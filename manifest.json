@@ -1,0 +1,16 @@
+{
+  "name": "Лоза",
+  "short_name": "Лоза",
+  "description": "Психологический клуб для родителей подростков",
+  "theme_color": "#fbf7fd",
+  "background_color": "#ece3d4",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    { "src": "/assets/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

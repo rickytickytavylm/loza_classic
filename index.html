@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="description" content="Лоза — закрытый психологический клуб для родителей подростков" />
+    <meta name="theme-color" content="#fbf7fd" />
+    <link rel="icon" type="image/png" href="assets/icon.png" />
+    <link rel="apple-touch-icon" href="assets/icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Лоза" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&family=Onest:wght@400..800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <title>Лоза — психологический клуб</title>
+    <script src="config.js"></script>
+  </head>
+  <body>
+    <div id="app" class="app">
+      <div id="splash" class="splash-screen" aria-hidden="true">
+        <img src="https://rickytickytavylm-loza-front-3b01.twc1.net/images/new_logo.png" alt="Лоза" width="96" height="96" />
+      </div>
+
+      <header class="topbar">
+        <button class="brand" type="button" data-tab="home">
+          <img src="https://rickytickytavylm-loza-front-3b01.twc1.net/images/new_logo.png" alt="" />
+          <span>Лоза</span>
+        </button>
+        <nav class="desktop-nav" aria-label="Основная навигация" id="desktop-nav"></nav>
+        <div class="header-actions">
+          <button aria-label="Профиль" class="profile-pill ios-profile" type="button" data-tab="profile">
+            <span class="profile-pill-inner" id="header-initial">В</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="shell">
+        <section class="page-shell" id="page-shell" aria-live="polite"></section>
+      </main>
+
+      <nav class="mobile-nav" aria-label="Мобильная навигация" id="mobile-nav"></nav>
+    </div>
+
+    <div id="portal" aria-hidden="true"></div>
+
+    <script src="js/data.js" defer></script>
+    <script src="js/audioStorage.js" defer></script>
+    <script src="js/media.js" defer></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/app.js" defer></script>
+  </body>
+</html>
