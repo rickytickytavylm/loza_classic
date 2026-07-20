@@ -1,13 +1,16 @@
-const CACHE = 'loza-classic-v1';
+const CACHE = 'loza-classic-v2';
 const PRECACHE = [
-  '/',
-  '/index.html',
-  '/css/styles.css',
-  '/js/data.js',
-  '/js/api.js',
-  '/js/app.js',
-  '/config.js',
-  '/manifest.json',
+  './',
+  './index.html',
+  './css/styles.css',
+  './js/data.js',
+  './js/libraryContent.js',
+  './js/audioStorage.js',
+  './js/media.js',
+  './js/api.js',
+  './js/app.js',
+  './config.js',
+  './manifest.json',
 ];
 
 self.addEventListener('install', (event) => {
@@ -28,20 +31,17 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.pathname.startsWith('/api')) return;
+  if (url.origin !== self.location.origin || url.pathname.includes('/api/')) return;
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request)
-        .then((response) => {
-          if (response.ok && url.origin === self.location.origin) {
-            const clone = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    }),
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request)),
   );
 });

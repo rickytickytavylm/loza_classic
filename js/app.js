@@ -1,8 +1,12 @@
-/* global LOZA_DATA, LOZA_API, LOZA_MEDIA */
+/* global LOZA_DATA, LOZA_API, LOZA_MEDIA, LOZA_LIBRARY_CONTENT */
 (function () {
   const D = window.LOZA_DATA;
   const API = window.LOZA_API;
   const M = window.LOZA_MEDIA;
+  const LIBRARY = window.LOZA_LIBRARY_CONTENT || {
+    sections: D.LIBRARY_SECTIONS,
+    items: D.LIBRARY_ITEMS,
+  };
   const ASSET_BASE = window.__LOZA_FRONTEND_BASE__ || '';
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -27,8 +31,8 @@
     booting: true,
     selectedItemId: '',
     feedPosts: [...D.FEED_POSTS],
-    librarySections: [...D.LIBRARY_SECTIONS],
-    libraryItems: [...D.LIBRARY_ITEMS],
+    librarySections: [...LIBRARY.sections],
+    libraryItems: [...LIBRARY.items],
     movies: [...D.MOVIES],
     chatRooms: [],
     chatView: 'rooms',
@@ -63,7 +67,7 @@
   }
 
   function sectionTitle(id) {
-    return D.LIBRARY_SECTIONS.find((s) => s.id === id)?.title || id;
+    return state.librarySections.find((s) => s.id === id)?.title || id;
   }
 
   function bgImage(i) {
@@ -651,10 +655,48 @@
   async function loadContent() {
     try {
       const data = await API.content();
-      if (data.sections) state.librarySections = data.sections;
-      if (data.items?.length) state.libraryItems = data.items;
+      const sections = Array.isArray(data.sections)
+        ? data.sections
+          .filter((section) => section.slug && section.title)
+          .map((section) => ({
+            id: section.slug,
+            title: M.cleanDisplayText(section.title),
+            description: M.cleanDisplayText(section.description || ''),
+          }))
+        : [];
+      const apiItems = Array.isArray(data.entries)
+        ? data.entries
+          .filter((entry) => entry.slug && entry.title)
+          .map((entry) => {
+            const kind = entry.type === 'VIDEO' ? 'video' : entry.type === 'AUDIO' ? 'audio' : 'text';
+            const fallback = LIBRARY.items.find((item) => item.id === entry.slug) || {};
+            const meta = entry.questionNumber
+              ? `Вопрос ${entry.questionNumber} · ${kind === 'video' ? 'Видео' : kind === 'audio' ? 'Аудио' : 'Текст'}`
+              : entry.category || fallback.meta || '';
+
+            // The API supplies the latest text.  The generated React catalog
+            // supplies media URLs for legacy entries that the API does not yet have.
+            return {
+              ...fallback,
+              id: entry.slug,
+              sectionId: entry.section?.slug || fallback.sectionId || '',
+              title: M.cleanDisplayText(entry.title),
+              meta,
+              kind,
+              duration: entry.duration || fallback.duration || meta,
+              description: entry.summary || fallback.description || '',
+              questionNumber: entry.questionNumber || fallback.questionNumber,
+              transcript: entry.transcript || entry.body || fallback.transcript,
+              mediaUrl: entry.mediaUrl || fallback.mediaUrl,
+              audioAssetPath: entry.audioAssetPath || fallback.audioAssetPath,
+            };
+          })
+        : [];
+
+      if (sections.length) state.librarySections = sections;
+      if (apiItems.length) state.libraryItems = apiItems;
     } catch {
-      /* fallback data */
+      // The full generated React catalog remains available offline.
     }
   }
 
@@ -664,13 +706,13 @@
       if (data.posts?.length) {
         state.feedPosts = data.posts.map((p) => ({
           id: p.id,
-          authorName: p.authorName,
-          authorRole: p.authorRole,
+          authorName: p.authorName || p.author?.name || 'Клуб Лозы',
+          authorRole: p.authorRole || p.author?.role || 'клуб Лозы',
           createdAt: p.createdAt,
-          body: p.body,
+          body: p.body || '',
           imageUrl: p.imageUrl,
-          likes: p.likes || 0,
-          comments: p.comments || 0,
+          likes: p.likes || p._count?.reactions || 0,
+          comments: p.comments || p._count?.comments || 0,
         }));
       }
     } catch {
@@ -697,6 +739,9 @@
       state.booting = false;
       $('#splash')?.remove();
     }, 900);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);

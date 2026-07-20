@@ -97,9 +97,9 @@
   }
 
   function resolveAudioUrl(item) {
-    if (item.audioAssetPath) return storageUrl(item.audioAssetPath);
     const storedObjectKey = findStoredAudioObjectKey(item);
     if (storedObjectKey) return storageUrl(storedObjectKey);
+    if (item.audioAssetPath) return storageUrl(item.audioAssetPath);
     return resolveMediaUrl(item.mediaUrl);
   }
 
