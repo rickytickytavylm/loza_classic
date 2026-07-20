@@ -632,11 +632,15 @@
     state.aiSending = true;
     renderScreen();
     try {
-      const res = await API.askAiPublic(state.aiMessages.slice(-10));
-      state.aiMessages[state.aiMessages.length - 1].content = res.answer || '';
+      const payload = state.aiMessages
+        .filter((m) => m.content && m.content.trim())
+        .slice(-10);
+      const res = await API.askAiPublic(payload);
+      state.aiMessages[state.aiMessages.length - 1].content =
+        res.answer || 'Не удалось получить ответ. Попробуйте переформулировать вопрос.';
     } catch {
-      state.aiMessages.pop();
-      state.aiMessages.pop();
+      state.aiMessages[state.aiMessages.length - 1].content =
+        'Не удалось связаться с ИИ-наставником. Попробуйте ещё раз чуть позже.';
     } finally {
       state.aiSending = false;
       renderScreen();
