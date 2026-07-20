@@ -1063,6 +1063,14 @@ button {
   backdrop-filter: blur(20px);
 }
 
+.audio-modal-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .audio-modal-info {
   display: grid;
   gap: 6px;
@@ -2205,6 +2213,8 @@ button {
   border-radius: 22px;
   color: white;
   background: var(--action);
+  background-position: center;
+  background-size: cover;
   box-shadow: 0 16px 36px rgba(30, 21, 40, 0.14);
   text-align: left;
 }
@@ -2907,6 +2917,12 @@ button {
     left: 8px;
     right: 8px;
     bottom: 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .movie-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

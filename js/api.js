@@ -1,6 +1,7 @@
 /* global window */
 (function () {
   const TOKEN_KEY = 'loza_session_token';
+  const GUEST_KEY = 'loza_chat_guest_id';
 
   function normalizeApiUrl(raw) {
     let url = String(raw || '').trim();
@@ -31,6 +32,20 @@
     }
   }
 
+  function getGuestId() {
+    try {
+      let value = localStorage.getItem(GUEST_KEY);
+      if (!value) {
+        value = globalThis.crypto?.randomUUID?.()
+          || `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        localStorage.setItem(GUEST_KEY, value);
+      }
+      return value;
+    } catch {
+      return `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+  }
+
   async function request(path, init) {
     const response = await fetch(`${API_URL}${path}`, {
       cache: 'no-store',
@@ -56,6 +71,7 @@
     API_ORIGIN,
     getToken,
     setToken,
+    getGuestId,
     me: () => request('/me'),
     publicConfig: () => request('/config/public'),
     content: () => request('/content'),
@@ -64,7 +80,11 @@
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
     chatRooms: () => request('/chat/rooms'),
     sendChatMessage: (roomId, body) =>
-      request(`/chat/rooms/${roomId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }),
+      request(`/chat/rooms/${roomId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body, guestId: getGuestId() }),
+      }),
+    chatStreamUrl: () => `${API_URL}/chat/stream`,
     askAiPublic: (messages) =>
       fetch(`${API_ORIGIN}/api/ai/chat/public`, {
         method: 'POST',

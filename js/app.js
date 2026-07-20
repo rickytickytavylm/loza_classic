@@ -17,6 +17,10 @@
     return `${ASSET_BASE}${path}`;
   }
 
+  function localAsset(path) {
+    return new URL(path, window.location.href).toString();
+  }
+
   // Render a lucide-style SVG icon by name (matches React lucide-react icons)
   function ic(name, size = 24, opts = {}) {
     const paths = D.ICON_PATHS[name];
@@ -35,6 +39,7 @@
     libraryItems: [...LIBRARY.items],
     movies: [...D.MOVIES],
     chatRooms: [],
+    chatStream: null,
     chatView: 'rooms',
     selectedRoomId: '',
     chatBg: localStorage.getItem('chat-bg') || 'aurora',
@@ -425,6 +430,7 @@
     const meta = esc(M.cleanDisplayText(item.meta) || 'Аудио клуба');
     const subtitle = item.sectionId === 'podcasts' ? 'Подкаст закрытого клуба' : 'Аудиоответ эксперта';
     const bgImage = bgImageForItem(item.id);
+    const coverImage = audioCoverForItem(item.id);
 
     $('#portal').innerHTML = `<div class="audio-modal-backdrop" id="modal-close">
       <div class="audio-modal" role="dialog" aria-modal="true" aria-label="${title}" onclick="event.stopPropagation()">
@@ -433,7 +439,7 @@
         <div class="audio-modal-overlay"></div>
         <div class="audio-modal-content">
           <button class="audio-modal-close" type="button" id="modal-x">${ic('chevronDown', 26)}</button>
-          <div class="audio-modal-art">${ic('audioLines', 64)}</div>
+          <div class="audio-modal-art"><img src="${esc(coverImage)}" alt="" /></div>
           <div class="audio-modal-info"><span>${meta}</span><h2>${title}</h2><p>${subtitle}</p></div>
           <div class="audio-modal-controls" id="audio-controls">
             <input aria-label="Перемотка" class="audio-modal-seek" id="audio-seek" max="100" min="0" type="range" value="0" />
@@ -456,6 +462,12 @@
     let hash = 0;
     for (let i = 0; i < (id || '').length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
     return asset(D.EDITORIAL_BACKGROUNDS[hash % D.EDITORIAL_BACKGROUNDS.length]);
+  }
+
+  function audioCoverForItem(id) {
+    let hash = 0;
+    for (let i = 0; i < (id || '').length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    return localAsset(`assets/audio-cover-0${(hash % 6) + 1}.png`);
   }
 
   function bindAudioPlayer(item) {
@@ -500,10 +512,9 @@
 
     playBtn.addEventListener('click', () => {
       if (isPlaying) audio.pause();
-      else audio.play().catch(showError);
+      else audio.play().catch(() => {});
     });
 
-    audio.play().catch(showError);
     syncUi();
   }
 
@@ -512,7 +523,7 @@
       const room = state.chatRooms.find((r) => r.id === state.selectedRoomId) || state.chatRooms[0];
       const preset = D.CHAT_BG_PRESETS.find((p) => p.id === state.chatBg) || D.CHAT_BG_PRESETS[0];
       const msgs = (room?.messages || []).map((m) => {
-        const mine = Boolean(m.isMe);
+        const mine = m.authorId === API.getGuestId();
         return `<div class="chat-bubble-row ${mine ? 'mine' : 'incoming'}"><div class="chat-bubble ${mine ? 'mine' : 'incoming'}">${!mine ? `<strong>${esc(m.authorName || m.author)}</strong>` : ''}<p>${esc(m.body || m.text)}</p><small>${new Date(m.createdAt || Date.now()).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</small></div></div>`;
       }).join('');
       return `<div class="telegram-chat-layout thread-open"><div class="telegram-thread">
@@ -530,7 +541,7 @@
     }).join('');
     return `<div class="telegram-chat-layout rooms-open"><aside class="telegram-room-list">
       <div class="telegram-room-list-head"><img class="telegram-room-list-logo" src="${asset('/images/new_logo.png')}" alt="" /><h2>Чаты клуба</h2></div>
-      ${rooms || '<p class="chat-muted">Загружаем комнаты…</p>'}
+      ${rooms || '<p class="chat-muted">Чаты откроются после входа через Яндекс.</p>'}
     </aside></div>`;
   }
 
@@ -546,10 +557,11 @@
       if (!body || !state.selectedRoomId) return;
       try {
         await API.sendChatMessage(state.selectedRoomId, body);
+        $('#chat-draft', root).value = '';
         await loadChatRooms();
         renderScreen();
       } catch {
-        /* ignore */
+        window.alert('Не удалось отправить сообщение. Попробуйте ещё раз.');
       }
     });
   }
@@ -570,7 +582,7 @@
   function renderMovies() {
     const cards = state.movies.map((m, i) => `
       <button class="movie-card" type="button" data-movie="${esc(m.id)}" style="background-image:url('${esc(asset(m.poster) || bgImage(i))}')">
-        <div class="movie-card-info"><span>${esc(m.year)}</span><strong>${esc(m.title)}</strong><small>${esc(m.theme)}</small></div>
+        <div class="movie-info"><span>${esc(m.year)}</span><h3>${esc(m.title)}</h3><p>${esc(m.theme)}</p></div>
       </button>`).join('');
     return `<section class="section"><header class="section-header"><span>Киноклуб</span><h2>Фильмы для разговоров с подростками</h2><p>Нажмите на фильм, чтобы открыть описание и вопрос для обсуждения</p></header><div class="movie-grid">${cards}</div></section>`;
   }
@@ -723,17 +735,59 @@
   async function loadChatRooms() {
     try {
       const data = await API.chatRooms();
-      state.chatRooms = data.rooms || [];
+      state.chatRooms = (data.rooms || []).map((room) => ({
+        ...room,
+        messages: (room.messages || []).map((message) => ({
+          ...message,
+          authorId: message.author?.id || message.authorId,
+          authorName: message.author?.name || message.authorName || 'Участник клуба',
+        })),
+      }));
       if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
     } catch {
       state.chatRooms = [];
     }
   }
 
+  function startChatStream() {
+    if (state.chatStream || !window.EventSource) return;
+    const stream = new EventSource(API.chatStreamUrl());
+    stream.addEventListener('chat.message', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const room = state.chatRooms.find((item) => item.id === payload.roomId);
+        if (!room) return;
+
+        if (payload.type === 'deleted') {
+          room.messages = room.messages.filter((message) => message.id !== payload.messageId);
+        } else if (payload.message) {
+          const message = {
+            ...payload.message,
+            authorId: payload.message.author?.id || payload.message.authorId,
+            authorName: payload.message.author?.name || payload.message.authorName || 'Участник клуба',
+          };
+          const index = room.messages.findIndex((item) => item.id === message.id);
+          if (index >= 0) room.messages[index] = message;
+          else room.messages.push(message);
+        }
+        if (state.tab === 'chat') renderScreen();
+      } catch {
+        // Ignore malformed stream events; the regular reload will recover state.
+      }
+    });
+    stream.onerror = () => {
+      stream.close();
+      state.chatStream = null;
+      window.setTimeout(startChatStream, 3000);
+    };
+    state.chatStream = stream;
+  }
+
   async function init() {
     renderNav();
     setTab('home');
     await Promise.all([loadContent(), loadFeed(), loadChatRooms()]);
+    startChatStream();
     renderScreen();
     setTimeout(() => {
       state.booting = false;
