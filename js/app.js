@@ -14,6 +14,7 @@
   function asset(path) {
     if (!path) return '';
     if (/^https?:\/\//i.test(path)) return path;
+    if (path.startsWith('/assets/')) return localAsset(`.${path}`);
     return `${ASSET_BASE}${path}`;
   }
 
@@ -531,7 +532,7 @@
   function audioCoverForItem(id) {
     let hash = 0;
     for (let i = 0; i < (id || '').length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-    return localAsset(`assets/audio-cover-0${(hash % 6) + 1}.png`);
+    return localAsset(`assets/webp/audio-cover-0${(hash % 6) + 1}.webp`);
   }
 
   function bindAudioPlayer(item) {
