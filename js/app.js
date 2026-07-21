@@ -34,6 +34,7 @@
     tab: 'home',
     booting: true,
     selectedItemId: '',
+    selectedMovieId: '',
     feedPosts: [...D.FEED_POSTS],
     librarySections: [...LIBRARY.sections],
     libraryItems: [...LIBRARY.items],
@@ -99,6 +100,7 @@
   function setTab(tab) {
     state.tab = tab;
     state.selectedItemId = '';
+    state.selectedMovieId = '';
     document.body.classList.remove('material-immersive-open');
     $('#portal').innerHTML = '';
     if (tab !== 'chat') {
@@ -138,6 +140,18 @@
 
   function renderScreen() {
     const shell = $('#page-shell');
+    if (state.selectedMovieId) {
+      const movie = state.movies.find((x) => x.id === state.selectedMovieId);
+      if (movie) {
+        $('#portal').innerHTML = renderMovieDetail(movie);
+        bindMovieDetail($('#portal'), movie);
+        document.body.classList.add('material-immersive-open');
+        return;
+      }
+      state.selectedMovieId = '';
+      document.body.classList.remove('material-immersive-open');
+      $('#portal').innerHTML = '';
+    }
     if (state.selectedItemId) {
       const item = state.libraryItems.find((x) => x.id === state.selectedItemId);
       if (item) {
@@ -219,7 +233,8 @@
     const posts = state.feedPosts.map((post, index) => {
       const liked = state.feedLikes[post.id];
       const likes = (liked ? pseudoLikes(post.id) + 1 : pseudoLikes(post.id));
-      const comments = (state.feedComments[post.id] || []).length + (post.comments || 0);
+      const localOnly = (state.feedComments[post.id] || []).filter((c) => String(c.id).startsWith('l-')).length;
+      const comments = (post.comments || 0) + localOnly;
       const image = asset(post.imageUrl) || bgImage(index);
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
@@ -253,29 +268,65 @@
     });
   }
 
+  function commentItemHtml(c) {
+    const name = c.author || 'Участник клуба';
+    return `<li class="comments-item"><div class="comments-item-avatar">${esc((name[0] || '?').toUpperCase())}</div><div class="comments-item-copy"><strong>${esc(name)}</strong><p>${esc(c.body)}</p></div></li>`;
+  }
+
+  function renderCommentsBody(postId, loading) {
+    const list = (state.feedComments[postId] || []).map(commentItemHtml).join('');
+    if (list) return `<ul class="comments-list">${list}</ul>`;
+    if (loading) return `<div class="comments-empty">${ic('messageCircle', 40, { strokeWidth: 1.5 })}<p>Загружаем комментарии…</p></div>`;
+    return `<div class="comments-empty">${ic('messageCircle', 40, { strokeWidth: 1.5 })}<p>Пока нет комментариев</p><span>Будьте первым</span></div>`;
+  }
+
+  async function loadComments(postId) {
+    try {
+      const data = await API.feedComments(postId);
+      const server = (data.comments || []).map((c) => {
+        const role = c.author?.role;
+        const name = isTeamRole(role) ? 'Лоза' : (c.author?.name || 'Участник клуба');
+        return { id: c.id, author: name, body: c.body };
+      });
+      const local = (state.feedComments[postId] || []).filter((c) => String(c.id).startsWith('l-'));
+      state.feedComments[postId] = [...server, ...local];
+    } catch {
+      /* keep whatever local comments exist */
+    }
+  }
+
   function openComments(postId) {
     const post = state.feedPosts.find((p) => p.id === postId);
     if (!post) return;
-    const list = (state.feedComments[postId] || []).map((c) =>
-      `<li class="comments-item"><div class="comments-item-avatar">${esc(c.author[0])}</div><div class="comments-item-copy"><strong>${esc(c.author)}</strong><p>${esc(c.body)}</p></div></li>`,
-    ).join('');
+    const hasServerComments = (post.comments || 0) > 0;
+    const needsLoad = hasServerComments && !(state.feedComments[postId] || []).some((c) => !String(c.id).startsWith('l-'));
+
     $('#portal').innerHTML = `<div class="comments-backdrop" id="modal-close">
       <div class="comments-sheet" onclick="event.stopPropagation()">
         <div class="comments-sheet-handle"></div>
         <div class="comments-sheet-header"><span class="comments-sheet-title">Комментарии</span><button class="comments-sheet-close" type="button" id="modal-x">${ic('x', 20)}</button></div>
-        <div class="comments-sheet-body">${list ? `<ul class="comments-list">${list}</ul>` : `<div class="comments-empty">${ic('messageCircle', 40, { strokeWidth: 1.5 })}<p>Пока нет комментариев</p><span>Будьте первым</span></div>`}</div>
-        <form class="comments-sheet-input" id="comment-form"><input placeholder="Написать комментарий…" id="comment-draft" /><button type="submit">${ic('send', 18)}</button></form>
+        <div class="comments-sheet-body" id="comments-body">${renderCommentsBody(postId, needsLoad)}</div>
+        <form class="comments-sheet-input" id="comment-form"><input placeholder="Написать комментарий…" id="comment-draft" /><button type="submit" aria-label="Отправить">${ic('send', 18)}</button></form>
       </div></div>`;
-    $('#modal-close').onclick = closePortal;
-    $('#modal-x').onclick = closePortal;
+    bindModalClose();
+
+    function refreshBody() {
+      const body = $('#comments-body');
+      if (body) body.innerHTML = renderCommentsBody(postId, false);
+    }
+
+    if (needsLoad) loadComments(postId).then(refreshBody);
+
     $('#comment-form').onsubmit = (e) => {
       e.preventDefault();
-      const body = $('#comment-draft').value.trim();
+      const input = $('#comment-draft');
+      const body = input.value.trim();
       if (!body) return;
       if (!state.feedComments[postId]) state.feedComments[postId] = [];
       state.feedComments[postId].push({ id: `l-${Date.now()}`, author: 'Вы', body });
+      input.value = '';
       API.addFeedComment(postId, body).catch(() => {});
-      closePortal();
+      refreshBody();
       renderScreen();
     };
   }
@@ -492,28 +543,50 @@
     if (!audio || !seek || !playBtn) return;
 
     let isPlaying = false;
+    let isScrubbing = false;
+
+    function paint() {
+      const duration = audio.duration || 0;
+      const value = Number(seek.value);
+      const pct = duration ? (value / duration) * 100 : 0;
+      seek.style.background = `linear-gradient(90deg, #fff ${pct}%, rgba(255,255,255,0.25) ${pct}%)`;
+    }
 
     function syncUi() {
-      const duration = audio.duration || 0;
+      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
       const current = audio.currentTime || 0;
-      seek.max = String(duration || 100);
-      seek.value = String(current);
-      timeCurrent.textContent = M.formatAudioTime(current);
+      seek.max = String(duration || 0);
+      if (!isScrubbing) seek.value = String(current);
+      timeCurrent.textContent = M.formatAudioTime(isScrubbing ? Number(seek.value) : current);
       timeDuration.textContent = M.formatAudioTime(duration);
       playBtn.innerHTML = isPlaying ? ic('pause', 34) : ic('play', 34);
       playBtn.setAttribute('aria-label', isPlaying ? 'Пауза' : 'Воспроизвести');
+      paint();
     }
 
     audio.addEventListener('loadedmetadata', syncUi);
+    audio.addEventListener('durationchange', syncUi);
     audio.addEventListener('timeupdate', syncUi);
     audio.addEventListener('play', () => { isPlaying = true; syncUi(); });
     audio.addEventListener('pause', () => { isPlaying = false; syncUi(); });
     audio.addEventListener('ended', () => { isPlaying = false; audio.currentTime = 0; syncUi(); });
 
-    seek.addEventListener('input', () => {
+    const startScrub = () => { isScrubbing = true; };
+    const endScrub = () => {
+      if (!isScrubbing) return;
       audio.currentTime = Number(seek.value);
+      isScrubbing = false;
       syncUi();
+    };
+    seek.addEventListener('pointerdown', startScrub);
+    seek.addEventListener('input', () => {
+      isScrubbing = true;
+      timeCurrent.textContent = M.formatAudioTime(Number(seek.value));
+      paint();
     });
+    seek.addEventListener('change', endScrub);
+    seek.addEventListener('pointerup', endScrub);
+    seek.addEventListener('pointercancel', endScrub);
 
     playBtn.addEventListener('click', () => {
       if (isPlaying) audio.pause();
@@ -521,6 +594,9 @@
     });
 
     syncUi();
+    // Auto-start playback when the player opens (best-effort; browsers may block
+    // until the user interacts, in which case the play button stays available).
+    audio.play().then(() => { isPlaying = true; syncUi(); }).catch(() => {});
   }
 
   function chatBgVars(preset) {
@@ -665,28 +741,50 @@
 
   function bindMovies(root) {
     $$('[data-movie]', root).forEach((b) => {
-      b.onclick = () => {
-        const m = state.movies.find((x) => x.id === b.dataset.movie);
-        if (!m) return;
-        const facts = [
-          m.director ? `<div class="movie-fact"><span>Режиссёр</span><strong>${esc(m.director)}</strong></div>` : '',
-          m.genre ? `<div class="movie-fact"><span>Жанр</span><strong>${esc(m.genre)}</strong></div>` : '',
-          m.runtime ? `<div class="movie-fact"><span>Хронометраж</span><strong>${esc(m.runtime)}</strong></div>` : '',
-          m.year ? `<div class="movie-fact"><span>Год</span><strong>${esc(m.year)}</strong></div>` : '',
-        ].filter(Boolean).join('');
-        $('#portal').innerHTML = `<div class="movie-modal-backdrop" id="modal-close"><article class="movie-modal glass-panel" onclick="event.stopPropagation()">
-          <div class="movie-modal-hero">${moviePosterHtml(m)}<div class="movie-modal-head"><span>${esc(m.year)} · ${esc(m.theme)}</span><h2>${esc(m.title)}</h2></div></div>
-          <button class="movie-modal-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
-          <div class="movie-modal-body">
-            ${facts ? `<div class="movie-facts">${facts}</div>` : ''}
-            <p>${esc(m.description)}</p>
-            <div class="prompt movie-modal-prompt"><strong>Вопрос для обсуждения</strong><p>${esc(m.prompt)}</p></div>
-            <button class="primary-button movie-modal-cta" type="button" id="movie-chat">Открыть обсуждение в чате ${ic('arrowRight', 18)}</button>
-          </div></article></div>`;
-        bindModalClose();
-        $('#movie-chat').onclick = () => { closePortal(); setTab('chat'); };
-      };
+      b.onclick = () => openMovie(b.dataset.movie);
     });
+  }
+
+  function openMovie(id) {
+    const movie = state.movies.find((x) => x.id === id);
+    if (!movie) return;
+    state.selectedMovieId = id;
+    renderScreen();
+  }
+
+  function closeMovie() {
+    state.selectedMovieId = '';
+    document.body.classList.remove('material-immersive-open');
+    $('#portal').innerHTML = '';
+    renderScreen();
+  }
+
+  function renderMovieDetail(m) {
+    const facts = [
+      m.director ? `<div class="movie-fact"><span>Режиссёр</span><strong>${esc(m.director)}</strong></div>` : '',
+      m.genre ? `<div class="movie-fact"><span>Жанр</span><strong>${esc(m.genre)}</strong></div>` : '',
+      m.runtime ? `<div class="movie-fact"><span>Хронометраж</span><strong>${esc(m.runtime)}</strong></div>` : '',
+      m.year ? `<div class="movie-fact"><span>Год</span><strong>${esc(m.year)}</strong></div>` : '',
+    ].filter(Boolean).join('');
+    return `<div class="movie-detail-page">
+      <div class="movie-detail-hero">
+        ${moviePosterHtml(m)}
+        <button class="movie-detail-back" type="button" id="movie-back" aria-label="Назад">${ic('chevronLeft', 24)}</button>
+      </div>
+      <div class="movie-detail-body">
+        <span class="movie-detail-kicker">${esc(m.year)} · ${esc(m.theme)}</span>
+        <h1>${esc(m.title)}</h1>
+        ${facts ? `<div class="movie-facts">${facts}</div>` : ''}
+        <p class="movie-detail-desc">${esc(m.description)}</p>
+        <div class="prompt movie-modal-prompt"><strong>Вопрос для обсуждения</strong><p>${esc(m.prompt)}</p></div>
+        <button class="primary-button movie-modal-cta" type="button" id="movie-chat">Открыть обсуждение в чате ${ic('arrowRight', 18)}</button>
+      </div>
+    </div>`;
+  }
+
+  function bindMovieDetail(root, _m) {
+    $('#movie-back', root)?.addEventListener('click', closeMovie);
+    $('#movie-chat', root)?.addEventListener('click', () => { closeMovie(); setTab('chat'); });
   }
 
   function renderAi() {

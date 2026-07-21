@@ -75,6 +75,7 @@
     me: () => request('/me'),
     publicConfig: () => request('/config/public'),
     content: () => request('/content'),
+    feedComments: (postId) => request(`/feed/${postId}/comments`),
     feed: () => request('/feed'),
     addFeedComment: (postId, body) =>
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),

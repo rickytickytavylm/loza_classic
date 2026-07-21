@@ -1024,9 +1024,9 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   height: 100%;
-  padding: calc(env(safe-area-inset-top, 0px) + 20px) 28px calc(env(safe-area-inset-bottom, 0px) + 48px);
+  padding: calc(env(safe-area-inset-top, 0px) + 64px) 28px calc(env(safe-area-inset-bottom, 0px) + 40px);
   gap: 0;
   color: #fff;
 }
@@ -1048,9 +1048,9 @@ button {
 .audio-modal-art {
   display: grid;
   place-items: center;
-  width: min(62vw, 260px);
+  width: min(58vw, 240px);
   aspect-ratio: 1;
-  margin-bottom: 36px;
+  margin-bottom: 28px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 36px;
   color: rgba(255, 255, 255, 0.9);
@@ -1109,22 +1109,34 @@ button {
 
 .audio-modal-seek {
   width: 100%;
-  height: 4px;
-  accent-color: #fff;
+  height: 6px;
   cursor: pointer;
   appearance: none;
-  border-radius: 4px;
+  -webkit-appearance: none;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.25);
   outline: none;
+  touch-action: none;
 }
 
 .audio-modal-seek::-webkit-slider-thumb {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
   appearance: none;
+  -webkit-appearance: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.audio-modal-seek::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -1797,11 +1809,13 @@ button {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 18% 18%, var(--chat-bg-accent), transparent 34%),
-    radial-gradient(circle at 82% 22%, var(--chat-bg-c), transparent 36%),
-    radial-gradient(circle at 54% 76%, var(--chat-bg-accent), transparent 40%),
-    linear-gradient(135deg, var(--chat-bg-a), var(--chat-bg-b) 48%, var(--chat-bg-c));
+  background-color: var(--chat-bg-b);
+  background-image:
+    radial-gradient(120% 85% at 8% 4%, var(--chat-bg-accent), transparent 46%),
+    radial-gradient(120% 90% at 96% 10%, var(--chat-bg-c), transparent 50%),
+    radial-gradient(150% 120% at 82% 104%, var(--chat-bg-accent), transparent 52%),
+    radial-gradient(150% 130% at 4% 100%, var(--chat-bg-a), transparent 54%),
+    linear-gradient(155deg, var(--chat-bg-a), var(--chat-bg-b) 52%, var(--chat-bg-c));
 }
 
 .chat-background::before,
@@ -1811,35 +1825,32 @@ button {
   inset: 0;
 }
 
+/* Subtle dotted texture layer for a refined, non-flat surface. */
 .chat-background::before {
-  opacity: 0.18;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.28) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.28) 1px, transparent 1px);
-  background-size: 34px 34px;
+  opacity: 0.5;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+  background-position: 0 0;
+  mix-blend-mode: soft-light;
 }
 
+/* Soft top highlight + bottom depth for gentle vignette. */
 .chat-background::after {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 42%),
-    linear-gradient(0deg, rgba(18, 13, 24, 0.15), transparent 44%);
-}
-
-.chat-background-aurora {
-  background:
-    conic-gradient(from 210deg at 52% 44%, rgba(149, 213, 178, 0.58), rgba(247, 231, 240, 0.7), rgba(199, 222, 245, 0.68), rgba(149, 213, 178, 0.58)),
-    radial-gradient(circle at 18% 20%, var(--chat-bg-accent), transparent 38%),
-    linear-gradient(135deg, var(--chat-bg-a), var(--chat-bg-b) 55%, var(--chat-bg-c));
+    radial-gradient(130% 100% at 50% -10%, rgba(255, 255, 255, 0.28), transparent 55%),
+    linear-gradient(0deg, rgba(20, 14, 26, 0.14), transparent 46%);
 }
 
 .chat-background-dark::before {
-  opacity: 0.08;
+  opacity: 0.3;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1.4px);
+  mix-blend-mode: screen;
 }
 
 .chat-background-dark::after {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
-    linear-gradient(0deg, rgba(0, 0, 0, 0.38), transparent 52%);
+    radial-gradient(130% 100% at 50% -10%, rgba(255, 255, 255, 0.08), transparent 52%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.42), transparent 58%);
 }
 
 .telegram-date-pill {
@@ -2735,7 +2746,7 @@ button {
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.86);
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 22px 55px rgba(var(--plum-rgb), 0.2);
   backdrop-filter: blur(24px);
 }
@@ -2824,6 +2835,25 @@ button {
 
   .page-shell-media {
     padding-top: 8px;
+  }
+
+  /* Soft fade so page content dissolves into the background instead of
+     bleeding through the translucent floating navigation. */
+  .app::after {
+    content: "";
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 26px);
+    z-index: 29;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(235, 230, 239, 0) 0%, var(--bg-deep) 66%);
+  }
+
+  .app.immersive-ai::after,
+  .app.immersive-chat::after {
+    display: none;
   }
 
   .hero {
@@ -3141,7 +3171,8 @@ button {
 
 body.material-immersive-open .topbar,
 body.material-immersive-open .mobile-nav,
-body.material-immersive-open .pwa-install-banner {
+body.material-immersive-open .pwa-install-banner,
+body.material-immersive-open .app::after {
   display: none !important;
 }
 
@@ -4040,7 +4071,7 @@ body.material-immersive-open {
 }
 
 .insta-post-caption {
-  padding: 10px 14px 0;
+  padding: 10px 16px 18px;
   font-size: 14px;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -4258,6 +4289,110 @@ body.material-immersive-open {
   font-weight: 700;
 }
 
+/* ── Movie detail page (Apple-style overlap) ────────────── */
+
+.movie-detail-page {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+}
+
+.movie-detail-hero {
+  position: relative;
+  width: 100%;
+  height: min(64vh, 560px);
+  overflow: hidden;
+  background: #1e1528;
+}
+
+.movie-detail-hero img,
+.movie-detail-hero .poster-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.movie-detail-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(25, 17, 31, 0.32) 0%, transparent 26%, transparent 62%, var(--bg) 99%);
+}
+
+.movie-detail-back {
+  position: absolute;
+  z-index: 2;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: 16px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #1e1528;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.24);
+}
+
+.movie-detail-back:active {
+  transform: scale(0.92);
+}
+
+.movie-detail-body {
+  position: relative;
+  z-index: 1;
+  margin-top: -34px;
+  padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 48px);
+  border-radius: 28px 28px 0 0;
+  background: var(--bg);
+}
+
+.movie-detail-kicker {
+  color: var(--olive-dark);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.movie-detail-body h1 {
+  margin: 8px 0 16px;
+  font-size: clamp(28px, 7vw, 40px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.movie-detail-body .movie-facts {
+  padding: 16px 0;
+  margin-bottom: 4px;
+  border-top: 1px solid rgba(var(--plum-rgb), 0.1);
+  border-bottom: 1px solid rgba(var(--plum-rgb), 0.1);
+}
+
+.movie-detail-desc {
+  margin: 18px 0 0;
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--ink);
+}
+
+.movie-detail-body .movie-modal-prompt {
+  margin-top: 22px;
+}
+
+.movie-detail-body .movie-modal-cta {
+  margin-top: 22px;
+  width: 100%;
+  justify-content: center;
+}
+
 /* ── iOS-style profile ──────────────────────────────────── */
 
 .profile-ios {
@@ -4358,15 +4493,16 @@ body.material-immersive-open {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  color: #fff;
-  background: var(--action);
+  color: var(--ink);
+  background: rgba(var(--plum-rgb), 0.06);
+  border: 1px solid rgba(var(--plum-rgb), 0.08);
 }
 
-.ios-row-icon-media { background: #6c5b7b; }
-.ios-row-icon-feed { background: #b565a7; }
-.ios-row-icon-movies { background: #4f8f5f; }
-.ios-row-icon-chat { background: #2f9fd0; }
-.ios-row-icon-ai { background: #ff7a59; }
+.ios-row-icon svg {
+  width: 19px;
+  height: 19px;
+  opacity: 0.82;
+}
 
 .ios-row-text {
   display: grid;
