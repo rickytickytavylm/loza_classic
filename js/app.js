@@ -71,6 +71,17 @@
     return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   }
 
+  function roleLabel(role) {
+    if (role === 'ADMIN' || role === 'OWNER') return 'команда Лозы';
+    if (role === 'CURATOR') return 'куратор клуба';
+    if (!role) return 'клуб Лозы';
+    return role;
+  }
+
+  function isTeamRole(role) {
+    return role === 'ADMIN' || role === 'OWNER';
+  }
+
   function sectionTitle(id) {
     return state.librarySections.find((s) => s.id === id)?.title || id;
   }
@@ -294,10 +305,16 @@
         </div>
       </article>`;
     }).join('');
+    const note = state.mediaQuery.trim()
+      ? `<p class="media-feed-search-note">Найдено ${items.length} материалов по запросу «${esc(state.mediaQuery.trim())}»</p>`
+      : '';
     return `<div class="media-feed-page">
       <div class="media-feed-controls">
-        <label class="media-feed-search"><span>${ic('search', 18)}</span><input placeholder="Поиск материалов…" value="${esc(state.mediaQuery)}" id="media-search" /><button type="button" id="media-clear" ${state.mediaQuery ? '' : 'hidden'}>${ic('x', 16)}</button></label>
-        <div class="media-feed-categories">${cats}</div>
+        <header class="media-feed-header">
+          <label class="media-feed-search media-feed-search-top"><span>${ic('search', 18)}</span><input placeholder="Поиск материалов…" value="${esc(state.mediaQuery)}" id="media-search" /><button class="media-feed-search-clear" type="button" id="media-clear" ${state.mediaQuery ? '' : 'hidden'}>${ic('x', 16)}</button></label>
+          <nav class="media-feed-categories" aria-label="Разделы медиатеки">${cats}</nav>
+          ${note}
+        </header>
       </div>
       <div class="media-feed-scroll"><div class="media-feed-list">${cards || '<div class="media-feed-empty"><p>Ничего не найдено</p></div>'}</div></div>
     </div>`;
@@ -446,10 +463,6 @@
             <div class="audio-modal-times"><span id="audio-time-current">0:00</span><span id="audio-time-duration">0:00</span></div>
             <button aria-label="Воспроизвести" class="audio-modal-play-btn" id="audio-play" type="button">${ic('play', 34)}</button>
           </div>
-          <div class="audio-modal-error" id="audio-error" hidden>
-            <p>Не удалось загрузить аудио. Проверьте доступность файлов в хранилище.</p>
-            <a href="${esc(src)}" rel="noreferrer" target="_blank">Открыть напрямую ↗</a>
-          </div>
         </div>
       </div>
     </div>`;
@@ -476,16 +489,9 @@
     const playBtn = $('#audio-play');
     const timeCurrent = $('#audio-time-current');
     const timeDuration = $('#audio-time-duration');
-    const controls = $('#audio-controls');
-    const errorBox = $('#audio-error');
     if (!audio || !seek || !playBtn) return;
 
     let isPlaying = false;
-
-    function showError() {
-      if (controls) controls.hidden = true;
-      if (errorBox) errorBox.hidden = false;
-    }
 
     function syncUi() {
       const duration = audio.duration || 0;
@@ -503,7 +509,6 @@
     audio.addEventListener('play', () => { isPlaying = true; syncUi(); });
     audio.addEventListener('pause', () => { isPlaying = false; syncUi(); });
     audio.addEventListener('ended', () => { isPlaying = false; audio.currentTime = 0; syncUi(); });
-    audio.addEventListener('error', showError);
 
     seek.addEventListener('input', () => {
       audio.currentTime = Number(seek.value);
@@ -518,31 +523,88 @@
     syncUi();
   }
 
+  function chatBgVars(preset) {
+    return `--chat-bg-a:${preset.colors[0]};--chat-bg-b:${preset.colors[1]};--chat-bg-c:${preset.colors[2]};--chat-bg-accent:${preset.accent}`;
+  }
+
+  function formatBubbleTime(value) {
+    const d = new Date(value || Date.now());
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function chatDateLabel(value) {
+    const date = new Date(value);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return 'Сегодня';
+    if (date.toDateString() === yesterday.toDateString()) return 'Вчера';
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  }
+
+  function renderChatBubble(message, mine) {
+    const author = !mine ? `<strong class="bubble-author">${esc(message.authorName || message.author || 'Участник клуба')}</strong>` : '';
+    const check = mine ? ic('checkCheck', 15) : '';
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}"><div class="bubble-body">${author}<p>${esc(message.body || message.text || '')}</p><div class="bubble-meta"><time>${formatBubbleTime(message.createdAt)}</time>${check}</div></div></article>`;
+  }
+
   function renderChat() {
-    if (state.chatView === 'thread') {
-      const room = state.chatRooms.find((r) => r.id === state.selectedRoomId) || state.chatRooms[0];
-      const preset = D.CHAT_BG_PRESETS.find((p) => p.id === state.chatBg) || D.CHAT_BG_PRESETS[0];
-      const msgs = (room?.messages || []).map((m) => {
-        const mine = m.authorId === API.getGuestId();
-        return `<div class="chat-bubble-row ${mine ? 'mine' : 'incoming'}"><div class="chat-bubble ${mine ? 'mine' : 'incoming'}">${!mine ? `<strong>${esc(m.authorName || m.author)}</strong>` : ''}<p>${esc(m.body || m.text)}</p><small>${new Date(m.createdAt || Date.now()).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</small></div></div>`;
-      }).join('');
-      return `<div class="telegram-chat-layout thread-open"><div class="telegram-thread">
-        <header class="telegram-thread-head"><button type="button" id="chat-back">${ic('chevronLeft', 22)}</button><div><strong>${esc(room?.title || 'Чат')}</strong><span>${esc(room?.description || '')}</span></div><button type="button" id="chat-settings">${ic('settings', 20)}</button></header>
-        <div class="telegram-messages" style="background:linear-gradient(135deg,${preset.colors.join(',')})">${msgs || '<p class="chat-muted">Напишите первое сообщение.</p>'}</div>
-        <form class="telegram-composer" id="chat-form"><input placeholder="Сообщение" id="chat-draft" /><button type="submit">${ic('send', 18)}</button></form>
-      </div></div>`;
-    }
-    const rooms = state.chatRooms.map((room, i) => {
+    const guestId = API.getGuestId();
+    const selectedRoom = state.chatRooms.find((r) => r.id === state.selectedRoomId) || state.chatRooms[0];
+    const preset = D.CHAT_BG_PRESETS.find((p) => p.id === state.chatBg) || D.CHAT_BG_PRESETS[0];
+
+    const roomButtons = state.chatRooms.map((room, i) => {
       const last = room.messages?.[room.messages.length - 1];
-      return `<button type="button" class="telegram-room${room.id === state.selectedRoomId ? ' active' : ''}" data-room="${esc(room.id)}">
-        <img class="telegram-room-avatar" src="${bgImage(i)}" alt="" />
-        <div><strong>${esc(room.title)}</strong><span>${esc(last?.body || last?.text || 'Нет сообщений')}</span></div>
+      const preview = last ? (last.body || last.text || '') : (room.description || 'Пока нет сообщений');
+      const time = last ? `<time>${formatBubbleTime(last.createdAt)}</time>` : '';
+      return `<button type="button" class="${room.id === selectedRoom?.id ? 'active' : ''}" data-room="${esc(room.id)}">
+        <span class="telegram-room-avatar" style="background-image:url(${bgImage(i)})"></span>
+        <span class="telegram-room-copy"><strong>${esc(room.title)}</strong><small>${esc(preview)}</small></span>
+        ${time}
       </button>`;
     }).join('');
-    return `<div class="telegram-chat-layout rooms-open"><aside class="telegram-room-list">
-      <div class="telegram-room-list-head"><img class="telegram-room-list-logo" src="${asset('/images/new_logo.png')}" alt="" /><h2>Чаты клуба</h2></div>
-      ${rooms || '<p class="chat-muted">Чаты откроются после входа через Яндекс.</p>'}
-    </aside></div>`;
+
+    const timeline = [];
+    let lastDateKey = '';
+    (selectedRoom?.messages || []).forEach((message) => {
+      const dateKey = new Date(message.createdAt || Date.now()).toDateString();
+      if (dateKey !== lastDateKey) {
+        timeline.push(`<div class="telegram-date-pill">${esc(chatDateLabel(message.createdAt || Date.now()))}</div>`);
+        lastDateKey = dateKey;
+      }
+      timeline.push(renderChatBubble(message, message.authorId === guestId));
+    });
+
+    const emptyThread = !(selectedRoom?.messages || []).length
+      ? '<div class="empty-chat"><p>Напишите первое сообщение.</p></div>'
+      : '';
+
+    const roomsListInner = roomButtons
+      ? `<div class="telegram-room-group">${roomButtons}</div>`
+      : '<p class="chat-muted">Комнаты пока не созданы в базе.</p>';
+
+    return `<div class="telegram-chat-layout ${state.chatView === 'rooms' ? 'rooms-open' : 'thread-open'}">
+      <aside class="telegram-room-list">
+        <div class="telegram-room-list-head"><img class="telegram-room-list-logo" src="${asset('/images/new_logo.png')}" alt="" /><h2>Чаты клуба</h2></div>
+        ${roomsListInner}
+      </aside>
+      <section class="telegram-thread">
+        <header class="telegram-header">
+          <button class="telegram-header-back" type="button" id="chat-back" aria-label="К списку чатов">${ic('chevronLeft', 22)}</button>
+          <div class="telegram-header-pill"><strong>${esc(selectedRoom?.title || 'Чат клуба')}</strong><span>${esc(selectedRoom?.description || 'Живое общение участников')}</span></div>
+          <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>
+        </header>
+        <div class="telegram-messages">
+          <div class="chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}"></div>
+          ${timeline.join('')}
+          ${emptyThread}
+        </div>
+        <form class="telegram-composer" id="chat-form">
+          <input placeholder="Сообщение" id="chat-draft" />
+          <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('send', 18)}</button>
+        </form>
+      </section>
+    </div>`;
   }
 
   function bindChat(root) {
@@ -551,13 +613,16 @@
     });
     $('#chat-back', root)?.addEventListener('click', () => { state.chatView = 'rooms'; renderScreen(); setImmersive(); });
     $('#chat-settings', root)?.addEventListener('click', () => openChatBgPicker());
+    const messages = $('.telegram-messages', root);
+    if (messages) messages.scrollTop = messages.scrollHeight;
     $('#chat-form', root)?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const body = $('#chat-draft', root)?.value.trim();
+      const input = $('#chat-draft', root);
+      const body = input?.value.trim();
       if (!body || !state.selectedRoomId) return;
       try {
         await API.sendChatMessage(state.selectedRoomId, body);
-        $('#chat-draft', root).value = '';
+        input.value = '';
         await loadChatRooms();
         renderScreen();
       } catch {
@@ -568,10 +633,15 @@
 
   function openChatBgPicker() {
     const swatches = D.CHAT_BG_PRESETS.map((p) =>
-      `<button type="button" class="chat-bg-swatch${state.chatBg === p.id ? ' active' : ''}" data-bg="${p.id}" style="background:linear-gradient(135deg,${p.colors.join(',')})">${esc(p.label)}</button>`,
+      `<button type="button" class="${state.chatBg === p.id ? 'active' : ''}" data-bg="${p.id}">
+        <span class="chat-bg-swatch chat-bg-swatch-${p.id}" style="${chatBgVars(p)}"></span>
+        <strong>${esc(p.label)}</strong>
+      </button>`,
     ).join('');
-    $('#portal').innerHTML = `<div class="player-backdrop" id="modal-close"><section class="chat-bg-picker glass-panel" onclick="event.stopPropagation()">
-      <h3>Настройки чата</h3><p>Фон сообщений</p><div class="chat-bg-grid">${swatches}</div>
+    $('#portal').innerHTML = `<div class="chat-bg-picker-backdrop" id="modal-close"><section class="chat-bg-picker" aria-label="Настройки фона чата" onclick="event.stopPropagation()">
+      <div class="chat-bg-picker-handle"></div>
+      <header class="chat-bg-picker-head"><div><span>Настройки чата</span><h2>Фон сообщений</h2></div><button type="button" id="modal-x" aria-label="Закрыть настройки">${ic('x', 20)}</button></header>
+      <div class="chat-bg-grid">${swatches}</div>
     </section></div>`;
     bindModalClose();
     $$('[data-bg]', $('#portal')).forEach((b) => {
@@ -579,12 +649,18 @@
     });
   }
 
+  function moviePosterHtml(m) {
+    const poster = asset(m.poster);
+    return poster ? `<img alt="" src="${esc(poster)}" loading="lazy" decoding="async" />` : '<div class="poster-fallback"></div>';
+  }
+
   function renderMovies() {
-    const cards = state.movies.map((m, i) => `
-      <button class="movie-card" type="button" data-movie="${esc(m.id)}" style="background-image:url('${esc(asset(m.poster) || bgImage(i))}')">
+    const cards = state.movies.map((m) => `
+      <button class="movie-card" type="button" data-movie="${esc(m.id)}">
+        ${moviePosterHtml(m)}
         <div class="movie-info"><span>${esc(m.year)}</span><h3>${esc(m.title)}</h3><p>${esc(m.theme)}</p></div>
       </button>`).join('');
-    return `<section class="section"><header class="section-header"><span>Киноклуб</span><h2>Фильмы для разговоров с подростками</h2><p>Нажмите на фильм, чтобы открыть описание и вопрос для обсуждения</p></header><div class="movie-grid">${cards}</div></section>`;
+    return `<section class="section"><header class="section-header"><span>Киноклуб</span><h2>Фильмы для разговоров с подростками</h2><p>Нажмите на карточку — откроется описание и вопрос для семейного разговора.</p></header><div class="movie-grid">${cards}</div></section>`;
   }
 
   function bindMovies(root) {
@@ -592,11 +668,21 @@
       b.onclick = () => {
         const m = state.movies.find((x) => x.id === b.dataset.movie);
         if (!m) return;
-        $('#portal').innerHTML = `<div class="movie-modal-backdrop" id="modal-close"><div class="movie-modal" onclick="event.stopPropagation()">
-          <div class="movie-modal-hero" style="background-image:url('${esc(asset(m.poster) || bgImage(0))}')"><button class="movie-modal-close" type="button" id="modal-x">${ic('x', 18)}</button></div>
-          <div class="movie-modal-body"><p class="movie-modal-meta">${esc(m.year)} · ${esc(m.theme.toUpperCase())}</p><h2>${esc(m.title)}</h2><p>${esc(m.description)}</p>
-          <div class="prompt"><span>Вопрос для обсуждения</span><p>${esc(m.prompt)}</p></div>
-          <button class="primary-button" type="button" id="movie-chat">Открыть обсуждение в чате →</button></div></div></div>`;
+        const facts = [
+          m.director ? `<div class="movie-fact"><span>Режиссёр</span><strong>${esc(m.director)}</strong></div>` : '',
+          m.genre ? `<div class="movie-fact"><span>Жанр</span><strong>${esc(m.genre)}</strong></div>` : '',
+          m.runtime ? `<div class="movie-fact"><span>Хронометраж</span><strong>${esc(m.runtime)}</strong></div>` : '',
+          m.year ? `<div class="movie-fact"><span>Год</span><strong>${esc(m.year)}</strong></div>` : '',
+        ].filter(Boolean).join('');
+        $('#portal').innerHTML = `<div class="movie-modal-backdrop" id="modal-close"><article class="movie-modal glass-panel" onclick="event.stopPropagation()">
+          <div class="movie-modal-hero">${moviePosterHtml(m)}<div class="movie-modal-head"><span>${esc(m.year)} · ${esc(m.theme)}</span><h2>${esc(m.title)}</h2></div></div>
+          <button class="movie-modal-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
+          <div class="movie-modal-body">
+            ${facts ? `<div class="movie-facts">${facts}</div>` : ''}
+            <p>${esc(m.description)}</p>
+            <div class="prompt movie-modal-prompt"><strong>Вопрос для обсуждения</strong><p>${esc(m.prompt)}</p></div>
+            <button class="primary-button movie-modal-cta" type="button" id="movie-chat">Открыть обсуждение в чате ${ic('arrowRight', 18)}</button>
+          </div></article></div>`;
         bindModalClose();
         $('#movie-chat').onclick = () => { closePortal(); setTab('chat'); };
       };
@@ -647,14 +733,43 @@
     }
   }
 
+  function iosRow(icon, label, sub, tab) {
+    return `<button class="ios-row" type="button" data-tab-link="${tab}">
+      <span class="ios-row-icon ios-row-icon-${tab}">${ic(icon, 20)}</span>
+      <span class="ios-row-text"><strong>${esc(label)}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}</span>
+      <span class="ios-row-chevron">${ic('chevronRight', 18)}</span>
+    </button>`;
+  }
+
   function renderProfile() {
-    const plans = D.PLANS.map((p) => `<article class="plan-card"><h3>${esc(p.planName)}</h3><p>${esc(p.description)}</p><strong>${p.priceRub.toLocaleString('ru-RU')} ₽</strong></article>`).join('');
-    return `<div class="profile-grid">
-      <section class="profile-hero glass-panel"><div class="avatar large">В</div><h1>Гость</h1>
-      <p>Вход и оплата будут подключены позже</p>
+    return `<div class="profile-ios">
+      <section class="profile-ios-hero">
+        <div class="profile-ios-avatar">Г</div>
+        <div class="profile-ios-identity">
+          <h1>Гость</h1>
+          <p>Психологический клуб «Лоза»</p>
+        </div>
       </section>
-      <section class="profile-plans glass-card"><header class="section-header"><span>Подписка</span><h2>Тарифы клуба</h2></header><div class="plan-grid">${plans}</div></section>
-      <section class="profile-links glass-card"><h3>Что открыто без подписки</h3><ul class="profile-free-list"><li>Лента клуба</li><li>Киноклуб</li><li>2 подкаста, превью вопросов, 1 эфир</li></ul><button class="secondary-button" type="button" data-tab-link="feed">Перейти в ленту</button></section>
+
+      <div class="ios-group">
+        <div class="ios-group-title">Разделы клуба</div>
+        <div class="ios-list">
+          ${iosRow('media', 'Медиатека', 'Лекции, аудио и практики', 'media')}
+          ${iosRow('feed', 'Лента', 'Посты и разборы психологов', 'feed')}
+          ${iosRow('movies', 'Киноклуб', 'Фильмы для семейных разговоров', 'movies')}
+          ${iosRow('chat', 'Чаты клуба', 'Живое общение участников', 'chat')}
+          ${iosRow('ai', 'AI-наставник', 'Бережный разбор ситуации', 'ai')}
+        </div>
+      </div>
+
+      <div class="ios-group">
+        <div class="ios-group-title">О клубе</div>
+        <div class="ios-list">
+          <div class="ios-info-row"><span>«Лоза» — закрытый терапевтический клуб для родителей подростков. Здесь вы найдёте бережную опору: разборы, практики и живое общение с теми, кто проходит через то же самое.</span></div>
+        </div>
+      </div>
+
+      <p class="ios-footnote">Вход и подписка появятся позже. Сейчас весь контент открыт.</p>
     </div>`;
   }
 
@@ -720,16 +835,21 @@
     try {
       const data = await API.feed();
       if (data.posts?.length) {
-        state.feedPosts = data.posts.map((p) => ({
-          id: p.id,
-          authorName: p.authorName || p.author?.name || 'Клуб Лозы',
-          authorRole: p.authorRole || p.author?.role || 'клуб Лозы',
-          createdAt: p.createdAt,
-          body: p.body || '',
-          imageUrl: p.imageUrl,
-          likes: p.likes || p._count?.reactions || 0,
-          comments: p.comments || p._count?.comments || 0,
-        }));
+        state.feedPosts = data.posts.map((p) => {
+          const rawRole = p.author?.role || p.authorRole || '';
+          const team = isTeamRole(rawRole);
+          const rawName = p.author?.name || p.authorName || '';
+          return {
+            id: p.id,
+            authorName: team || !rawName ? 'Лоза' : rawName,
+            authorRole: roleLabel(rawRole),
+            createdAt: p.createdAt,
+            body: p.body || '',
+            imageUrl: p.imageUrl,
+            likes: p.likes || p._count?.reactions || 0,
+            comments: p.comments || p._count?.comments || 0,
+          };
+        });
       }
     } catch {
       /* fallback */
