@@ -12,7 +12,7 @@
     return url;
   }
 
-  const API_URL = normalizeApiUrl(window.__LOZA_API_URL__) || 'https://loza-backend-production.up.railway.app/api';
+  const API_URL = normalizeApiUrl(window.__LOZA_API_URL__) || 'https://api.loza-club.ru/api';
   const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
 
   function getToken() {
