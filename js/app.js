@@ -191,7 +191,7 @@
         <div class="editorial-card-body">
           <span class="editorial-kicker">${i === 0 ? 'Новое в клубе' : 'Материал дня'}</span>
           <h3>${esc(item.title)}</h3>
-          <p>${esc(item.description || '')}</p>
+          <p>${esc(M.getMaterialSummary(item))}</p>
         </div>
         <footer class="editorial-card-footer">
           <img alt="" class="editorial-icon" src="${asset('/images/new_logo.png')}" />
@@ -349,7 +349,7 @@
         <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/images/new_logo.png')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span></div>
         <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}"><img alt="" src="${bgImage(i)}" loading="lazy" /></button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
-        <p class="media-feed-card-desc">${esc(item.description || '')}</p>
+      <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item))}</p>
         <div class="media-feed-card-actions">
           <button type="button" data-open-item="${esc(item.id)}">${ic('play', 18)}<span>Открыть</span></button>
           <button class="${liked ? 'media-action-liked' : ''}" type="button" data-like-item="${esc(item.id)}">${ic('heart', 18, { fill: liked ? 'currentColor' : 'none' })}</button>
@@ -419,7 +419,19 @@
   }
 
   function materialBodyHtml(text) {
-    return esc(text).replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+    return String(text || '').split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map((paragraph) => `<p>${esc(paragraph).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  }
+
+  function innerHeader(label) {
+    return `<header class="inner-page-header">
+      <button class="inner-page-back" type="button" id="material-back" aria-label="Назад">${ic('chevronLeft', 22)}</button>
+      <div class="inner-page-brand"><strong>Лоза</strong><span>${esc(label)}</span></div>
+      <span class="inner-page-spacer" aria-hidden="true"></span>
+    </header>`;
   }
 
   function renderMaterialMedia(item, immersive) {
@@ -447,21 +459,19 @@
     const materialSummary = M.getMaterialSummary(item);
     const displayTitle = esc(M.cleanDisplayText(item.title));
     const displayMeta = esc(M.cleanDisplayText(item.meta));
-    const kindLabel = item.kind === 'video' ? 'Видеоответ' : item.kind === 'audio' ? 'Аудиоответ' : 'Текст';
-    const questionChip = item.questionNumber ? `<small>Вопрос ${esc(item.questionNumber)}</small>` : '';
-    const bodyParagraphs = `<p>${materialBodyHtml(materialBody)}</p>`;
+    const kindLabel = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Материал';
+    const bodyParagraphs = materialBodyHtml(materialBody);
 
     if (hasMediaLayout) {
       return `<div class="material-page material-page-immersive">
+        ${innerHeader(kindLabel)}
         <div class="material-immersive-media">${renderMaterialMedia(item, true)}</div>
         <div class="material-immersive-body">
-          <button class="glass-back-btn" type="button" id="material-back">${ic('chevronLeft', 18)} Назад</button>
           <span class="material-kicker">${displayMeta}</span>
           <h1>${displayTitle}</h1>
-          <p>${esc(materialSummary)}</p>
-          <div class="material-chips"><small>${kindLabel}</small>${questionChip}</div>
+          <p class="material-summary">${esc(materialSummary)}</p>
           <section class="material-section material-section-plain">
-            <h2>${item.kind === 'audio' ? 'О подкасте' : 'Описание'}</h2>
+            <h2>${item.kind === 'audio' ? 'О выпуске' : 'О материале'}</h2>
             ${bodyParagraphs}
           </section>
         </div>
@@ -469,12 +479,12 @@
     }
 
     return `<div class="material-page">
-      <button class="detail-back" type="button" id="material-back">← Назад в медиатеку</button>
+      ${innerHeader('Медиатека')}
       <section class="material-hero glass-panel">
         <span>${displayMeta}</span>
         <h1>${displayTitle}</h1>
         <p>${esc(materialSummary)}</p>
-        <div class="material-chips"><small>${kindLabel}</small>${questionChip}</div>
+        <small class="material-type-label">${kindLabel}</small>
       </section>
       <section class="material-section glass-card">
         <h2>Описание материала</h2>
@@ -768,11 +778,13 @@
       m.year ? `<div class="movie-fact"><span>Год</span><strong>${esc(m.year)}</strong></div>` : '',
     ].filter(Boolean).join('');
     return `<div class="movie-detail-page">
-      <div class="movie-detail-hero">
-        ${moviePosterHtml(m)}
-        <button class="movie-detail-back" type="button" id="movie-back" aria-label="Назад">${ic('chevronLeft', 24)}</button>
-      </div>
+      <header class="inner-page-header movie-detail-header">
+        <button class="inner-page-back" type="button" id="movie-back" aria-label="Назад">${ic('chevronLeft', 22)}</button>
+        <div class="inner-page-brand"><strong>Лоза</strong><span>Киноклуб</span></div>
+        <span class="inner-page-spacer" aria-hidden="true"></span>
+      </header>
       <div class="movie-detail-body">
+        <div class="movie-detail-poster">${moviePosterHtml(m)}</div>
         <span class="movie-detail-kicker">${esc(m.year)} · ${esc(m.theme)}</span>
         <h1>${esc(m.title)}</h1>
         ${facts ? `<div class="movie-facts">${facts}</div>` : ''}
@@ -788,13 +800,32 @@
     $('#movie-chat', root)?.addEventListener('click', () => { closeMovie(); setTab('chat'); });
   }
 
+  function aiMessagesHtml() {
+    return state.aiMessages.map((m) => {
+      const typing = state.aiSending && m.role === 'assistant' && !m.content;
+      return `<article class="ai-message ${m.role}">
+        <span>${m.role === 'assistant' ? 'Лоза AI' : 'Вы'}</span>
+        ${typing
+          ? '<div class="ai-typing" aria-label="Лоза AI печатает"><i></i><i></i><i></i></div>'
+          : `<p>${esc(m.content)}</p>`}
+      </article>`;
+    }).join('');
+  }
+
+  function refreshAiMessages() {
+    const windowEl = $('.ai-chat-window');
+    if (!windowEl) return;
+    windowEl.innerHTML = aiMessagesHtml();
+    windowEl.scrollTop = windowEl.scrollHeight;
+  }
+
   function renderAi() {
     const chatting = state.aiMessages.length > 0;
     const hero = !chatting ? `<div class="ai-coach-hero"><span class="eyebrow">AI-наставник Лозы</span><h1>Разбор семейной ситуации с опорой на материалы клуба</h1><p>Опишите ситуацию с подростком — я помогу разложить динамику и предложить бережные шаги.</p></div>` : '';
     const starters = !chatting ? `<div class="ai-starters">${D.AI_STARTERS.map((s) => `<button type="button" data-starter="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : '';
-    const msgs = state.aiMessages.map((m, i) => `<article class="ai-message ${m.role}"><span>${m.role === 'assistant' ? 'Лоза AI' : 'Вы'}</span><p>${esc(m.content) || (state.aiSending && i === state.aiMessages.length - 1 ? 'Думаю над ситуацией...' : '')}</p></article>`).join('');
+    const msgs = aiMessagesHtml();
     return `<section class="ai-coach-page">
-      <header class="ai-fullscreen-head"><button type="button" data-tab-link="home">${ic('chevronLeft', 22)}</button><div><strong>Лоза AI</strong><span>бережный разбор ситуации</span></div></header>
+      <header class="inner-page-header ai-inner-header"><button class="inner-page-back" type="button" data-tab-link="home" aria-label="Назад">${ic('chevronLeft', 22)}</button><div class="inner-page-brand"><strong>Лоза</strong><span>AI-наставник</span></div><span class="inner-page-spacer" aria-hidden="true"></span></header>
       <div class="ai-coach-shell${chatting ? ' is-chatting' : ''}">${hero}<div class="ai-chat-window">${msgs}</div>${starters}
       <form class="ai-composer" id="ai-form"><textarea rows="1" placeholder="Сообщение" id="ai-draft"></textarea><button type="submit">${ic('send', 18)}</button></form></div></section>`;
   }
@@ -820,9 +851,23 @@
       const payload = state.aiMessages
         .filter((m) => m.content && m.content.trim())
         .slice(-10);
-      const res = await API.askAiPublic(payload);
-      state.aiMessages[state.aiMessages.length - 1].content =
-        res.answer || 'Не удалось получить ответ. Попробуйте переформулировать вопрос.';
+      let gotToken = false;
+      await API.askAiPublicStream(payload, (event, data) => {
+        const answer = state.aiMessages[state.aiMessages.length - 1];
+        if (!answer || answer.role !== 'assistant') return;
+        if (event === 'token' && data.token) {
+          gotToken = true;
+          answer.content += data.token;
+          refreshAiMessages();
+        }
+        if (event === 'error') {
+          throw new Error(data.error || 'AI_PROVIDER_ERROR');
+        }
+      });
+      if (!gotToken) {
+        state.aiMessages[state.aiMessages.length - 1].content =
+          'Не удалось получить ответ. Попробуйте переформулировать вопрос.';
+      }
     } catch {
       state.aiMessages[state.aiMessages.length - 1].content =
         'Не удалось связаться с ИИ-наставником. Попробуйте ещё раз чуть позже.';
@@ -832,12 +877,11 @@
     }
   }
 
-  function iosRow(icon, label, sub, tab) {
-    return `<button class="ios-row" type="button" data-tab-link="${tab}">
-      <span class="ios-row-icon ios-row-icon-${tab}">${ic(icon, 20)}</span>
+  function iosRow(icon, label, sub) {
+    return `<div class="ios-row">
+      <span class="ios-row-icon">${ic(icon, 20)}</span>
       <span class="ios-row-text"><strong>${esc(label)}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}</span>
-      <span class="ios-row-chevron">${ic('chevronRight', 18)}</span>
-    </button>`;
+    </div>`;
   }
 
   function renderProfile() {
@@ -851,30 +895,26 @@
       </section>
 
       <div class="ios-group">
-        <div class="ios-group-title">Разделы клуба</div>
+        <div class="ios-group-title">Настройки</div>
         <div class="ios-list">
-          ${iosRow('media', 'Медиатека', 'Лекции, аудио и практики', 'media')}
-          ${iosRow('feed', 'Лента', 'Посты и разборы психологов', 'feed')}
-          ${iosRow('movies', 'Киноклуб', 'Фильмы для семейных разговоров', 'movies')}
-          ${iosRow('chat', 'Чаты клуба', 'Живое общение участников', 'chat')}
-          ${iosRow('ai', 'AI-наставник', 'Бережный разбор ситуации', 'ai')}
+          ${iosRow('settings', 'Уведомления', 'Напоминания о новых материалах')}
+          ${iosRow('ai', 'Внешний вид', 'Светлая тема')}
         </div>
       </div>
 
       <div class="ios-group">
-        <div class="ios-group-title">О клубе</div>
+        <div class="ios-group-title">О приложении</div>
         <div class="ios-list">
-          <div class="ios-info-row"><span>«Лоза» — закрытый терапевтический клуб для родителей подростков. Здесь вы найдёте бережную опору: разборы, практики и живое общение с теми, кто проходит через то же самое.</span></div>
+          ${iosRow('shieldCheck', 'О клубе «Лоза»', 'Психологический клуб для родителей')}
+          ${iosRow('messageCircle', 'Поддержка', 'Мы на связи')}
         </div>
       </div>
 
-      <p class="ios-footnote">Вход и подписка появятся позже. Сейчас весь контент открыт.</p>
+      <p class="ios-footnote">Версия для участников клуба «Лоза».</p>
     </div>`;
   }
 
-  function bindProfile(root) {
-    $$('[data-tab-link]', root).forEach((b) => { b.onclick = () => setTab(b.dataset.tabLink); });
-  }
+  function bindProfile(_root) {}
 
   function closePortal() { $('#portal').innerHTML = ''; }
   function bindModalClose() {

@@ -98,5 +98,45 @@
         }
         return r.json();
       }),
+    async askAiPublicStream(messages, onEvent) {
+      const response = await fetch(`${API_ORIGIN}/api/ai/chat/public/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify({ messages }),
+      });
+      if (!response.ok || !response.body) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'AI_STREAM_ERROR');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let eventName = 'message';
+
+      const emit = (block) => {
+        for (const line of block.split(/\r?\n/)) {
+          if (line.startsWith('event:')) eventName = line.slice(6).trim();
+          if (!line.startsWith('data:')) continue;
+          const payload = JSON.parse(line.slice(5).trim());
+          onEvent(eventName, payload);
+          eventName = 'message';
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop();
+        blocks.filter(Boolean).forEach(emit);
+        if (done) break;
+      }
+      if (buffer.trim()) emit(buffer);
+    },
   };
 })();

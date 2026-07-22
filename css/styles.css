@@ -3685,8 +3685,8 @@ body.material-immersive-open {
 
 .media-feed-header {
   display: grid;
-  gap: 10px;
-  padding: 4px 0 8px;
+  gap: 16px;
+  padding: 8px 0 14px;
   background: var(--bg);
 }
 
@@ -3725,7 +3725,7 @@ body.material-immersive-open {
   display: flex;
   gap: 18px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 2px 0 6px;
   scrollbar-width: none;
 }
 
@@ -4391,6 +4391,189 @@ body.material-immersive-open {
   margin-top: 22px;
   width: 100%;
   justify-content: center;
+}
+
+/* ── Consistent inner-screen navigation ────────────────── */
+
+.inner-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 60px;
+  padding: env(safe-area-inset-top, 0px) 14px 0;
+  border-bottom: 1px solid rgba(var(--plum-rgb), 0.08);
+  background: rgba(251, 247, 253, 0.94);
+  backdrop-filter: blur(20px);
+}
+
+.inner-page-back {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: rgba(var(--plum-rgb), 0.08);
+}
+
+.inner-page-back:active {
+  transform: scale(0.92);
+  background: rgba(var(--plum-rgb), 0.14);
+}
+
+.inner-page-brand {
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  line-height: 1.1;
+}
+
+.inner-page-brand strong {
+  color: var(--ink);
+  font-size: 15px;
+  letter-spacing: -0.03em;
+}
+
+.inner-page-brand span {
+  overflow: hidden;
+  max-width: 100%;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inner-page-spacer {
+  width: 34px;
+  height: 34px;
+}
+
+/* The poster belongs to the film content, not a stretched screen header. */
+.movie-detail-page {
+  display: block;
+  background: var(--bg);
+}
+
+.movie-detail-header {
+  position: sticky;
+}
+
+.movie-detail-hero {
+  display: none;
+}
+
+.movie-detail-body {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 22px 20px calc(env(safe-area-inset-bottom, 0px) + 48px);
+  border-radius: 0;
+}
+
+.movie-detail-poster {
+  width: min(58vw, 250px);
+  margin: 0 auto 24px;
+  overflow: hidden;
+  aspect-ratio: 2 / 3;
+  border-radius: 16px;
+  background: #e8e1e9;
+  box-shadow: 0 16px 34px rgba(30, 21, 40, 0.18);
+}
+
+.movie-detail-poster img,
+.movie-detail-poster .poster-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.movie-detail-body h1 {
+  margin: 8px 0 14px;
+  font-size: clamp(27px, 7vw, 38px);
+}
+
+.material-page-immersive .inner-page-header {
+  position: sticky;
+}
+
+.material-immersive-media {
+  padding: 0 12px;
+  background: var(--bg);
+}
+
+.material-video-immersive {
+  overflow: hidden;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 28px rgba(var(--plum-rgb), 0.12);
+}
+
+.material-immersive-body {
+  gap: 14px;
+  padding: 22px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+}
+
+.material-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.62;
+}
+
+.material-section-plain {
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.material-section-plain h2 {
+  margin: 10px 0 0;
+}
+
+.material-section-plain p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.material-type-label {
+  color: var(--olive-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ai-inner-header {
+  margin: calc(-1 * (env(safe-area-inset-top, 0px) + 6px)) -8px 10px;
+}
+
+.ai-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 1px 2px 2px;
+}
+
+.ai-typing i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(var(--plum-rgb), 0.48);
+  animation: ai-typing-pulse 1.2s ease-in-out infinite;
+}
+
+.ai-typing i:nth-child(2) { animation-delay: 0.14s; }
+.ai-typing i:nth-child(3) { animation-delay: 0.28s; }
+
+@keyframes ai-typing-pulse {
+  0%, 60%, 100% { opacity: 0.34; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
 }
 
 /* ── iOS-style profile ──────────────────────────────────── */
