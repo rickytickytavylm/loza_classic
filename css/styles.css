@@ -1810,12 +1810,6 @@ button {
   overflow: hidden;
   pointer-events: none;
   background-color: var(--chat-bg-b);
-  background-image:
-    radial-gradient(120% 85% at 8% 4%, var(--chat-bg-accent), transparent 46%),
-    radial-gradient(120% 90% at 96% 10%, var(--chat-bg-c), transparent 50%),
-    radial-gradient(150% 120% at 82% 104%, var(--chat-bg-accent), transparent 52%),
-    radial-gradient(150% 130% at 4% 100%, var(--chat-bg-a), transparent 54%),
-    linear-gradient(155deg, var(--chat-bg-a), var(--chat-bg-b) 52%, var(--chat-bg-c));
 }
 
 .chat-background::before,
@@ -1825,32 +1819,87 @@ button {
   inset: 0;
 }
 
-/* Subtle dotted texture layer for a refined, non-flat surface. */
 .chat-background::before {
-  opacity: 0.5;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1.4px);
-  background-size: 22px 22px;
-  background-position: 0 0;
-  mix-blend-mode: soft-light;
+  opacity: 0.7;
 }
 
-/* Soft top highlight + bottom depth for gentle vignette. */
 .chat-background::after {
   background:
-    radial-gradient(130% 100% at 50% -10%, rgba(255, 255, 255, 0.28), transparent 55%),
-    linear-gradient(0deg, rgba(20, 14, 26, 0.14), transparent 46%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 24%),
+    linear-gradient(0deg, rgba(20, 14, 26, 0.12), transparent 50%);
+}
+
+/* CSS-only patterns adapted from the Uiverse pattern collection. */
+.chat-background-aurora {
+  background-color: #eef4ec;
+}
+
+.chat-background-aurora::before {
+  background-image: radial-gradient(rgba(94, 139, 90, 0.24) 1.2px, transparent 1.4px);
+  background-size: 24px 24px;
+}
+
+.chat-background-dark {
+  background-color: #17141e;
+  background-image: linear-gradient(135deg, #17141e 0%, #201a2b 100%);
 }
 
 .chat-background-dark::before {
-  opacity: 0.3;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1.4px);
-  mix-blend-mode: screen;
+  opacity: 0.34;
+  background-image:
+    linear-gradient(45deg, rgba(162, 121, 221, 0.28) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(162, 121, 221, 0.18) 25%, transparent 25%);
+  background-size: 18px 18px;
+  background-position: 0 0, 9px 9px;
 }
 
 .chat-background-dark::after {
-  background:
-    radial-gradient(130% 100% at 50% -10%, rgba(255, 255, 255, 0.08), transparent 52%),
-    linear-gradient(0deg, rgba(0, 0, 0, 0.42), transparent 58%);
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.42), transparent 64%);
+}
+
+.chat-background-plum {
+  background-color: #f5ecf5;
+}
+
+.chat-background-plum::before {
+  opacity: 0.62;
+  background-image:
+    linear-gradient(rgba(132, 83, 128, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(132, 83, 128, 0.14) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.chat-background-sunset {
+  background-color: #fff2e5;
+  background-image: linear-gradient(180deg, #fff2e5, #fdd8cc);
+}
+
+.chat-background-sunset::before {
+  opacity: 0.5;
+  background-image:
+    repeating-radial-gradient(ellipse at 50% 130%, transparent 0 12px, rgba(234, 123, 102, 0.23) 13px 15px, transparent 16px 28px);
+  background-size: 100% 60px;
+}
+
+.chat-background-ocean {
+  background-color: #eaf7fb;
+}
+
+.chat-background-ocean::before {
+  opacity: 0.58;
+  background-image: repeating-linear-gradient(135deg, rgba(43, 137, 174, 0.19) 0 1px, transparent 1px 12px);
+}
+
+.chat-background-forest {
+  background-color: #eef5e9;
+}
+
+.chat-background-forest::before {
+  opacity: 0.56;
+  background-image:
+    radial-gradient(ellipse 8px 4px at 8px 12px, rgba(67, 124, 72, 0.25) 45%, transparent 48%),
+    radial-gradient(ellipse 8px 4px at 20px 24px, rgba(67, 124, 72, 0.2) 45%, transparent 48%);
+  background-size: 32px 32px;
 }
 
 .telegram-date-pill {
@@ -2118,10 +2167,7 @@ button {
   height: 86px;
   overflow: hidden;
   border-radius: 15px;
-  background:
-    radial-gradient(circle at 20% 18%, var(--chat-bg-accent), transparent 36%),
-    radial-gradient(circle at 80% 26%, var(--chat-bg-c), transparent 34%),
-    linear-gradient(135deg, var(--chat-bg-a), var(--chat-bg-b) 48%, var(--chat-bg-c));
+  background-color: var(--chat-bg-b);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
 }
 
@@ -2154,6 +2200,43 @@ button {
 
 .chat-bg-swatch-dark::after {
   background: rgba(118, 210, 106, 0.88);
+}
+
+.chat-bg-swatch-aurora {
+  background-image: radial-gradient(rgba(94, 139, 90, 0.38) 1.5px, transparent 1.7px);
+  background-size: 15px 15px;
+}
+
+.chat-bg-swatch-dark {
+  background-color: #17141e;
+  background-image:
+    linear-gradient(45deg, rgba(162, 121, 221, 0.3) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(162, 121, 221, 0.18) 25%, transparent 25%);
+  background-size: 12px 12px;
+}
+
+.chat-bg-swatch-plum {
+  background-image:
+    linear-gradient(rgba(132, 83, 128, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(132, 83, 128, 0.2) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.chat-bg-swatch-sunset {
+  background-color: #fff2e5;
+  background-image: repeating-radial-gradient(ellipse at 50% 130%, transparent 0 9px, rgba(234, 123, 102, 0.32) 10px 12px, transparent 13px 20px);
+  background-size: 100% 40px;
+}
+
+.chat-bg-swatch-ocean {
+  background-image: repeating-linear-gradient(135deg, rgba(43, 137, 174, 0.25) 0 1px, transparent 1px 8px);
+}
+
+.chat-bg-swatch-forest {
+  background-image:
+    radial-gradient(ellipse 7px 3px at 8px 12px, rgba(67, 124, 72, 0.32) 45%, transparent 48%),
+    radial-gradient(ellipse 7px 3px at 19px 23px, rgba(67, 124, 72, 0.24) 45%, transparent 48%);
+  background-size: 22px 22px;
 }
 
 @media (max-width: 980px) {
@@ -2571,11 +2654,10 @@ button {
 }
 
 .ai-starters {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 2px 2px 8px;
-  scrollbar-width: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 2px 0 8px;
 }
 
 .ai-starters::-webkit-scrollbar {
@@ -2583,20 +2665,33 @@ button {
 }
 
 .ai-starters button {
-  flex: 0 0 auto;
-  width: clamp(150px, 52vw, 200px);
-  padding: 9px 12px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 76px;
+  padding: 12px;
   border: 1px solid rgba(var(--plum-rgb), 0.1);
-  border-radius: 12px;
+  border-radius: 16px;
   color: var(--ink);
   background: rgba(255, 255, 255, 0.86);
   text-align: left;
-  font-size: 12.5px;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  box-shadow: 0 6px 18px rgba(var(--plum-rgb), 0.05);
+}
+
+.ai-starters button span {
+  color: var(--olive-dark);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ai-starters button:active {
+  transform: scale(0.98);
+  background: rgba(var(--plum-rgb), 0.05);
 }
 
 .ai-error {
@@ -4009,6 +4104,20 @@ body.material-immersive-open {
   font-weight: 800;
 }
 
+.insta-post-avatar.is-brand {
+  overflow: hidden;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(var(--plum-rgb), 0.1);
+}
+
+.insta-post-avatar.is-brand img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .insta-post-meta {
   display: grid;
   gap: 2px;
@@ -4251,10 +4360,16 @@ body.material-immersive-open {
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  border: 0;
+  border-radius: 13px;
   color: #fff;
-  background: var(--action);
-  transition: opacity 0.15s;
+  background: linear-gradient(135deg, #2a1d35, #4b3858);
+  box-shadow: 0 5px 14px rgba(var(--plum-rgb), 0.25);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.comments-sheet-input button:active {
+  transform: scale(0.92);
 }
 
 .comments-sheet-input button:disabled {

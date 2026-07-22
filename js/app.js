@@ -232,6 +232,8 @@
 
   function renderFeed() {
     const posts = state.feedPosts.map((post, index) => {
+      const authorName = post.authorName || post.author || 'Лоза';
+      const showBrandLogo = authorName === 'Лоза' || isTeamRole(post.authorRole);
       const liked = state.feedLikes[post.id];
       const likes = (liked ? pseudoLikes(post.id) + 1 : pseudoLikes(post.id));
       const localOnly = (state.feedComments[post.id] || []).filter((c) => String(c.id).startsWith('l-')).length;
@@ -239,8 +241,8 @@
       const image = asset(post.imageUrl) || bgImage(index);
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
-          <div class="insta-post-avatar">${esc((post.authorName || post.author || '?')[0])}</div>
-          <div class="insta-post-meta"><strong>${esc(post.authorName || post.author)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
+          <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? `<img src="${asset('/images/new_logo.png')}" alt="Лоза" />` : esc(authorName[0])}</div>
+          <div class="insta-post-meta"><strong>${esc(authorName)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
         </header>
         <div class="insta-post-media"><img alt="" src="${esc(image)}" loading="lazy" /></div>
         <div class="insta-post-actions">
@@ -248,7 +250,7 @@
           <button class="insta-action" type="button" data-comments="${esc(post.id)}">${ic('messageCircle', 24)}<span>${comments}</span></button>
           <button class="insta-action insta-action-share" type="button" data-share="${esc(post.id)}">${ic('send', 24)}</button>
         </div>
-        <div class="insta-post-caption"><strong>${esc(post.authorName || post.author)}</strong> ${esc(post.body || post.text).replace(/\n/g, '<br>')}</div>
+        <div class="insta-post-caption"><strong>${esc(authorName)}</strong> ${esc(post.body || post.text).replace(/\n/g, '<br>')}</div>
       </article>`;
     }).join('');
     return `<div class="feed-page"><div class="feed-list insta-feed">${posts}</div></div>`;
@@ -256,7 +258,13 @@
 
   function bindFeed(root) {
     $$('[data-like]', root).forEach((b) => {
-      b.onclick = () => { state.feedLikes[b.dataset.like] = !state.feedLikes[b.dataset.like]; renderScreen(); };
+      b.onclick = () => {
+        const id = b.dataset.like;
+        const liked = !(state.feedLikes[id]);
+        state.feedLikes[id] = liked;
+        b.classList.toggle('insta-liked', liked);
+        b.innerHTML = `${ic('heart', 24, { fill: liked ? 'currentColor' : 'none' })}<span>${pseudoLikes(id) + (liked ? 1 : 0)}</span>`;
+      };
     });
     $$('[data-comments]', root).forEach((b) => {
       b.onclick = () => openComments(b.dataset.comments);
@@ -307,7 +315,7 @@
         <div class="comments-sheet-handle"></div>
         <div class="comments-sheet-header"><span class="comments-sheet-title">Комментарии</span><button class="comments-sheet-close" type="button" id="modal-x">${ic('x', 20)}</button></div>
         <div class="comments-sheet-body" id="comments-body">${renderCommentsBody(postId, needsLoad)}</div>
-        <form class="comments-sheet-input" id="comment-form"><input placeholder="Написать комментарий…" id="comment-draft" /><button type="submit" aria-label="Отправить">${ic('send', 18)}</button></form>
+        <form class="comments-sheet-input" id="comment-form"><input placeholder="Написать комментарий…" id="comment-draft" /><button type="submit" aria-label="Отправить комментарий">${ic('arrowUp', 18)}</button></form>
       </div></div>`;
     bindModalClose();
 
@@ -822,7 +830,7 @@
   function renderAi() {
     const chatting = state.aiMessages.length > 0;
     const hero = !chatting ? `<div class="ai-coach-hero"><span class="eyebrow">AI-наставник Лозы</span><h1>Разбор семейной ситуации с опорой на материалы клуба</h1><p>Опишите ситуацию с подростком — я помогу разложить динамику и предложить бережные шаги.</p></div>` : '';
-    const starters = !chatting ? `<div class="ai-starters">${D.AI_STARTERS.map((s) => `<button type="button" data-starter="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : '';
+    const starters = !chatting ? `<div class="ai-starters">${D.AI_STARTERS.map((s) => `<button type="button" data-starter="${esc(s)}"><span>Начать разговор</span>${esc(s)}</button>`).join('')}</div>` : '';
     const msgs = aiMessagesHtml();
     return `<section class="ai-coach-page">
       <header class="inner-page-header ai-inner-header"><button class="inner-page-back" type="button" data-tab-link="home" aria-label="Назад">${ic('chevronLeft', 22)}</button><div class="inner-page-brand"><strong>Лоза</strong><span>AI-наставник</span></div><span class="inner-page-spacer" aria-hidden="true"></span></header>

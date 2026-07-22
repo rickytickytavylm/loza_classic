@@ -1,5 +1,5 @@
-const CACHE = 'loza-classic-v3';
-const IMAGE_CACHE = 'loza-classic-images-v1';
+const CACHE = 'loza-classic-v4';
+const IMAGE_CACHE = 'loza-classic-images-v2';
 const PRECACHE = [
   './',
   './index.html',
