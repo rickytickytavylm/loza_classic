@@ -249,7 +249,7 @@
       const image = asset(post.imageUrl) || bgImage(index);
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
-          <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? brandMark('insta-post-brand-mark') : esc(authorName[0])}</div>
+          <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? `<img class="insta-post-brand-mark" src="${localAsset('assets/brand-avatar.png')}" alt="Лоза" />` : esc(authorName[0])}</div>
           <div class="insta-post-meta"><strong>${esc(authorName)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
         </header>
         <div class="insta-post-media"><img alt="" src="${esc(image)}" loading="lazy" /></div>

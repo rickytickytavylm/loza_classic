@@ -4125,8 +4125,8 @@ body.material-immersive-open {
 
 .insta-post-avatar.is-brand {
   overflow: hidden;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.9);
+  padding: 0;
+  background: #f1ebe1;
   border: 1px solid rgba(var(--plum-rgb), 0.1);
 }
 
@@ -4138,7 +4138,7 @@ body.material-immersive-open {
 }
 
 .insta-post-brand-mark {
-  padding: 1px;
+  transform: scale(1.08);
 }
 
 .insta-post-meta {
