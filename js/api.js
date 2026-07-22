@@ -86,11 +86,12 @@
         body: JSON.stringify({ body, guestId: getGuestId() }),
       }),
     chatStreamUrl: () => `${API_URL}/chat/stream`,
-    askAiPublic: (messages) =>
+    askAiPublic: (messages, signal) =>
       fetch(`${API_ORIGIN}/api/ai/chat/public`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         body: JSON.stringify({ messages }),
+        signal,
       }).then(async (r) => {
         if (!r.ok) {
           const p = await r.json().catch(() => ({}));
@@ -98,7 +99,7 @@
         }
         return r.json();
       }),
-    async askAiPublicStream(messages, onEvent) {
+    async askAiPublicStream(messages, onEvent, signal) {
       const response = await fetch(`${API_ORIGIN}/api/ai/chat/public/stream`, {
         method: 'POST',
         headers: {
@@ -107,6 +108,7 @@
           'Cache-Control': 'no-cache',
         },
         body: JSON.stringify({ messages }),
+        signal,
       });
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => ({}));

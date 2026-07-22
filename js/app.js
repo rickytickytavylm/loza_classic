@@ -863,31 +863,59 @@
     state.aiMessages.push({ role: 'assistant', content: '' });
     state.aiSending = true;
     renderScreen();
+
+    const setAnswer = (txt) => {
+      const answer = state.aiMessages[state.aiMessages.length - 1];
+      if (answer && answer.role === 'assistant') answer.content = String(txt || '');
+    };
+    const payload = state.aiMessages
+      .filter((m) => m.content && m.content.trim())
+      .slice(-10);
+    // Guard against a hung request leaving the chat "frozen" inside in-app
+    // browsers (Telegram/webview) — always resolve within the timeout.
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = setTimeout(() => controller?.abort(), 45000);
+
+    let gotToken = false;
     try {
-      const payload = state.aiMessages
-        .filter((m) => m.content && m.content.trim())
-        .slice(-10);
-      let gotToken = false;
-      await API.askAiPublicStream(payload, (event, data) => {
-        const answer = state.aiMessages[state.aiMessages.length - 1];
-        if (!answer || answer.role !== 'assistant') return;
-        if (event === 'token' && data.token) {
-          gotToken = true;
-          answer.content += data.token;
-          refreshAiMessages();
-        }
-        if (event === 'error') {
-          throw new Error(data.error || 'AI_PROVIDER_ERROR');
-        }
-      });
+      // 1) Preferred: token-by-token streaming.
+      try {
+        await API.askAiPublicStream(payload, (event, data) => {
+          const answer = state.aiMessages[state.aiMessages.length - 1];
+          if (!answer || answer.role !== 'assistant') return;
+          if (event === 'token' && data.token) {
+            gotToken = true;
+            answer.content += data.token;
+            refreshAiMessages();
+          }
+          if (event === 'error') {
+            throw new Error(data.error || 'AI_PROVIDER_ERROR');
+          }
+        }, controller?.signal);
+      } catch (streamError) {
+        // If we already streamed something, keep it; otherwise fall through
+        // to the non-streaming request below.
+        if (gotToken) throw streamError;
+      }
+
+      // 2) Fallback: plain request (older webviews without ReadableStream, or
+      //    a stream that produced no tokens).
       if (!gotToken) {
-        state.aiMessages[state.aiMessages.length - 1].content =
-          'Не удалось получить ответ. Попробуйте переформулировать вопрос.';
+        const result = await API.askAiPublic(payload, controller?.signal);
+        const answerText = result && (result.answer || result.reply || result.content);
+        if (answerText) {
+          setAnswer(answerText);
+          refreshAiMessages();
+        } else {
+          setAnswer('Не удалось получить ответ. Попробуйте переформулировать вопрос.');
+        }
       }
     } catch {
-      state.aiMessages[state.aiMessages.length - 1].content =
-        'Не удалось связаться с ИИ-наставником. Попробуйте ещё раз чуть позже.';
+      if (!gotToken) {
+        setAnswer('Не удалось связаться с ИИ-наставником. Попробуйте ещё раз чуть позже.');
+      }
     } finally {
+      clearTimeout(timer);
       state.aiSending = false;
       renderScreen();
     }
