@@ -816,12 +816,20 @@
     $('#movie-chat', root)?.addEventListener('click', () => { closeMovie(); setTab('chat'); });
   }
 
+  function cleanAiLinkTitle(s) {
+    return String(s || '')
+      .replace(/^\s*\[[^\]]*\]\s*/, '') // drop a leading "[тип]" copied from the knowledge base
+      .replace(/\s*\([^)]*\)\s*$/, '') // drop a trailing "(год, тема)"
+      .trim();
+  }
+
   function parseAiContent(raw) {
     const text = String(raw || '');
     const linkRe = /\[\[\s*(?:открыть|open)\s*\|\s*([^|\]]+?)\s*\|\s*([^\]]+?)\s*\]\]/gi;
     const links = [];
     let visible = text.replace(linkRe, (_match, type, title) => {
-      links.push({ type: type.trim().toLowerCase(), title: title.trim() });
+      const clean = cleanAiLinkTitle(title);
+      if (clean) links.push({ type: type.trim().toLowerCase(), title: clean });
       return '';
     });
     // Hide a still-incomplete "[[..." fragment while streaming.
