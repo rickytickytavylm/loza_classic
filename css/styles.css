@@ -2653,6 +2653,66 @@ button {
   white-space: pre-wrap;
 }
 
+.ai-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ai-link-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid rgba(var(--plum-rgb), 0.14);
+  border-radius: 14px;
+  background: rgba(var(--plum-rgb), 0.05);
+  color: var(--plum);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+
+.ai-link-chip:hover {
+  background: rgba(var(--plum-rgb), 0.1);
+  border-color: rgba(var(--plum-rgb), 0.24);
+}
+
+.ai-link-chip:active {
+  transform: scale(0.985);
+}
+
+.ai-link-chip > svg:first-child {
+  flex: 0 0 auto;
+  color: #5f8e4b;
+}
+
+.ai-link-chip > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+  opacity: 1;
+}
+
+.ai-link-chip > svg:last-child {
+  flex: 0 0 auto;
+  opacity: 0.5;
+}
+
 .ai-starters {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

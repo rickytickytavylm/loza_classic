@@ -816,9 +816,46 @@
     $('#movie-chat', root)?.addEventListener('click', () => { closeMovie(); setTab('chat'); });
   }
 
+  function parseAiContent(raw) {
+    const text = String(raw || '');
+    const linkRe = /\[\[\s*(?:открыть|open)\s*\|\s*([^|\]]+?)\s*\|\s*([^\]]+?)\s*\]\]/gi;
+    const links = [];
+    let visible = text.replace(linkRe, (_match, type, title) => {
+      links.push({ type: type.trim().toLowerCase(), title: title.trim() });
+      return '';
+    });
+    // Hide a still-incomplete "[[..." fragment while streaming.
+    visible = visible.replace(/\[\[[^\]]*$/, '');
+    visible = visible.replace(/\n{3,}/g, '\n\n').trim();
+    return { visible, links };
+  }
+
+  function aiLinkIcon(type) {
+    if (/(кино|фильм|movie)/.test(type)) return ic('movies', 16);
+    if (/(чат|chat)/.test(type)) return ic('chat', 16);
+    if (/(раздел|section|медиа)/.test(type)) return ic('media', 16);
+    return ic('play', 16);
+  }
+
+  function aiLinksHtml(links) {
+    if (!links.length) return '';
+    const chips = links.map((l) =>
+      `<button type="button" class="ai-link-chip" data-ai-open data-ai-type="${esc(l.type)}" data-ai-title="${esc(l.title)}">${aiLinkIcon(l.type)}<span>${esc(l.title)}</span>${ic('arrowRight', 15)}</button>`,
+    ).join('');
+    return `<div class="ai-links">${chips}</div>`;
+  }
+
   function aiMessagesHtml() {
     return state.aiMessages.map((m) => {
       const typing = state.aiSending && m.role === 'assistant' && !m.content;
+      if (m.role === 'assistant' && !typing) {
+        const { visible, links } = parseAiContent(m.content);
+        return `<article class="ai-message assistant">
+          <span>Лоза AI</span>
+          ${visible ? `<p>${esc(visible)}</p>` : ''}
+          ${aiLinksHtml(links)}
+        </article>`;
+      }
       return `<article class="ai-message ${m.role}">
         <span>${m.role === 'assistant' ? 'Лоза AI' : 'Вы'}</span>
         ${typing
@@ -826,6 +863,44 @@
           : `<p>${esc(m.content)}</p>`}
       </article>`;
     }).join('');
+  }
+
+  function openAiRecommendation(type, title) {
+    const norm = (s) => String(s || '')
+      .toLowerCase()
+      .replace(/[«»"'`ё]/g, (c) => (c === 'ё' ? 'е' : ''))
+      .replace(/[.,!?:;()]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const t = norm(title);
+    if (!t) { setTab('media'); return; }
+    const findBy = (arr, key) =>
+      arr.find((x) => norm(x[key]) === t)
+      || arr.find((x) => norm(x[key]) && (norm(x[key]).includes(t) || t.includes(norm(x[key]))));
+
+    if (/(кино|фильм|movie)/.test(type)) {
+      const mv = findBy(state.movies, 'title');
+      if (mv) { openMovie(mv.id); return; }
+      setTab('movies');
+      return;
+    }
+    if (/(чат|chat)/.test(type)) { setTab('chat'); return; }
+    if (/(раздел|section)/.test(type)) {
+      setTab('media');
+      const sec = state.librarySections.find(
+        (s) => norm(s.title) && (norm(s.title).includes(t) || t.includes(norm(s.title))),
+      );
+      if (sec) state.mediaSection = sec.id;
+      else state.mediaQuery = title;
+      renderScreen();
+      return;
+    }
+    // material / audio / video / text
+    const item = findBy(state.libraryItems, 'title');
+    if (item) { openItem(item.id); return; }
+    setTab('media');
+    state.mediaQuery = title;
+    renderScreen();
   }
 
   function refreshAiMessages() {
@@ -849,6 +924,11 @@
   function bindAi(root) {
     $$('[data-tab-link]', root).forEach((b) => { b.onclick = () => setTab(b.dataset.tabLink); });
     $$('[data-starter]', root).forEach((b) => { b.onclick = () => sendAi(b.dataset.starter); });
+    $('.ai-chat-window', root)?.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-ai-open]');
+      if (!chip) return;
+      openAiRecommendation(chip.dataset.aiType || '', chip.dataset.aiTitle || '');
+    });
     $('#ai-form', root)?.addEventListener('submit', (e) => {
       e.preventDefault();
       sendAi($('#ai-draft', root).value);
