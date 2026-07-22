@@ -4118,6 +4118,10 @@ body.material-immersive-open {
   object-fit: contain;
 }
 
+.insta-post-brand-mark {
+  padding: 1px;
+}
+
 .insta-post-meta {
   display: grid;
   gap: 2px;
@@ -4542,10 +4546,23 @@ body.material-immersive-open {
 }
 
 .inner-page-brand {
-  display: grid;
-  justify-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-width: 0;
   line-height: 1.1;
+}
+
+.inner-page-brand > div {
+  display: grid;
+  min-width: 0;
+}
+
+.inner-page-logo {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
 }
 
 .inner-page-brand strong {

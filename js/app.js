@@ -22,6 +22,14 @@
     return new URL(path, window.location.href).toString();
   }
 
+  function brandMark(className = '') {
+    return `<img class="brand-mark ${className}" src="${localAsset('assets/favicon.png')}" alt="" />`;
+  }
+
+  function innerBrand(label) {
+    return `<div class="inner-page-brand">${brandMark('inner-page-logo')}<div><strong>Лоза</strong><span>${esc(label)}</span></div></div>`;
+  }
+
   // Render a lucide-style SVG icon by name (matches React lucide-react icons)
   function ic(name, size = 24, opts = {}) {
     const paths = D.ICON_PATHS[name];
@@ -241,7 +249,7 @@
       const image = asset(post.imageUrl) || bgImage(index);
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
-          <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? `<img src="${asset('/images/new_logo.png')}" alt="Лоза" />` : esc(authorName[0])}</div>
+          <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? brandMark('insta-post-brand-mark') : esc(authorName[0])}</div>
           <div class="insta-post-meta"><strong>${esc(authorName)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
         </header>
         <div class="insta-post-media"><img alt="" src="${esc(image)}" loading="lazy" /></div>
@@ -437,7 +445,7 @@
   function innerHeader(label) {
     return `<header class="inner-page-header">
       <button class="inner-page-back" type="button" id="material-back" aria-label="Назад">${ic('chevronLeft', 22)}</button>
-      <div class="inner-page-brand"><strong>Лоза</strong><span>${esc(label)}</span></div>
+      ${innerBrand(label)}
       <span class="inner-page-spacer" aria-hidden="true"></span>
     </header>`;
   }
@@ -788,7 +796,7 @@
     return `<div class="movie-detail-page">
       <header class="inner-page-header movie-detail-header">
         <button class="inner-page-back" type="button" id="movie-back" aria-label="Назад">${ic('chevronLeft', 22)}</button>
-        <div class="inner-page-brand"><strong>Лоза</strong><span>Киноклуб</span></div>
+        ${innerBrand('Киноклуб')}
         <span class="inner-page-spacer" aria-hidden="true"></span>
       </header>
       <div class="movie-detail-body">
@@ -833,7 +841,7 @@
     const starters = !chatting ? `<div class="ai-starters">${D.AI_STARTERS.map((s) => `<button type="button" data-starter="${esc(s)}"><span>Начать разговор</span>${esc(s)}</button>`).join('')}</div>` : '';
     const msgs = aiMessagesHtml();
     return `<section class="ai-coach-page">
-      <header class="inner-page-header ai-inner-header"><button class="inner-page-back" type="button" data-tab-link="home" aria-label="Назад">${ic('chevronLeft', 22)}</button><div class="inner-page-brand"><strong>Лоза</strong><span>AI-наставник</span></div><span class="inner-page-spacer" aria-hidden="true"></span></header>
+      <header class="inner-page-header ai-inner-header"><button class="inner-page-back" type="button" data-tab-link="home" aria-label="Назад">${ic('chevronLeft', 22)}</button>${innerBrand('AI-наставник')}<span class="inner-page-spacer" aria-hidden="true"></span></header>
       <div class="ai-coach-shell${chatting ? ' is-chatting' : ''}">${hero}<div class="ai-chat-window">${msgs}</div>${starters}
       <form class="ai-composer" id="ai-form"><textarea rows="1" placeholder="Сообщение" id="ai-draft"></textarea><button type="submit">${ic('send', 18)}</button></form></div></section>`;
   }
