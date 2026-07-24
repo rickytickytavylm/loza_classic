@@ -783,7 +783,7 @@
         </div>
         <form class="telegram-composer" id="chat-form">
           <input placeholder="Сообщение" id="chat-draft" />
-          <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('send', 18)}</button>
+          <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>
       </section>
     </div>`;

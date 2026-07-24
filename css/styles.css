@@ -2052,19 +2052,29 @@ button {
   width: 40px;
   height: 40px;
   min-width: 40px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   color: var(--muted);
   background: transparent;
+  line-height: 0;
 }
 
 .telegram-composer-send {
   color: #fff;
-  background: #5fae4d;
+  background: linear-gradient(180deg, var(--olive) 0%, var(--olive-dark) 100%);
+  box-shadow: 0 8px 18px rgba(var(--plum-rgb), 0.22);
+}
+
+.telegram-composer-send svg {
+  display: block;
+  /* optical center for the up-arrow in a circle */
+  transform: translateY(-0.5px);
 }
 
 .telegram-composer-send:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 .chat-bg-picker-backdrop {
