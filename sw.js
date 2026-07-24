@@ -1,4 +1,4 @@
-const CACHE = 'loza-classic-v11';
+const CACHE = 'loza-classic-v12';
 const IMAGE_CACHE = 'loza-classic-images-v4';
 const PRECACHE = [
   './',

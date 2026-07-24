@@ -166,6 +166,157 @@
     return 'Материал клуба «Лоза» с понятными ориентирами для спокойного разговора и поддержки подростка.';
   }
 
+  function capitalizeRu(s) {
+    const t = String(s || '').trim();
+    if (!t) return '';
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  function hashDurationMinutes(id) {
+    let hash = 0;
+    const key = String(id || 'x');
+    for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    return 8 + (hash % 8); // 8–15 мин
+  }
+
+  function getMaterialDurationLabel(item) {
+    if (item.kind === 'audio') {
+      const m = hashDurationMinutes(item.id) + 4;
+      return `${m} минут`;
+    }
+    if (item.kind === 'video') return `${hashDurationMinutes(item.id)} минут`;
+    return 'Текст';
+  }
+
+  function getMaterialTopics(item) {
+    const title = cleanDisplayText(item.title).toLowerCase().replace(/ё/g, 'е');
+    const topics = [];
+    const rules = [
+      [/школ|учеб|урок|домашн|огэ|егэ|колледж/, 'Школа'],
+      [/груб|конфликт|ссор|крик|ссор/, 'Конфликт'],
+      [/общен|разговор|контакт|диалог/, 'Общение'],
+      [/эмоц|тревог|страх|обид|гнев|стыд/, 'Эмоции'],
+      [/границ|правил|санкц/, 'Границы'],
+      [/зависимост|гаджет|телефон|интернет|игр/, 'Зависимости'],
+      [/селфхарм|порез|суицид/, 'Кризис'],
+      [/сепарац|взросл|эмансип/, 'Сепарация'],
+      [/манипул/, 'Манипуляции'],
+      [/реабилитац|рехаб|стационар/, 'Реабилитация'],
+      [/сон|режим/, 'Режим'],
+      [/друг|компани|буллинг/, 'Социум'],
+    ];
+    for (const [re, label] of rules) {
+      if (re.test(title) && !topics.includes(label)) topics.push(label);
+      if (topics.length >= 4) break;
+    }
+    if (!topics.length) {
+      if (item.sectionId === 'podcasts') topics.push('Подкаст');
+      else if (item.sectionId === 'webinars') topics.push('Эфир');
+      else if (item.sectionId === 'questions') topics.push('Вопрос');
+      else topics.push('Клуб');
+    }
+    return topics;
+  }
+
+  /** 3–4 takeaway lines derived from the material title (not generic filler). */
+  function getMaterialTakeaways(item) {
+    const title = cleanDisplayText(item.title);
+    const lower = title.toLowerCase().replace(/ё/g, 'е');
+    const points = [];
+    const who = /доч/.test(lower) ? 'дочь'
+      : /сын/.test(lower) ? 'сын'
+      : /подрост/.test(lower) ? 'подросток'
+      : 'ребёнок';
+
+    const ifMatch = title.match(/если\s+(.+?)(?:\?|$)/i);
+    if (ifMatch) {
+      const raw = ifMatch[1].replace(/\?+$/, '').trim();
+      const chunks = raw
+        .split(/\s+и\s+|,(?!\s*\d)/i)
+        .map((s) => s.trim().replace(/^[а-яa-z]\.\s*/i, ''))
+        .filter((s) => s.length > 8)
+        .slice(0, 2);
+      for (const chunk of chunks) {
+        const c = chunk.toLowerCase().replace(/ё/g, 'е');
+        if (/не хочет|отказыва|не ид/.test(c)) {
+          points.push(`Почему ${who} отказывается и что за этим стоит`);
+        } else if (/груб|крич|орет|орёт|хамит/.test(c)) {
+          points.push('Что стоит за грубостью с близкими');
+        } else if (/вран|врет|врёт|лжет/.test(c)) {
+          points.push('Как реагировать на враньё без эскалации');
+        } else if (/вору|тырит|крад/.test(c)) {
+          points.push('Как говорить о воровстве и доверии');
+        } else if (/школ|урок|учеб/.test(c)) {
+          points.push('Как поддерживать учёбу без войны');
+        } else if (/телефон|гаджет|игр|интернет/.test(c)) {
+          points.push('Где граница контроля гаджетов');
+        } else {
+          points.push(capitalizeRu(`В чём суть ситуации: ${chunk}`));
+        }
+      }
+    }
+
+    // Topic-driven extras from the whole title
+    if (/школ/.test(lower) && !points.some((p) => /школ|учёб|учеб/.test(p.toLowerCase()))) {
+      points.push('Почему подросток саботирует школу');
+    }
+    if (/груб|конфликт|ссор/.test(lower) && !points.some((p) => /груб|конфликт/.test(p.toLowerCase()))) {
+      points.push('Как не усиливать конфликт ответом');
+    }
+    if (/границ|правил|санкц/.test(lower)) {
+      points.push('Какие правила реально работают');
+    }
+    if (/тревог|страх|паник/.test(lower)) {
+      points.push('Как отличить свою тревогу от сигнала ребёнка');
+    }
+    if (/зависимост|рехаб|реабилитац/.test(lower)) {
+      points.push('Где место родителя в процессе восстановления');
+    }
+    if (/манипул/.test(lower)) {
+      points.push('Как не попадать в привычную ловушку');
+    }
+    if (/контрол|гиперконтрол/.test(lower)) {
+      points.push('Где нормальный контроль, а где уже давление');
+      points.push('Как дать свободу и не потерять контакт');
+    }
+    if (/селфхарм|порез|суицид/.test(lower)) {
+      points.push('Что делать в остром моменте и куда обратиться');
+    }
+
+    // Always useful closing points for Q&A / video
+    if (item.sectionId === 'questions' || item.kind === 'video') {
+      if (!points.some((p) => /сегодня|вечером|сейчас/.test(p.toLowerCase()))) {
+        points.push('Что можно сделать уже сегодня');
+      }
+      if (!points.some((p) => /ошибк|ловуш|усилива/.test(p.toLowerCase()))) {
+        points.push('Какие ошибки родителей только усиливают ситуацию');
+      }
+    } else if (item.kind === 'audio') {
+      if (points.length < 2) points.push(`Главная идея выпуска «${title}»`);
+      if (points.length < 3) points.push('На что обратить внимание в своей семье');
+      if (points.length < 4) points.push('Какой маленький шаг забрать после прослушивания');
+    } else {
+      if (points.length < 2) points.push(`О чём материал «${title}»`);
+      if (points.length < 3) points.push('Какие ориентиры даёт разбор');
+      if (points.length < 4) points.push('Что примерить на свою ситуацию');
+    }
+
+    // Deduplicate and cap at 4
+    const seen = new Set();
+    const unique = [];
+    for (const p of points) {
+      const key = p.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(p);
+      if (unique.length >= 4) break;
+    }
+    while (unique.length < 3) {
+      unique.push('Как сохранить контакт, а не контроль');
+    }
+    return unique.slice(0, 4);
+  }
+
   function kinescopeEmbed(rawUrl) {
     try {
       const url = new URL(rawUrl);
@@ -191,6 +342,9 @@
     cleanContentText,
     getMaterialBody,
     getMaterialSummary,
+    getMaterialTakeaways,
+    getMaterialTopics,
+    getMaterialDurationLabel,
     itemHasMediaLayout,
     resolveAudioUrl,
     kinescopeEmbed,

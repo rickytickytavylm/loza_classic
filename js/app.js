@@ -348,17 +348,17 @@
     };
   }
 
-  function renderMedia() {
-    const cats = Object.entries(D.MEDIA_SECTION_LABELS).map(([id, label]) =>
-      `<button type="button" class="${state.mediaSection === id ? 'active' : ''}" data-cat="${id}">${label}</button>`,
-    ).join('');
-    const items = state.libraryItems.filter((item) => {
+  function filteredMediaItems() {
+    return state.libraryItems.filter((item) => {
       const sec = state.mediaSection === 'all' || item.sectionId === state.mediaSection;
       const q = state.mediaQuery.trim().toLowerCase();
       const query = !q || `${item.title} ${item.meta} ${item.description}`.toLowerCase().includes(q);
       return sec && query;
     });
-    const cards = items.map((item, i) => {
+  }
+
+  function mediaCardsHtml(items) {
+    return items.map((item, i) => {
       const liked = state.mediaLikes.includes(item.id);
       const kind = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Текст';
       return `<article class="media-feed-card" data-item="${esc(item.id)}">
@@ -373,35 +373,17 @@
         </div>
       </article>`;
     }).join('');
-    const note = state.mediaQuery.trim()
-      ? `<p class="media-feed-search-note">Найдено ${items.length} материалов по запросу «${esc(state.mediaQuery.trim())}»</p>`
-      : '';
-    return `<div class="media-feed-page">
-      <div class="media-feed-controls">
-        <header class="media-feed-header">
-          <label class="media-feed-search media-feed-search-top"><span>${ic('search', 18)}</span><input placeholder="Поиск материалов…" value="${esc(state.mediaQuery)}" id="media-search" /><button class="media-feed-search-clear" type="button" id="media-clear" ${state.mediaQuery ? '' : 'hidden'}>${ic('x', 16)}</button></label>
-          <nav class="media-feed-categories" aria-label="Разделы медиатеки">${cats}</nav>
-          ${note}
-        </header>
-      </div>
-      <div class="media-feed-scroll"><div class="media-feed-list">${cards || '<div class="media-feed-empty"><p>Ничего не найдено</p></div>'}</div></div>
-    </div>`;
   }
 
-  function bindMedia(root) {
-    const search = $('#media-search', root);
-    if (search) {
-      search.oninput = () => { state.mediaQuery = search.value; renderScreen(); };
-    }
-    $('#media-clear', root)?.addEventListener('click', () => { state.mediaQuery = ''; renderScreen(); });
-    $$('[data-cat]', root).forEach((b) => { b.onclick = () => { state.mediaSection = b.dataset.cat; renderScreen(); }; });
+  function bindMediaCardActions(root) {
     $$('[data-like-item]', root).forEach((b) => {
       b.onclick = () => {
         const id = b.dataset.likeItem;
         if (state.mediaLikes.includes(id)) state.mediaLikes = state.mediaLikes.filter((x) => x !== id);
         else state.mediaLikes.push(id);
         localStorage.setItem('media-likes', JSON.stringify(state.mediaLikes));
-        renderScreen();
+        // Soft refresh cards only — keep search focus/caret
+        refreshMediaResults(root);
       };
     });
     $$('[data-open-item]', root).forEach((b) => {
@@ -413,6 +395,68 @@
         if (item && navigator.share) navigator.share({ title: item.title, text: `${item.title} — Лоза` }).catch(() => {});
       };
     });
+  }
+
+  function refreshMediaResults(root) {
+    const items = filteredMediaItems();
+    const list = $('.media-feed-list', root);
+    const noteHost = $('.media-feed-search-note', root);
+    const header = $('.media-feed-header', root);
+    const clearBtn = $('#media-clear', root);
+    if (clearBtn) clearBtn.hidden = !state.mediaQuery;
+    if (list) {
+      list.innerHTML = mediaCardsHtml(items) || '<div class="media-feed-empty"><p>Ничего не найдено</p></div>';
+      bindMediaCardActions(list);
+    }
+    const noteHtml = state.mediaQuery.trim()
+      ? `<p class="media-feed-search-note">Найдено ${items.length} материалов по запросу «${esc(state.mediaQuery.trim())}»</p>`
+      : '';
+    if (noteHost) {
+      if (noteHtml) noteHost.outerHTML = noteHtml;
+      else noteHost.remove();
+    } else if (noteHtml && header) {
+      header.insertAdjacentHTML('beforeend', noteHtml);
+    }
+  }
+
+  function renderMedia() {
+    const cats = Object.entries(D.MEDIA_SECTION_LABELS).map(([id, label]) =>
+      `<button type="button" class="${state.mediaSection === id ? 'active' : ''}" data-cat="${id}">${label}</button>`,
+    ).join('');
+    const items = filteredMediaItems();
+    const note = state.mediaQuery.trim()
+      ? `<p class="media-feed-search-note">Найдено ${items.length} материалов по запросу «${esc(state.mediaQuery.trim())}»</p>`
+      : '';
+    return `<div class="media-feed-page">
+      <div class="media-feed-controls">
+        <header class="media-feed-header">
+          <label class="media-feed-search media-feed-search-top"><span>${ic('search', 18)}</span><input placeholder="Поиск материалов…" value="${esc(state.mediaQuery)}" id="media-search" autocomplete="off" /><button class="media-feed-search-clear" type="button" id="media-clear" ${state.mediaQuery ? '' : 'hidden'}>${ic('x', 16)}</button></label>
+          <nav class="media-feed-categories" aria-label="Разделы медиатеки">${cats}</nav>
+          ${note}
+        </header>
+      </div>
+      <div class="media-feed-scroll"><div class="media-feed-list">${mediaCardsHtml(items) || '<div class="media-feed-empty"><p>Ничего не найдено</p></div>'}</div></div>
+    </div>`;
+  }
+
+  function bindMedia(root) {
+    const search = $('#media-search', root);
+    if (search) {
+      // Soft filter: update list only. Full renderScreen() on every keystroke
+      // remounts the input and kicks the keyboard/caret out.
+      search.oninput = () => {
+        state.mediaQuery = search.value;
+        refreshMediaResults(root);
+      };
+    }
+    $('#media-clear', root)?.addEventListener('click', () => {
+      state.mediaQuery = '';
+      if (search) search.value = '';
+      refreshMediaResults(root);
+      search?.focus();
+    });
+    $$('[data-cat]', root).forEach((b) => { b.onclick = () => { state.mediaSection = b.dataset.cat; renderScreen(); }; });
+    bindMediaCardActions(root);
   }
 
   function openItem(id) {
@@ -469,10 +513,37 @@
     return `<div class="${phClass}">${ic('play', 28)}<h3>${item.kind === 'audio' ? 'Аудио недоступно' : 'Видео скоро появится'}</h3><p>Текст и описание материала доступны ниже.</p></div>`;
   }
 
+  function materialLessonExtrasHtml(item) {
+    if (item.kind !== 'video' && item.kind !== 'audio') return '';
+    const duration = M.getMaterialDurationLabel(item);
+    const kindLabel = item.kind === 'video' ? 'Видео' : 'Аудио';
+    const topics = M.getMaterialTopics(item);
+    const takeaways = M.getMaterialTakeaways(item);
+    const minutes = parseInt(String(duration).replace(/\D/g, ''), 10) || 12;
+    const chips = topics.map((t) => `<small>${esc(t)}</small>`).join('');
+    const points = takeaways.map((p) =>
+      `<li><span class="material-takeaway-check">${ic('check', 16)}</span><span>${esc(p)}</span></li>`,
+    ).join('');
+    const ctaLabel = item.kind === 'audio' ? 'Слушать' : 'Смотреть';
+    return `
+      <div class="material-meta-row">
+        <span>${ic('clock', 15)} ${esc(duration)}</span>
+        <span>${ic(item.kind === 'audio' ? 'audioLines' : 'play', 15)} ${kindLabel}</span>
+      </div>
+      <div class="material-chips">${chips}</div>
+      <section class="material-takeaways" aria-label="Что узнаете">
+        <h2>За ${minutes} минут вы узнаете</h2>
+        <ul>${points}</ul>
+      </section>
+      <button type="button" class="material-cta" id="material-cta">
+        <span class="material-cta-copy"><strong>${ctaLabel}</strong></span>
+        ${ic('play', 18)}
+      </button>`;
+  }
+
   function renderMaterialDetail(item) {
     const hasMediaLayout = M.itemHasMediaLayout(item);
     const materialBody = M.getMaterialBody(item);
-    const materialSummary = M.getMaterialSummary(item);
     const displayTitle = esc(M.cleanDisplayText(item.title));
     const displayMeta = esc(M.cleanDisplayText(item.meta));
     const kindLabel = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Материал';
@@ -481,11 +552,11 @@
     if (hasMediaLayout) {
       return `<div class="material-page material-page-immersive">
         ${innerHeader(kindLabel)}
-        <div class="material-immersive-media">${renderMaterialMedia(item, true)}</div>
+        <div class="material-immersive-media" id="material-player">${renderMaterialMedia(item, true)}</div>
         <div class="material-immersive-body">
           <span class="material-kicker">${displayMeta}</span>
           <h1>${displayTitle}</h1>
-          <p class="material-summary">${esc(materialSummary)}</p>
+          ${materialLessonExtrasHtml(item)}
           <section class="material-section material-section-plain">
             <h2>${item.kind === 'audio' ? 'О выпуске' : 'О материале'}</h2>
             ${bodyParagraphs}
@@ -499,7 +570,7 @@
       <section class="material-hero glass-panel">
         <span>${displayMeta}</span>
         <h1>${displayTitle}</h1>
-        <p>${esc(materialSummary)}</p>
+        <p>${esc(M.getMaterialSummary(item))}</p>
         <small class="material-type-label">${kindLabel}</small>
       </section>
       <section class="material-section glass-card">
@@ -516,6 +587,14 @@
   function bindMaterialDetail(root, item) {
     $('#material-back', root)?.addEventListener('click', closeMaterial);
     $('#material-audio-open', root)?.addEventListener('click', () => openAudioPlayerModal(item));
+    $('#material-cta', root)?.addEventListener('click', () => {
+      if (item.kind === 'audio') {
+        openAudioPlayerModal(item);
+        return;
+      }
+      const player = $('#material-player', root) || $('.material-immersive-media', root);
+      player?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   function openAudioPlayerModal(item) {
