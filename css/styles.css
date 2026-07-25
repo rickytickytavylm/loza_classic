@@ -355,8 +355,9 @@ button {
 .hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  gap: 28px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: clamp(20px, 3vw, 36px);
+  align-items: center;
   min-height: 520px;
   padding: clamp(28px, 5vw, 58px);
   border-radius: 44px;
@@ -376,6 +377,8 @@ button {
   position: relative;
   z-index: 2;
   align-self: center;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .eyebrow,
@@ -390,12 +393,12 @@ button {
   text-transform: uppercase;
 }
 
-.hero h1,
+/* Display font only for secondary section titles — not brand wordmark / hero
+   (Unbounded is too wide and was crushing the hero layout). */
 .section-header h2,
 .profile-hero h1,
 .material-page-immersive h1,
-.movie-detail-body h1,
-.brand span {
+.movie-detail-body h1 {
   font-family: var(--font-display);
 }
 
@@ -404,10 +407,18 @@ button {
 .profile-hero h1 {
   margin: 14px 0;
   color: var(--ink);
-  font-size: clamp(38px, 6vw, 76px);
-  line-height: 0.94;
-  letter-spacing: -0.04em;
-  font-weight: 700;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+  font-weight: 800;
+}
+
+.hero h1 {
+  font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
+  max-width: 14ch;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
 }
 
 .hero p,
@@ -491,16 +502,22 @@ button {
 
 .hero-art {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   display: grid;
   place-items: center;
-  min-height: 360px;
+  min-width: 0;
+  min-height: 320px;
   border-radius: 0;
   background: transparent;
+  overflow: hidden;
 }
 
 .hero-art img {
-  width: min(88%, 390px);
+  display: block;
+  width: min(100%, 360px);
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
   filter: drop-shadow(0 30px 50px rgba(var(--plum-rgb), 0.16));
 }
 
@@ -3174,12 +3191,12 @@ button {
   }
 }
 
-/* Final visual polish for the React PWA header and media controls. */
+/* Brand wordmark — real loaded fonts (not "Manrope Variable", which never loads). */
 .brand span {
-  font-family: "Manrope Variable", "Onest Variable", "Segoe UI", system-ui, sans-serif;
-  font-size: 31px;
-  font-weight: 820;
-  letter-spacing: -0.065em;
+  font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 
