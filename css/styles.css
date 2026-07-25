@@ -3098,7 +3098,12 @@ button {
   }
 
   .hero h1 {
-    font-size: clamp(32px, 9vw, 42px);
+    font-family: var(--font-display);
+    font-size: clamp(32px, 9vw, 44px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    max-width: none;
   }
 
   .hero-copy > p {
