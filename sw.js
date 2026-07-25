@@ -1,5 +1,5 @@
-const CACHE = 'loza-classic-v13';
-const IMAGE_CACHE = 'loza-classic-images-v4';
+const CACHE = 'loza-classic-v14';
+const IMAGE_CACHE = 'loza-classic-images-v5';
 const PRECACHE = [
   './',
   './index.html',
@@ -12,6 +12,10 @@ const PRECACHE = [
   './js/app.js',
   './config.js',
   './manifest.json',
+  './assets/webp/new_logo.webp',
+  './assets/webp/hero_logo.webp',
+  './assets/favicon.png',
+  './assets/brand-avatar.png',
 ];
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|ico)(\?|$)/i;

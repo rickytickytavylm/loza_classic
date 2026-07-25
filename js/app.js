@@ -7,15 +7,19 @@
     sections: D.LIBRARY_SECTIONS,
     items: D.LIBRARY_ITEMS,
   };
-  const ASSET_BASE = window.__LOZA_FRONTEND_BASE__ || '';
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+  /** Resolve image/media paths from this origin only (GitHub Pages). Never remote CDN. */
   function asset(path) {
     if (!path) return '';
-    if (/^https?:\/\//i.test(path)) return path;
-    if (path.startsWith('/assets/')) return localAsset(`.${path}`);
-    return `${ASSET_BASE}${path}`;
+    if (/^https?:\/\//i.test(path)) {
+      // Legacy remote Timeweb URLs break on many RU mobile networks — refuse them.
+      if (/twc1\.net|rickytickytavylm-loza-front/i.test(path)) return '';
+      return path;
+    }
+    const clean = String(path).replace(/^\.\//, '').replace(/^\//, '');
+    return localAsset(clean);
   }
 
   function localAsset(path) {
@@ -202,7 +206,7 @@
           <p>${esc(M.getMaterialSummary(item))}</p>
         </div>
         <footer class="editorial-card-footer">
-          <img alt="" class="editorial-icon" src="${asset('/images/new_logo.png')}" />
+          <img alt="" class="editorial-icon" src="${asset('/assets/webp/new_logo.webp')}" />
           <div class="editorial-meta"><strong>${esc(item.meta || '')}</strong><span>${item.kind === 'video' ? 'Видеоответ' : item.kind === 'audio' ? 'Аудио' : 'Текст'}</span></div>
           <button class="editorial-cta" type="button" data-open-media="${esc(item.id)}">Читать</button>
         </footer>
@@ -220,7 +224,7 @@
           </div>
         </div>
         <div class="hero-art">
-          <img src="${asset('/images/hero_section-logo.png')}" alt="Лоза" />
+          <img src="${asset('/assets/webp/hero_logo.webp')}" alt="Лоза" />
           <div class="hero-note">${ic('shieldCheck', 18)} Лента и превью открыты</div>
         </div>
       </section>
@@ -362,7 +366,7 @@
       const liked = state.mediaLikes.includes(item.id);
       const kind = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Текст';
       return `<article class="media-feed-card" data-item="${esc(item.id)}">
-        <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/images/new_logo.png')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span></div>
+        <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span></div>
         <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}"><img alt="" src="${bgImage(i)}" loading="lazy" /></button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
       <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item))}</p>
@@ -767,7 +771,7 @@
 
     return `<div class="telegram-chat-layout ${state.chatView === 'rooms' ? 'rooms-open' : 'thread-open'}">
       <aside class="telegram-room-list">
-        <div class="telegram-room-list-head"><img class="telegram-room-list-logo" src="${asset('/images/new_logo.png')}" alt="" /><h2>Чаты клуба</h2></div>
+        <div class="telegram-room-list-head"><img class="telegram-room-list-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><h2>Чаты клуба</h2></div>
         ${roomsListInner}
       </aside>
       <section class="telegram-thread">
