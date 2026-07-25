@@ -2,7 +2,8 @@
 
 :root {
   color-scheme: light;
-  font-family: "Onest", "Manrope", "Inter", "Segoe UI", system-ui, sans-serif;
+  font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Unbounded", "Onest", "Manrope", sans-serif;
   color: #1e1528;
   background: #fbf7fd;
   font-synthesis: none;
@@ -391,12 +392,22 @@ button {
 
 .hero h1,
 .section-header h2,
+.profile-hero h1,
+.material-page-immersive h1,
+.movie-detail-body h1,
+.brand span {
+  font-family: var(--font-display);
+}
+
+.hero h1,
+.section-header h2,
 .profile-hero h1 {
   margin: 14px 0;
   color: var(--ink);
   font-size: clamp(38px, 6vw, 76px);
   line-height: 0.94;
-  letter-spacing: -0.07em;
+  letter-spacing: -0.04em;
+  font-weight: 700;
 }
 
 .hero p,
@@ -669,6 +680,8 @@ button {
 .section {
   display: grid;
   gap: 18px;
+  /* Match hero inner padding so left edges align on desktop */
+  padding-inline: clamp(28px, 5vw, 58px);
 }
 
 .section-header {
@@ -1803,13 +1816,22 @@ button {
   z-index: 1;
 }
 
+/* Sticky + negative margin keeps the pattern covering the full scroll height
+   (absolute inset:0 only covers the viewport and leaves a white gap below). */
 .chat-background {
-  position: absolute;
-  inset: 0;
+  position: sticky;
+  top: 0;
+  left: 0;
   z-index: 0;
+  flex: 0 0 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0 0 -100%;
   overflow: hidden;
   pointer-events: none;
   background-color: var(--chat-bg-b);
+  align-self: stretch;
 }
 
 .chat-background::before,
@@ -3029,18 +3051,18 @@ button {
     padding-top: 8px;
   }
 
-  /* Soft fade so page content dissolves into the background instead of
-     bleeding through the translucent floating navigation. */
+  /* Soft scrim under the floating nav — short, so it doesn't read as a
+     blurry empty bar over the content. */
   .app::after {
     content: "";
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 26px);
+    height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 10px);
     z-index: 29;
     pointer-events: none;
-    background: linear-gradient(180deg, rgba(235, 230, 239, 0) 0%, var(--bg-deep) 66%);
+    background: linear-gradient(180deg, rgba(251, 247, 253, 0) 0%, var(--bg) 78%);
   }
 
   .app.immersive-ai::after,
@@ -3052,6 +3074,10 @@ button {
     min-height: auto;
     padding: 8px 0 18px;
     border-radius: 0;
+  }
+
+  .section {
+    padding-inline: 0;
   }
 
   .hero h1 {
@@ -3949,27 +3975,10 @@ body.material-immersive-open {
   padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 20px);
 }
 
-/* Fade scrolling content into the real background near the floating nav so a
-   partial card never reads as a stray opaque rectangle above the nav. */
-@media (max-width: 980px) {
-  .media-feed-scroll,
-  .page-shell-feed {
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      #000 0,
-      #000 calc(100% - var(--bottom-nav-height) - env(safe-area-inset-bottom, 0px) - 8px),
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to bottom,
-      #000 0,
-      #000 calc(100% - var(--bottom-nav-height) - env(safe-area-inset-bottom, 0px) - 8px),
-      transparent 100%
-    );
-  }
-}
-
 .media-feed-controls {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   flex-shrink: 0;
   background: var(--bg);
   border-bottom: 1px solid rgba(var(--plum-rgb), 0.08);
@@ -4841,7 +4850,10 @@ body.material-immersive-open {
 }
 
 .material-immersive-media {
-  padding: 0 12px;
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 12px 16px 0;
   background: var(--bg);
 }
 
@@ -4853,7 +4865,49 @@ body.material-immersive-open {
 
 .material-immersive-body {
   gap: 14px;
+  max-width: 720px;
   padding: 22px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 981px) {
+  .material-page-immersive {
+    background:
+      radial-gradient(1200px 480px at 50% -10%, rgba(var(--plum-soft-rgb), 0.28), transparent 60%),
+      var(--bg);
+  }
+
+  .material-immersive-media {
+    padding: 28px 28px 0;
+  }
+
+  .material-video-immersive {
+    border-radius: 22px !important;
+    box-shadow: 0 22px 60px rgba(var(--plum-rgb), 0.16);
+  }
+
+  .material-page-immersive h1 {
+    font-size: clamp(32px, 3.4vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+  }
+
+  .material-immersive-body {
+    padding: 28px 28px calc(48px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .material-takeaways {
+    max-width: 560px;
+  }
+
+  .material-cta {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 680px) {
+  .material-immersive-media {
+    padding: 8px 12px 0;
+  }
 }
 
 .material-summary {
@@ -4917,10 +4971,35 @@ body.material-immersive-open {
 
 .profile-ios {
   display: grid;
-  gap: 26px;
-  max-width: 640px;
+  gap: 22px;
+  width: 100%;
+  max-width: 720px;
   margin: 0 auto;
-  padding-bottom: 12px;
+  padding: 4px 0 24px;
+}
+
+@media (min-width: 981px) {
+  .profile-ios {
+    max-width: 880px;
+    gap: 28px;
+    padding: 12px 8px 40px;
+    grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+
+  .profile-ios-hero {
+    grid-column: 1 / -1;
+  }
+
+  .profile-ios-aside {
+    display: grid;
+    gap: 22px;
+  }
+
+  .profile-ios-main {
+    display: grid;
+    gap: 22px;
+  }
 }
 
 .profile-ios-hero {
@@ -4992,7 +5071,9 @@ body.material-immersive-open {
   padding: 14px 16px;
   border: 0;
   border-bottom: 1px solid rgba(var(--plum-rgb), 0.08);
+  color: inherit;
   background: transparent;
+  font: inherit;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -5002,8 +5083,19 @@ body.material-immersive-open {
   border-bottom: 0;
 }
 
+.ios-row:hover {
+  background: rgba(var(--plum-rgb), 0.04);
+}
+
 .ios-row:active {
-  background: rgba(var(--plum-rgb), 0.06);
+  background: rgba(var(--plum-rgb), 0.08);
+}
+
+.ios-row > svg:last-child {
+  flex: 0 0 auto;
+  margin-left: auto;
+  opacity: 0.35;
+  color: var(--muted);
 }
 
 .ios-row-icon {

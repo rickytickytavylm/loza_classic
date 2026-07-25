@@ -1092,11 +1092,13 @@
     }
   }
 
-  function iosRow(icon, label, sub) {
-    return `<div class="ios-row">
+  function iosRow(icon, label, sub, action) {
+    const act = action ? ` data-profile-action="${esc(action)}"` : '';
+    return `<button type="button" class="ios-row"${act}>
       <span class="ios-row-icon">${ic(icon, 20)}</span>
       <span class="ios-row-text"><strong>${esc(label)}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}</span>
-    </div>`;
+      ${ic('chevronRight', 18)}
+    </button>`;
   }
 
   function renderProfile() {
@@ -1105,31 +1107,54 @@
         <div class="profile-ios-avatar">Г</div>
         <div class="profile-ios-identity">
           <h1>Гость</h1>
-          <p>Психологический клуб «Лоза»</p>
+          <p>Психологический клуб «Лоза» · открытый доступ</p>
         </div>
       </section>
 
-      <div class="ios-group">
-        <div class="ios-group-title">Настройки</div>
-        <div class="ios-list">
-          ${iosRow('settings', 'Уведомления', 'Напоминания о новых материалах')}
-          ${iosRow('ai', 'Внешний вид', 'Светлая тема')}
+      <div class="profile-ios-aside">
+        <div class="ios-group">
+          <div class="ios-group-title">Быстрый доступ</div>
+          <div class="ios-list">
+            ${iosRow('media', 'Медиатека', 'Подкасты, разборы и эфиры', 'media')}
+            ${iosRow('chat', 'Чаты клуба', 'Общий чат и вопросы экспертам', 'chat')}
+            ${iosRow('ai', 'ИИ-наставник', 'Короткие ориентиры по ситуации', 'ai')}
+            ${iosRow('movies', 'Киноклуб', 'Фильмы с вопросами для семьи', 'movies')}
+          </div>
         </div>
       </div>
 
-      <div class="ios-group">
-        <div class="ios-group-title">О приложении</div>
-        <div class="ios-list">
-          ${iosRow('shieldCheck', 'О клубе «Лоза»', 'Психологический клуб для родителей')}
-          ${iosRow('messageCircle', 'Поддержка', 'Мы на связи')}
+      <div class="profile-ios-main">
+        <div class="ios-group">
+          <div class="ios-group-title">О клубе</div>
+          <div class="ios-list">
+            ${iosRow('shieldCheck', 'О «Лозе»', 'Бережная поддержка родителей подростков', 'about')}
+            ${iosRow('feed', 'Лента клуба', 'Заметки и короткие разборы', 'feed')}
+            ${iosRow('messageCircle', 'Поддержка', 'Написать в чат клуба', 'support')}
+          </div>
         </div>
+        <p class="ios-footnote">Сейчас вы в гостевом режиме — весь контент открыт. Авторизация и личный кабинет появятся позже.</p>
       </div>
-
-      <p class="ios-footnote">Версия для участников клуба «Лоза».</p>
     </div>`;
   }
 
-  function bindProfile(_root) {}
+  function bindProfile(root) {
+    $$('[data-profile-action]', root).forEach((btn) => {
+      btn.onclick = () => {
+        const action = btn.dataset.profileAction;
+        if (action === 'about') {
+          setTab('home');
+          return;
+        }
+        if (action === 'support') {
+          setTab('chat');
+          return;
+        }
+        if (['home', 'feed', 'media', 'chat', 'movies', 'ai'].includes(action)) {
+          setTab(action);
+        }
+      };
+    });
+  }
 
   function closePortal() { $('#portal').innerHTML = ''; }
   function bindModalClose() {
