@@ -74,6 +74,7 @@
     aiSending: false,
     feedLikes: {},
     feedComments: {},
+    listScroll: null, // { tab, media, shell } — restore after closing a material
   };
 
   function esc(s) {
@@ -473,6 +474,28 @@
     bindMediaCardActions(root);
   }
 
+  function captureListScroll() {
+    state.listScroll = {
+      tab: state.tab,
+      media: $('.media-feed-scroll')?.scrollTop || 0,
+      shell: $('#page-shell')?.scrollTop || 0,
+    };
+  }
+
+  function restoreListScroll() {
+    const saved = state.listScroll;
+    if (!saved || saved.tab !== state.tab) return;
+    // Double rAF: wait until the rebuilt list is laid out.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const feed = $('.media-feed-scroll');
+        if (feed) feed.scrollTop = saved.media;
+        const shell = $('#page-shell');
+        if (shell) shell.scrollTop = saved.shell;
+      });
+    });
+  }
+
   function openItem(id) {
     const item = state.libraryItems.find((x) => x.id === id);
     if (!item) return;
@@ -480,8 +503,9 @@
       openAudioPlayerModal(item);
       return;
     }
+    captureListScroll();
     state.selectedItemId = id;
-    $('#page-shell').scrollTop = 0;
+    // Don't reset the list scroll — immersive detail opens in #portal on top.
     renderScreen();
   }
 
@@ -490,6 +514,7 @@
     document.body.classList.remove('material-immersive-open');
     $('#portal').innerHTML = '';
     renderScreen();
+    restoreListScroll();
   }
 
   function materialBodyHtml(text) {
