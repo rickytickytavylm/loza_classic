@@ -172,20 +172,23 @@
     return t.charAt(0).toUpperCase() + t.slice(1);
   }
 
-  function hashDurationMinutes(id) {
-    let hash = 0;
-    const key = String(id || 'x');
-    for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-    return 8 + (hash % 8); // 8–15 мин
+  /** Real duration only — never invent minutes. Returns e.g. "12 минут" or "". */
+  function getMaterialDurationLabel(item) {
+    const candidates = [item.duration, item.runtime, item.meta];
+    for (const raw of candidates) {
+      const m = String(raw || '').match(/(\d+)\s*(?:мин|минут|min\.?)/i);
+      if (m) {
+        const n = Number(m[1]);
+        if (n > 0 && n < 600) return `${n} минут`;
+      }
+    }
+    return '';
   }
 
-  function getMaterialDurationLabel(item) {
-    if (item.kind === 'audio') {
-      const m = hashDurationMinutes(item.id) + 4;
-      return `${m} минут`;
-    }
-    if (item.kind === 'video') return `${hashDurationMinutes(item.id)} минут`;
-    return 'Текст';
+  function getMaterialDurationMinutes(item) {
+    const label = getMaterialDurationLabel(item);
+    const m = label.match(/(\d+)/);
+    return m ? Number(m[1]) : 0;
   }
 
   function getMaterialTopics(item) {
@@ -345,6 +348,7 @@
     getMaterialTakeaways,
     getMaterialTopics,
     getMaterialDurationLabel,
+    getMaterialDurationMinutes,
     itemHasMediaLayout,
     resolveAudioUrl,
     kinescopeEmbed,

@@ -3458,6 +3458,13 @@ body.material-immersive-open .app::after {
 }
 
 .material-page-immersive {
+  --m-pad-x: 20px;
+  --m-8: 8px;
+  --m-12: 12px;
+  --m-16: 16px;
+  --m-20: 20px;
+  --m-24: 24px;
+  --m-32: 32px;
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -3482,11 +3489,6 @@ body.material-immersive-open {
   margin-left: 0;
 }
 
-.material-video-immersive {
-  border-radius: 0 !important;
-  box-shadow: none;
-}
-
 .audio-frame-immersive {
   padding: 0;
   border: 0;
@@ -3502,11 +3504,11 @@ body.material-immersive-open {
 
 .material-immersive-body {
   display: grid;
-  gap: 12px;
+  gap: 0;
   width: 100%;
-  max-width: 680px;
+  max-width: 720px;
   margin: 0 auto;
-  padding: 16px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+  padding: 24px 20px calc(32px + env(safe-area-inset-bottom, 0px));
 }
 
 .glass-back-btn {
@@ -3526,19 +3528,28 @@ body.material-immersive-open {
 }
 
 .material-kicker {
-  color: var(--olive-dark);
+  margin: 0;
+  color: var(--ink);
   font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  opacity: 0.6;
 }
 
 .material-page-immersive h1 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(28px, 7vw, 42px);
-  line-height: 1.02;
-  letter-spacing: -0.05em;
+  font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 42px;
+  letter-spacing: -0.02em;
+}
+
+.material-page-immersive h1.is-long {
+  font-size: 34px;
+  line-height: 40px;
 }
 
 .material-page-immersive > .material-immersive-body > p {
@@ -3612,25 +3623,32 @@ body.material-immersive-open {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 4px;
+  margin: 0;
 }
 
+.material-chip,
 .material-chips small {
-  padding: 8px 11px;
-  border-radius: 999px;
-  color: var(--olive-dark);
-  background: rgba(var(--plum-rgb), 0.1);
-  font-weight: 850;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  color: var(--ink);
+  background: rgba(var(--plum-rgb), 0.08);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
 }
 
 .material-meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 2px;
+  align-items: center;
+  gap: 20px;
+  margin: 0;
   color: var(--muted);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .material-meta-row span {
@@ -3640,29 +3658,34 @@ body.material-immersive-open {
 }
 
 .material-meta-row svg {
+  width: 18px;
+  height: 18px;
   opacity: 0.72;
 }
 
 .material-takeaways {
   display: grid;
-  gap: 12px;
-  padding: 16px 16px 14px;
-  border-radius: 20px;
-  background: rgba(var(--plum-rgb), 0.06);
-  border: 1px solid rgba(var(--plum-rgb), 0.1);
+  gap: 16px;
+  margin: 0;
+  padding: 20px;
+  border-radius: 24px;
+  background: #fff;
+  border: 1px solid #ececec;
+  box-shadow: 0 4px 20px rgba(30, 21, 40, 0.08);
 }
 
 .material-takeaways h2 {
   margin: 0;
   color: var(--ink);
-  font-size: 17px;
-  font-weight: 800;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 34px;
   letter-spacing: -0.02em;
 }
 
 .material-takeaways ul {
   display: grid;
-  gap: 10px;
+  gap: 18px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3671,23 +3694,28 @@ body.material-immersive-open {
 .material-takeaways li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 14px;
   color: var(--ink);
-  font-size: 15px;
-  line-height: 1.4;
-  font-weight: 600;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
 }
 
 .material-takeaway-check {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
   border-radius: 50%;
   color: #fff;
   background: var(--olive-dark);
+}
+
+.material-takeaway-check svg {
+  width: 12px;
+  height: 12px;
 }
 
 .material-cta {
@@ -3696,10 +3724,11 @@ body.material-immersive-open {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  min-height: 56px;
-  padding: 14px 18px;
+  min-height: 60px;
+  height: 60px;
+  padding: 0 24px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 30px;
   color: #fff;
   background: linear-gradient(180deg, var(--olive) 0%, var(--olive-dark) 100%);
   box-shadow: 0 12px 28px rgba(var(--plum-rgb), 0.28);
@@ -3722,12 +3751,21 @@ body.material-immersive-open {
 }
 
 .material-cta-copy strong {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.material-cta-copy small {
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.85;
 }
 
 .material-cta svg {
   flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
   opacity: 0.92;
 }
 
@@ -4875,20 +4913,65 @@ body.material-immersive-open {
   width: 100%;
   max-width: 920px;
   margin: 0 auto;
-  padding: 12px 16px 0;
+  padding: var(--m-12) var(--m-pad-x) 0;
   background: var(--bg);
 }
 
 .material-video-immersive {
+  position: relative;
+  width: 100%;
   overflow: hidden;
-  border-radius: 16px !important;
+  /* ~1.58:1 MasterClass-like frame (taller than 16:9) */
+  aspect-ratio: 1.58 / 1;
+  border-radius: 20px !important;
   box-shadow: 0 10px 28px rgba(var(--plum-rgb), 0.12);
 }
 
+.material-video-immersive::before {
+  content: none;
+  display: none;
+  padding: 0;
+}
+
 .material-immersive-body {
-  gap: 14px;
+  display: grid;
+  gap: 0;
+  width: 100%;
   max-width: 720px;
-  padding: 22px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+  margin: 0 auto;
+  /* 24px from video → title block */
+  padding: var(--m-24) var(--m-pad-x) calc(var(--m-32) + env(safe-area-inset-bottom, 0px));
+}
+
+.material-immersive-body > .material-kicker {
+  margin: 0;
+}
+
+.material-immersive-body > h1 {
+  margin: var(--m-8) 0 0;
+}
+
+.material-immersive-body > .material-meta-row {
+  margin-top: var(--m-16);
+}
+
+.material-immersive-body > .material-chips {
+  margin-top: var(--m-16);
+}
+
+/* 24 between tags and takeaways card */
+.material-immersive-body > .material-takeaways {
+  margin-top: var(--m-24);
+}
+
+.material-immersive-body > .material-cta {
+  margin-top: var(--m-24);
+  max-width: none;
+  width: 100%;
+}
+
+.material-immersive-body > .material-section-plain {
+  margin-top: var(--m-32);
 }
 
 @media (min-width: 981px) {
@@ -4899,36 +4982,16 @@ body.material-immersive-open {
   }
 
   .material-immersive-media {
-    padding: 28px 28px 0;
+    padding: var(--m-24) var(--m-pad-x) 0;
   }
 
   .material-video-immersive {
-    border-radius: 22px !important;
+    border-radius: 20px !important;
     box-shadow: 0 22px 60px rgba(var(--plum-rgb), 0.16);
   }
 
-  .material-page-immersive h1 {
-    font-size: clamp(32px, 3.4vw, 44px);
-    line-height: 1.08;
-    letter-spacing: -0.03em;
-  }
-
   .material-immersive-body {
-    padding: 28px 28px calc(48px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .material-takeaways {
-    max-width: 560px;
-  }
-
-  .material-cta {
-    max-width: 360px;
-  }
-}
-
-@media (max-width: 680px) {
-  .material-immersive-media {
-    padding: 8px 12px 0;
+    padding: var(--m-24) var(--m-pad-x) calc(48px + env(safe-area-inset-bottom, 0px));
   }
 }
 

@@ -520,28 +520,31 @@
   function materialLessonExtrasHtml(item) {
     if (item.kind !== 'video' && item.kind !== 'audio') return '';
     const duration = M.getMaterialDurationLabel(item);
+    const minutes = M.getMaterialDurationMinutes(item);
     const kindLabel = item.kind === 'video' ? 'Видео' : 'Аудио';
     const topics = M.getMaterialTopics(item);
     const takeaways = M.getMaterialTakeaways(item);
-    const minutes = parseInt(String(duration).replace(/\D/g, ''), 10) || 12;
-    const chips = topics.map((t) => `<small>${esc(t)}</small>`).join('');
+    const chips = topics.map((t) => `<span class="material-chip">${esc(t)}</span>`).join('');
     const points = takeaways.map((p) =>
-      `<li><span class="material-takeaway-check">${ic('check', 16)}</span><span>${esc(p)}</span></li>`,
+      `<li><span class="material-takeaway-check">${ic('check', 14)}</span><span>${esc(p)}</span></li>`,
     ).join('');
     const ctaLabel = item.kind === 'audio' ? 'Слушать' : 'Смотреть';
+    // Only show minutes when the catalog actually has them — never invent.
+    const takeawaysTitle = minutes > 0 ? `За ${minutes} минут вы узнаете` : 'Вы узнаете';
+    const metaParts = [
+      duration ? `<span>${ic('clock', 18)} ${esc(duration)}</span>` : '',
+      `<span>${ic(item.kind === 'audio' ? 'audioLines' : 'play', 18)} ${kindLabel}</span>`,
+    ].filter(Boolean).join('');
     return `
-      <div class="material-meta-row">
-        <span>${ic('clock', 15)} ${esc(duration)}</span>
-        <span>${ic(item.kind === 'audio' ? 'audioLines' : 'play', 15)} ${kindLabel}</span>
-      </div>
+      <div class="material-meta-row">${metaParts}</div>
       <div class="material-chips">${chips}</div>
       <section class="material-takeaways" aria-label="Что узнаете">
-        <h2>За ${minutes} минут вы узнаете</h2>
+        <h2>${takeawaysTitle}</h2>
         <ul>${points}</ul>
       </section>
       <button type="button" class="material-cta" id="material-cta">
         <span class="material-cta-copy"><strong>${ctaLabel}</strong></span>
-        ${ic('play', 18)}
+        ${ic('play', 22)}
       </button>`;
   }
 
@@ -554,12 +557,14 @@
     const bodyParagraphs = materialBodyHtml(materialBody);
 
     if (hasMediaLayout) {
+      const titleLen = M.cleanDisplayText(item.title).length;
+      const titleClass = titleLen > 70 ? ' is-long' : '';
       return `<div class="material-page material-page-immersive">
         ${innerHeader(kindLabel)}
         <div class="material-immersive-media" id="material-player">${renderMaterialMedia(item, true)}</div>
         <div class="material-immersive-body">
           <span class="material-kicker">${displayMeta}</span>
-          <h1>${displayTitle}</h1>
+          <h1${titleClass ? ` class="${titleClass.trim()}"` : ''}>${displayTitle}</h1>
           ${materialLessonExtrasHtml(item)}
           <section class="material-section material-section-plain">
             <h2>${item.kind === 'audio' ? 'О выпуске' : 'О материале'}</h2>
