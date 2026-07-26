@@ -3540,17 +3540,17 @@ body.material-immersive-open {
 .material-page-immersive h1 {
   margin: 0;
   color: var(--ink);
-  /* Same display face as home mobile section titles («Материалы, которые…») */
+  /* Same display face as home mobile section titles — compact under video */
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 700;
-  line-height: 38px;
+  line-height: 30px;
   letter-spacing: -0.03em;
 }
 
 .material-page-immersive h1.is-long {
-  font-size: 28px;
-  line-height: 34px;
+  font-size: 22px;
+  line-height: 28px;
 }
 
 .material-page-immersive > .material-immersive-body > p {
