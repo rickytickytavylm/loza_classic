@@ -3540,16 +3540,17 @@ body.material-immersive-open {
 .material-page-immersive h1 {
   margin: 0;
   color: var(--ink);
-  font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
-  font-size: 36px;
+  /* Same display face as home mobile section titles («Материалы, которые…») */
+  font-family: var(--font-display);
+  font-size: 32px;
   font-weight: 700;
-  line-height: 42px;
-  letter-spacing: -0.02em;
+  line-height: 38px;
+  letter-spacing: -0.03em;
 }
 
 .material-page-immersive h1.is-long {
-  font-size: 34px;
-  line-height: 40px;
+  font-size: 28px;
+  line-height: 34px;
 }
 
 .material-page-immersive > .material-immersive-body > p {
@@ -3677,15 +3678,16 @@ body.material-immersive-open {
 .material-takeaways h2 {
   margin: 0;
   color: var(--ink);
-  font-size: 28px;
+  font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 34px;
+  line-height: 24px;
   letter-spacing: -0.02em;
 }
 
 .material-takeaways ul {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3694,11 +3696,11 @@ body.material-immersive-open {
 .material-takeaways li {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
   color: var(--ink);
-  font-size: 18px;
-  line-height: 28px;
-  font-weight: 400;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
 }
 
 .material-takeaway-check {
@@ -4962,16 +4964,6 @@ body.material-immersive-open {
 /* 24 between tags and takeaways card */
 .material-immersive-body > .material-takeaways {
   margin-top: var(--m-24);
-}
-
-.material-immersive-body > .material-cta {
-  margin-top: var(--m-24);
-  max-width: none;
-  width: 100%;
-}
-
-.material-immersive-body > .material-section-plain {
-  margin-top: var(--m-32);
 }
 
 @media (min-width: 981px) {

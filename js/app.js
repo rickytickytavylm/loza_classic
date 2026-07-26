@@ -528,7 +528,6 @@
     const points = takeaways.map((p) =>
       `<li><span class="material-takeaway-check">${ic('check', 14)}</span><span>${esc(p)}</span></li>`,
     ).join('');
-    const ctaLabel = item.kind === 'audio' ? 'Слушать' : 'Смотреть';
     // Only show minutes when the catalog actually has them — never invent.
     const takeawaysTitle = minutes > 0 ? `За ${minutes} минут вы узнаете` : 'Вы узнаете';
     const metaParts = [
@@ -541,11 +540,7 @@
       <section class="material-takeaways" aria-label="Что узнаете">
         <h2>${takeawaysTitle}</h2>
         <ul>${points}</ul>
-      </section>
-      <button type="button" class="material-cta" id="material-cta">
-        <span class="material-cta-copy"><strong>${ctaLabel}</strong></span>
-        ${ic('play', 22)}
-      </button>`;
+      </section>`;
   }
 
   function renderMaterialDetail(item) {
@@ -566,10 +561,6 @@
           <span class="material-kicker">${displayMeta}</span>
           <h1${titleClass ? ` class="${titleClass.trim()}"` : ''}>${displayTitle}</h1>
           ${materialLessonExtrasHtml(item)}
-          <section class="material-section material-section-plain">
-            <h2>${item.kind === 'audio' ? 'О выпуске' : 'О материале'}</h2>
-            ${bodyParagraphs}
-          </section>
         </div>
       </div>`;
     }
@@ -596,14 +587,6 @@
   function bindMaterialDetail(root, item) {
     $('#material-back', root)?.addEventListener('click', closeMaterial);
     $('#material-audio-open', root)?.addEventListener('click', () => openAudioPlayerModal(item));
-    $('#material-cta', root)?.addEventListener('click', () => {
-      if (item.kind === 'audio') {
-        openAudioPlayerModal(item);
-        return;
-      }
-      const player = $('#material-player', root) || $('.material-immersive-media', root);
-      player?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
   }
 
   function openAudioPlayerModal(item) {
