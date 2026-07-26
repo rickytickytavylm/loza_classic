@@ -27,6 +27,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&family=Onest:wght@400..800&family=Unbounded:wght@500..800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/onboarding.css" />
     <title>Лоза — психологический клуб</title>
     <script src="config.js"></script>
   </head>
@@ -37,6 +38,14 @@
           <img class="splash-logo" src="assets/favicon.png" alt="" />
           <span>Лоза</span>
         </div>
+      </div>
+
+      <div id="onboarding" class="onboarding" hidden aria-label="Онбординг">
+        <div class="onboarding-top">
+          <div class="onboarding-dots" id="onboarding-dots" aria-hidden="true"></div>
+          <button type="button" class="onboarding-next" id="onboarding-next">Далее</button>
+        </div>
+        <div class="onboarding-slides" id="onboarding-slides"></div>
       </div>
 
       <header class="topbar">

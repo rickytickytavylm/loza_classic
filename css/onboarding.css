@@ -1,0 +1,117 @@
+/* Onboarding — 5 full-bleed screens */
+
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  background: #120c18;
+  color: #fff;
+}
+
+.onboarding[hidden] {
+  display: none !important;
+}
+
+.onboarding-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+  pointer-events: none;
+}
+
+.onboarding-slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.onboarding-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.onboarding-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+  pointer-events: none;
+}
+
+.onboarding-dots {
+  position: absolute;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.onboarding-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.onboarding-dots i.is-active {
+  background: #fff;
+  transform: scale(1.25);
+}
+
+.onboarding-next {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  color: #1e1528;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 28px rgba(18, 12, 24, 0.28);
+  font-family: "Onest", "Manrope", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.onboarding-next:hover {
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(18, 12, 24, 0.34);
+}
+
+.onboarding-next:active {
+  transform: scale(0.97);
+}
+
+body.onboarding-open .topbar,
+body.onboarding-open .mobile-nav,
+body.onboarding-open .shell,
+body.onboarding-open .pwa-install-banner {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.onboarding-open {
+  overflow: hidden;
+}

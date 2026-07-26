@@ -43,9 +43,19 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
   }
 
+  const ONBOARDING_SLIDES = [
+    'assets/webp/onboarding/onboarding_one.webp',
+    'assets/webp/onboarding/onboarding_two.webp',
+    'assets/webp/onboarding/onboarding_three.webp',
+    'assets/webp/onboarding/onboarding_four.webp',
+    'assets/webp/onboarding/onboarding_five.webp',
+  ];
+
   const state = {
     tab: 'home',
     booting: true,
+    onboardingStep: 0,
+    onboardingDone: false,
     selectedItemId: '',
     selectedMovieId: '',
     feedPosts: [...D.FEED_POSTS],
@@ -1274,16 +1284,96 @@
     state.chatStream = stream;
   }
 
+  function clearLocalSessions() {
+    try {
+      localStorage.removeItem('loza_session_token');
+      localStorage.removeItem('loza_chat_guest_id');
+      // Temporary: always show onboarding until auth gating is wired.
+      // localStorage.removeItem('loza_onboarding_done');
+    } catch {
+      /* ignore */
+    }
+    if (API && typeof API.setToken === 'function') API.setToken('');
+  }
+
+  function renderOnboarding() {
+    const root = $('#onboarding');
+    const slidesHost = $('#onboarding-slides');
+    const dotsHost = $('#onboarding-dots');
+    const nextBtn = $('#onboarding-next');
+    if (!root || !slidesHost || !dotsHost || !nextBtn) return;
+
+    slidesHost.innerHTML = ONBOARDING_SLIDES.map((src, i) =>
+      `<div class="onboarding-slide${i === state.onboardingStep ? ' is-active' : ''}" data-step="${i}">
+        <img src="${localAsset(src)}" alt="" decoding="async" ${i === 0 ? '' : 'loading="lazy"'} />
+      </div>`,
+    ).join('');
+
+    dotsHost.innerHTML = ONBOARDING_SLIDES.map((_, i) =>
+      `<i class="${i === state.onboardingStep ? 'is-active' : ''}"></i>`,
+    ).join('');
+
+    const isLast = state.onboardingStep >= ONBOARDING_SLIDES.length - 1;
+    nextBtn.textContent = isLast ? 'Начать' : 'Далее';
+    root.hidden = false;
+    document.body.classList.add('onboarding-open');
+  }
+
+  function syncOnboardingStep() {
+    const slides = $$('.onboarding-slide');
+    const dots = $$('#onboarding-dots i');
+    slides.forEach((el, i) => el.classList.toggle('is-active', i === state.onboardingStep));
+    dots.forEach((el, i) => el.classList.toggle('is-active', i === state.onboardingStep));
+    const nextBtn = $('#onboarding-next');
+    if (nextBtn) {
+      nextBtn.textContent = state.onboardingStep >= ONBOARDING_SLIDES.length - 1 ? 'Начать' : 'Далее';
+    }
+  }
+
+  function finishOnboarding() {
+    state.onboardingDone = true;
+    const root = $('#onboarding');
+    if (root) root.hidden = true;
+    document.body.classList.remove('onboarding-open');
+    // Later: localStorage.setItem('loza_onboarding_done', '1') when user is authorized.
+  }
+
+  function bindOnboarding() {
+    const nextBtn = $('#onboarding-next');
+    if (!nextBtn) return;
+    nextBtn.onclick = () => {
+      if (state.onboardingStep < ONBOARDING_SLIDES.length - 1) {
+        state.onboardingStep += 1;
+        syncOnboardingStep();
+        return;
+      }
+      finishOnboarding();
+    };
+  }
+
+  function shouldShowOnboarding() {
+    // Temporary: every launch. Later skip when authorized / loza_onboarding_done.
+    return true;
+  }
+
   async function init() {
+    clearLocalSessions();
     renderNav();
     setTab('home');
+
+    if (shouldShowOnboarding()) {
+      renderOnboarding();
+      bindOnboarding();
+    }
+
     await Promise.all([loadContent(), loadFeed(), loadChatRooms()]);
     startChatStream();
     renderScreen();
     setTimeout(() => {
       state.booting = false;
-      $('#splash')?.remove();
-    }, 900);
+      $('#splash')?.classList.add('splash-screen-hide');
+      setTimeout(() => $('#splash')?.remove(), 500);
+    }, 700);
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
     }

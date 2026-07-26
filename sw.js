@@ -1,9 +1,10 @@
-const CACHE = 'loza-classic-v19';
-const IMAGE_CACHE = 'loza-classic-images-v5';
+const CACHE = 'loza-classic-v20';
+const IMAGE_CACHE = 'loza-classic-images-v6';
 const PRECACHE = [
   './',
   './index.html',
   './css/styles.css',
+  './css/onboarding.css',
   './js/data.js',
   './js/libraryContent.js',
   './js/audioStorage.js',
@@ -16,6 +17,7 @@ const PRECACHE = [
   './assets/webp/hero_logo.webp',
   './assets/favicon.png',
   './assets/brand-avatar.png',
+  './assets/webp/onboarding/onboarding_one.webp',
 ];
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|ico)(\?|$)/i;
