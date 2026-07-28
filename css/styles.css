@@ -1333,15 +1333,94 @@ button {
 .paywall-modal {
   position: relative;
   width: min(560px, 100%);
-  padding: clamp(26px, 5vw, 42px);
-  border-radius: 36px;
+  max-height: min(88dvh, 820px);
+  padding: clamp(20px, 4vw, 36px);
+  border-radius: 28px;
   text-align: left;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.paywall-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -8px 0 8px;
+  padding: 8px 0 10px;
+  background: linear-gradient(180deg, rgba(255, 252, 250, 0.96), rgba(255, 252, 250, 0.88));
 }
 
 .paywall-close {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px rgba(30, 21, 40, 0.1);
+}
+
+.paywall-later {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  font-weight: 700;
+}
+
+body.paywall-open,
+body.rules-open {
+  overflow: hidden;
+}
+
+.media-feed-card-visual {
+  position: relative;
+}
+
+.media-lock-overlay {
   position: absolute;
-  right: 18px;
-  top: 18px;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  justify-items: center;
+  color: #fff;
+  background: linear-gradient(180deg, rgba(42, 11, 61, 0.18), rgba(42, 11, 61, 0.62));
+  pointer-events: none;
+}
+
+.media-lock-overlay em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.media-cta-locked {
+  color: #fff !important;
+  background: linear-gradient(180deg, var(--olive) 0%, var(--olive-dark) 100%) !important;
+}
+
+.chat-rules-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+
+.chat-rules-list p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.consent-modal .auth-consent {
+  margin: 10px 0;
 }
 
 .paywall-kicker {
@@ -1357,11 +1436,24 @@ button {
 }
 
 .paywall-modal h2 {
-  margin: 18px 0 12px;
+  margin: 10px 0 10px;
   color: var(--ink);
-  font-size: clamp(30px, 5vw, 48px);
-  line-height: 0.98;
-  letter-spacing: -0.06em;
+  font-size: clamp(22px, 4.5vw, 34px);
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+}
+
+@media (max-width: 680px) {
+  .paywall-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .paywall-modal {
+    width: 100%;
+    max-height: 86dvh;
+    border-radius: 24px 24px 0 0;
+  }
 }
 
 .paywall-modal p {

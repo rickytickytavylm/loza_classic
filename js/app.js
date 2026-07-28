@@ -140,7 +140,13 @@
     return role === 'ADMIN' || role === 'OWNER';
   }
 
+  const SECTION_TITLE_OVERRIDES = {
+    home_reviews: 'Задания',
+    club_reviews: 'Разборы',
+  };
+
   function sectionTitle(id) {
+    if (SECTION_TITLE_OVERRIDES[id]) return SECTION_TITLE_OVERRIDES[id];
     return state.librarySections.find((s) => s.id === id)?.title || id;
   }
 
@@ -155,11 +161,15 @@
   }
 
   function setTab(tab) {
+    if (tab === 'chat' && needsChatRules()) {
+      openChatRules();
+      return;
+    }
     state.tab = tab;
     state.selectedItemId = '';
     state.selectedMovieId = '';
     document.body.classList.remove('material-immersive-open');
-    $('#portal').innerHTML = '';
+    closePortal();
     if (tab !== 'chat') {
       state.chatView = 'rooms';
       state.selectedRoomId = '';
@@ -177,6 +187,86 @@
     renderNav();
     renderScreen();
     setImmersive();
+  }
+
+  function needsLegalConsents() {
+    if (!state.user) return false;
+    return !state.user.acceptedTermsAt || !state.user.acceptedPrivacyAt;
+  }
+
+  function needsChatRules() {
+    if (!state.user) return false;
+    return !state.user.acceptedClubRulesAt;
+  }
+
+  function openLegalConsentsGate() {
+    document.body.classList.add('paywall-open');
+    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop">
+      <section class="paywall-modal glass-panel consent-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+        <h2>Согласие на обработку данных</h2>
+        <p>Чтобы пользоваться клубом, примите условия и политику конфиденциальности.</p>
+        <label class="auth-consent"><input type="checkbox" id="gate-terms" /><span>Принимаю условия использования и даю согласие на обработку персональных данных</span></label>
+        <label class="auth-consent"><input type="checkbox" id="gate-privacy" /><span>Ознакомлен(а) с политикой конфиденциальности</span></label>
+        <p class="checkout-note" id="consent-status"></p>
+        <button type="button" class="primary-button" id="consent-save">Продолжить</button>
+      </section>
+    </div>`;
+    $('#consent-save')?.addEventListener('click', async () => {
+      const terms = $('#gate-terms')?.checked;
+      const privacy = $('#gate-privacy')?.checked;
+      const status = $('#consent-status');
+      if (!terms || !privacy) {
+        if (status) status.textContent = 'Отметьте оба пункта, чтобы продолжить.';
+        return;
+      }
+      try {
+        const data = await API.acceptConsents({ terms: true, privacy: true });
+        state.user = data.user || state.user;
+        closePortal();
+        renderScreen();
+      } catch (error) {
+        if (status) status.textContent = error instanceof Error ? error.message : 'Не удалось сохранить согласие';
+      }
+    });
+  }
+
+  function openChatRules() {
+    document.body.classList.add('rules-open');
+    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop">
+      <section class="paywall-modal glass-panel consent-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+        <span class="paywall-kicker">Чаты клуба</span>
+        <h2>Правила общения</h2>
+        <div class="chat-rules-list">
+          <p>1. Уважаем друг друга: без оскорблений, давления и обесценивания.</p>
+          <p>2. Не публикуем личные данные детей и чужие истории без согласия.</p>
+          <p>3. Не даём медицинских диагнозов и не заменяем ими работу специалиста.</p>
+          <p>4. Реклама и спам запрещены. Для знакомства используйте хэштег <strong>#знакомство</strong>.</p>
+          <p>5. Модераторы могут скрывать сообщения, нарушающие правила клуба.</p>
+        </div>
+        <p class="checkout-note" id="rules-status"></p>
+        <button type="button" class="primary-button" id="rules-accept">Принимаю правила</button>
+      </section>
+    </div>`;
+    $('#rules-accept')?.addEventListener('click', async () => {
+      const status = $('#rules-status');
+      try {
+        if (state.user) {
+          const data = await API.acceptConsents({ clubRules: true });
+          state.user = data.user || state.user;
+        }
+        closePortal();
+        state.tab = 'chat';
+        const shell = $('#page-shell');
+        shell.scrollTop = 0;
+        shell.className = 'page-shell page-shell-chat';
+        shell.setAttribute('aria-label', D.TAB_TITLES.chat || 'Чаты');
+        renderNav();
+        renderScreen();
+        setImmersive();
+      } catch (error) {
+        if (status) status.textContent = error instanceof Error ? error.message : 'Не удалось сохранить';
+      }
+    });
   }
 
   function userDisplayName() {
@@ -285,7 +375,7 @@
       <section class="hero glass-panel">
         <div class="hero-copy">
           <div class="eyebrow">Психологический клуб для родителей</div>
-          <h1>Бережная опора, когда подростковый возраст становится штормом.</h1>
+          <h1>Бережная опора, когда подростковый возраст становится штормом</h1>
           <p>Лекции, разборы и практики от психологов клуба, киноклуб и живой чат с родителями, которые проходят через то же самое.</p>
           <div class="hero-actions">
             <button class="primary-button" type="button" data-tab-link="media">Открыть медиатеку ${ic('arrowRight', 18)}</button>
@@ -438,15 +528,21 @@
       const liked = state.mediaLikes.includes(item.id);
       const kind = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Текст';
       const lockBadge = item.locked
-        ? '<span class="access-badge locked">Закрыто</span>'
-        : '<span class="access-badge free">Доступно</span>';
+        ? '<span class="access-badge locked">Закрытый клуб</span>'
+        : '<span class="access-badge free">Открыто</span>';
+      const ctaLabel = item.locked
+        ? 'Открыть доступ'
+        : (item.kind === 'video' ? 'Смотреть' : item.kind === 'audio' ? 'Слушать' : 'Читать');
+      const lockOverlay = item.locked
+        ? `<span class="media-lock-overlay" aria-hidden="true">${ic('lock', 22)}<em>Материал закрытого клуба</em></span>`
+        : '';
       return `<article class="media-feed-card${item.locked ? ' is-locked' : ''}" data-item="${esc(item.id)}">
         <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span>${lockBadge}</div>
-        <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}"><img alt="" src="${bgImage(i)}" loading="lazy" /></button>
+        <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}"><img alt="" src="${bgImage(i)}" loading="lazy" />${lockOverlay}</button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
       <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item))}</p>
         <div class="media-feed-card-actions">
-          <button type="button" data-open-item="${esc(item.id)}">${ic('play', 18)}<span>Открыть</span></button>
+          <button type="button" class="${item.locked ? 'media-cta-locked' : ''}" data-open-item="${esc(item.id)}">${item.locked ? ic('lock', 18) : ic('play', 18)}<span>${ctaLabel}</span></button>
           <button class="${liked ? 'media-action-liked' : ''}" type="button" data-like-item="${esc(item.id)}">${ic('heart', 18, { fill: liked ? 'currentColor' : 'none' })}</button>
           <button type="button" data-share-item="${esc(item.id)}">${ic('share2', 18)}</button>
         </div>
@@ -604,18 +700,25 @@
       </button>`;
     }).join('');
 
-    $('#portal').innerHTML = `<div class="modal-backdrop" id="modal-close"><section class="paywall-modal glass-panel" onclick="event.stopPropagation()">
-      <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 20)}</button>
-      <span class="paywall-kicker">${esc(tierLabel(currentTier()))}</span>
-      <h2>${esc(title || 'Открыть доступ')}</h2>
-      <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
-      <div class="paywall-benefits">
-        <span>Медиатека</span><span>Чаты клуба</span><span>AI-наставник</span>
-      </div>
-      <div class="plan-grid">${cards || '<p class="checkout-note">Тарифы пока недоступны. Обновите страницу.</p>'}</div>
-      <p class="checkout-note" id="paywall-status"></p>
-    </section></div>`;
+    document.body.classList.add('paywall-open');
+    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
+      <section class="paywall-modal glass-panel" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+        <header class="paywall-modal-head">
+          <span class="paywall-kicker">Закрытый клуб</span>
+          <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 20)}</button>
+        </header>
+        <h2>${esc(title || 'Открыть доступ')}</h2>
+        <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
+        <div class="paywall-benefits">
+          <span>Медиатека</span><span>Чаты клуба</span><span>AI-наставник</span>
+        </div>
+        <div class="plan-grid">${cards || '<p class="checkout-note">Тарифы пока недоступны. Обновите страницу.</p>'}</div>
+        <p class="checkout-note" id="paywall-status"></p>
+        <button type="button" class="paywall-later" id="paywall-later">Позже</button>
+      </section>
+    </div>`;
     bindModalClose();
+    $('#paywall-later')?.addEventListener('click', closePortal);
     $$('[data-buy-plan]', $('#portal')).forEach((btn) => {
       btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#paywall-status'));
     });
@@ -1516,9 +1619,14 @@
     });
   }
 
-  function closePortal() { $('#portal').innerHTML = ''; }
+  function closePortal() {
+    document.body.classList.remove('paywall-open', 'rules-open');
+    $('#portal').innerHTML = '';
+  }
   function bindModalClose() {
-    $('#modal-close')?.addEventListener('click', closePortal);
+    $('#modal-close')?.addEventListener('click', (event) => {
+      if (event.target.id === 'modal-close') closePortal();
+    });
     $('#modal-x')?.addEventListener('click', closePortal);
   }
 
@@ -1566,7 +1674,12 @@
         : [];
 
       if (data.access) state.access = data.access;
-      if (sections.length) state.librarySections = sections;
+      if (sections.length) {
+        state.librarySections = sections.map((section) => ({
+          ...section,
+          title: SECTION_TITLE_OVERRIDES[section.id] || section.title,
+        }));
+      }
       if (apiItems.length) state.libraryItems = apiItems;
     } catch {
       // The full generated React catalog remains available offline.
@@ -1695,10 +1808,32 @@
     if (markDone) state.authDone = true;
   }
 
+  function syncAuthConsentButton() {
+    const btn = $('#auth-yandex-btn');
+    const terms = $('#auth-consent-terms');
+    const privacy = $('#auth-consent-privacy');
+    if (!btn || !terms || !privacy) return;
+    btn.disabled = !(terms.checked && privacy.checked);
+  }
+
   function bindAuth() {
     const btn = $('#auth-yandex-btn');
     if (!btn) return;
+    $('#auth-consent-terms')?.addEventListener('change', syncAuthConsentButton);
+    $('#auth-consent-privacy')?.addEventListener('change', syncAuthConsentButton);
+    syncAuthConsentButton();
     btn.onclick = () => {
+      const terms = $('#auth-consent-terms')?.checked;
+      const privacy = $('#auth-consent-privacy')?.checked;
+      if (!terms || !privacy) {
+        showAuthScreen('Чтобы войти, примите условия и политику конфиденциальности.');
+        return;
+      }
+      try {
+        sessionStorage.setItem('loza_pending_consents', JSON.stringify({ terms: true, privacy: true }));
+      } catch {
+        /* ignore */
+      }
       const url = API && API.yandexLoginUrl;
       if (!url) {
         showAuthScreen('Ссылка входа недоступна. Обновите страницу.');
@@ -1709,6 +1844,29 @@
       if (label) label.textContent = 'Переходим…';
       window.location.href = url;
     };
+  }
+
+  async function syncPendingConsents() {
+    if (!state.user) return;
+    let pending = null;
+    try {
+      pending = JSON.parse(sessionStorage.getItem('loza_pending_consents') || 'null');
+    } catch {
+      pending = null;
+    }
+    if (pending?.terms || pending?.privacy) {
+      try {
+        const data = await API.acceptConsents({
+          terms: Boolean(pending.terms),
+          privacy: Boolean(pending.privacy),
+        });
+        state.user = data.user || state.user;
+      } catch {
+        /* show gate below */
+      }
+      try { sessionStorage.removeItem('loza_pending_consents'); } catch { /* ignore */ }
+    }
+    if (needsLegalConsents()) openLegalConsentsGate();
   }
 
   function isAuthorized() {
@@ -1833,6 +1991,7 @@
       hideAuthScreen();
       const onboarding = $('#onboarding');
       if (onboarding) onboarding.hidden = true;
+      await syncPendingConsents();
     } else if (authReturn && authReturn.ok === false) {
       state.onboardingDone = true;
       showAuthScreen(authReturn.error);

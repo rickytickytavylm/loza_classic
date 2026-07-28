@@ -74,6 +74,8 @@
     setToken,
     getGuestId,
     me: () => request('/me'),
+    acceptConsents: (payload) =>
+      request('/me/consents', { method: 'PATCH', body: JSON.stringify(payload) }),
     logout: () => request('/auth/logout', { method: 'POST', body: '{}' }),
     deleteAccount: () => request('/me', { method: 'DELETE' }),
     publicConfig: () => request('/config/public'),

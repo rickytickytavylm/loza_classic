@@ -61,7 +61,15 @@
             <strong>Лоза</strong>
           </div>
           <p class="auth-screen-lead">Войдите, чтобы сохранить прогресс и открыть клуб</p>
-          <button type="button" class="auth-yandex-btn" id="auth-yandex-btn">
+          <label class="auth-consent">
+            <input type="checkbox" id="auth-consent-terms" />
+            <span>Принимаю <a href="./terms.html" target="_blank" rel="noopener">условия использования</a> и даю согласие на обработку персональных данных</span>
+          </label>
+          <label class="auth-consent">
+            <input type="checkbox" id="auth-consent-privacy" />
+            <span>Ознакомлен(а) с <a href="./privacy.html" target="_blank" rel="noopener">политикой конфиденциальности</a></span>
+          </label>
+          <button type="button" class="auth-yandex-btn" id="auth-yandex-btn" disabled>
             <span class="auth-yandex-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="22" height="22">
                 <rect width="24" height="24" rx="6" fill="#FC3F1D" />

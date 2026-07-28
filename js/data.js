@@ -28,9 +28,9 @@ window.LOZA_DATA = {
   MEDIA_SECTION_LABELS: {
     all: 'ВСЕ',
     podcasts: 'ПОДКАСТЫ',
-    home_reviews: 'ДОМАШНЕЕ',
+    home_reviews: 'ЗАДАНИЯ',
     questions: 'ВОПРОСЫ',
-    club_reviews: 'УЧАСТНИКИ',
+    club_reviews: 'РАЗБОРЫ',
     webinars: 'ЭФИРЫ',
   },
   FREE_SLUGS: ['podcasts-1', 'podcasts-2', 'questions-4a', 'questions-4b', 'questions-5', 'webinars-11'],
@@ -54,9 +54,9 @@ window.LOZA_DATA = {
   ],
   LIBRARY_SECTIONS: [
     { id: 'podcasts', title: 'Подкасты', description: 'Аудиоподкасты клуба' },
-    { id: 'home_reviews', title: 'Разбор домашнего', description: 'Практики и разборы' },
+    { id: 'home_reviews', title: 'Задания', description: 'Практики и домашние задания' },
     { id: 'questions', title: 'Вопросы и ответы', description: 'Вопросы родителей' },
-    { id: 'club_reviews', title: 'Разборы участниц клуба', description: 'Индивидуальные разборы' },
+    { id: 'club_reviews', title: 'Разборы', description: 'Индивидуальные разборы клуба' },
     { id: 'webinars', title: 'Эфиры и вебинары', description: 'Записи эфиров' },
   ],
   FEED_POSTS: [
@@ -155,5 +155,6 @@ window.LOZA_DATA = {
     user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
     trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+    lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   },
 };
