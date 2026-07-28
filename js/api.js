@@ -89,6 +89,17 @@
         body: JSON.stringify({ body, guestId: getGuestId() }),
       }),
     chatStreamUrl: () => `${API_URL}/chat/stream`,
+    createPayment: (planCode, returnUrl) =>
+      request('/payments/yookassa/create', {
+        method: 'POST',
+        body: JSON.stringify({ planCode, returnUrl }),
+      }),
+    paymentStatus: (paymentId) => request(`/payments/${paymentId}/status`),
+    completeMockPayment: (paymentId) =>
+      request(`/payments/yookassa/mock-complete/${paymentId}`, {
+        method: 'POST',
+        body: '{}',
+      }),
     askAiPublic: (messages, signal) =>
       fetch(`${API_ORIGIN}/api/ai/chat/public`, {
         method: 'POST',
@@ -102,20 +113,27 @@
         }
         return r.json();
       }),
-    async askAiPublicStream(messages, onEvent, signal) {
-      const response = await fetch(`${API_ORIGIN}/api/ai/chat/public/stream`, {
+    async askAiStream(messages, onEvent, signal) {
+      const authed = Boolean(getToken());
+      const path = authed ? '/ai/chat/stream' : '/ai/chat/public/stream';
+      const response = await fetch(`${API_ORIGIN}/api${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
           'Cache-Control': 'no-cache',
+          ...(authed ? { Authorization: `Bearer ${getToken()}` } : {}),
         },
+        credentials: 'include',
         body: JSON.stringify({ messages }),
         signal,
       });
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || 'AI_STREAM_ERROR');
+        const err = new Error(payload.error || 'AI_STREAM_ERROR');
+        err.code = payload.error;
+        err.meta = payload;
+        throw err;
       }
 
       const reader = response.body.getReader();
@@ -142,6 +160,9 @@
         if (done) break;
       }
       if (buffer.trim()) emit(buffer);
+    },
+    askAiPublicStream(messages, onEvent, signal) {
+      return this.askAiStream(messages, onEvent, signal);
     },
   };
 })();

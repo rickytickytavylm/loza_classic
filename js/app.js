@@ -77,7 +77,23 @@
     feedLikes: {},
     feedComments: {},
     listScroll: null, // { tab, media, shell } — restore after closing a material
+    access: null,
+    aiUsage: null,
+    plans: [],
+    freeTier: null,
+    paymentProvider: 'mock',
   };
+
+  function currentTier() {
+    return state.access?.tier || 'basic';
+  }
+
+  function tierLabel(tier) {
+    if (tier === 'library') return 'Медиатека';
+    if (tier === 'club') return 'Клуб';
+    if (tier === 'club_plus') return 'Клуб Плюс';
+    return 'Базовый';
+  }
 
   function esc(s) {
     return String(s ?? '')
@@ -406,8 +422,11 @@
     return items.map((item, i) => {
       const liked = state.mediaLikes.includes(item.id);
       const kind = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Текст';
-      return `<article class="media-feed-card" data-item="${esc(item.id)}">
-        <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span></div>
+      const lockBadge = item.locked
+        ? '<span class="access-badge locked">Закрыто</span>'
+        : '<span class="access-badge free">Доступно</span>';
+      return `<article class="media-feed-card${item.locked ? ' is-locked' : ''}" data-item="${esc(item.id)}">
+        <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span>${lockBadge}</div>
         <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}"><img alt="" src="${bgImage(i)}" loading="lazy" /></button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
       <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item))}</p>
@@ -529,6 +548,15 @@
   function openItem(id) {
     const item = state.libraryItems.find((x) => x.id === id);
     if (!item) return;
+    if (item.locked) {
+      openPaywall({
+        reason: 'library',
+        title: 'Материал в закрытой медиатеке',
+        text: 'Откройте тариф «Медиатека» или «Клуб», чтобы смотреть и слушать материалы без ограничений.',
+        preferPlan: 'library_30',
+      });
+      return;
+    }
     if (item.kind === 'audio' && M.resolveAudioUrl(item)) {
       openAudioPlayerModal(item);
       return;
@@ -537,6 +565,100 @@
     state.selectedItemId = id;
     // Don't reset the list scroll — immersive detail opens in #portal on top.
     renderScreen();
+  }
+
+  function openPaywall({ reason, title, text, preferPlan } = {}) {
+    const plans = (state.plans || []).filter((plan) => {
+      if (reason === 'chat' || reason === 'club') {
+        return plan.tier === 'club' || plan.tier === 'club_plus';
+      }
+      if (reason === 'library') {
+        return true;
+      }
+      return true;
+    });
+    const cards = plans.map((plan) => {
+      const featured = plan.code === preferPlan || (preferPlan === 'library_30' && plan.code === 'library_30');
+      const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
+      const days = plan.planDays === 90 ? '90 дней' : '30 дней';
+      const renew = plan.autoRenew ? ' · автопродление' : '';
+      return `<button type="button" class="plan-card${featured ? ' is-featured' : ''}" data-buy-plan="${esc(plan.code)}">
+        <strong>${esc(plan.planName)}</strong>
+        <span class="plan-card-price">${price}<small> / ${days}${renew}</small></span>
+        <span class="plan-card-desc">${esc(plan.description || '')}</span>
+      </button>`;
+    }).join('');
+
+    $('#portal').innerHTML = `<div class="modal-backdrop" id="modal-close"><section class="paywall-modal glass-panel" onclick="event.stopPropagation()">
+      <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 20)}</button>
+      <span class="paywall-kicker">${esc(tierLabel(currentTier()))}</span>
+      <h2>${esc(title || 'Открыть доступ')}</h2>
+      <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
+      <div class="paywall-benefits">
+        <span>Медиатека</span><span>Чаты клуба</span><span>AI-наставник</span>
+      </div>
+      <div class="plan-grid">${cards || '<p class="checkout-note">Тарифы пока недоступны. Обновите страницу.</p>'}</div>
+      <p class="checkout-note" id="paywall-status"></p>
+    </section></div>`;
+    bindModalClose();
+    $$('[data-buy-plan]', $('#portal')).forEach((btn) => {
+      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#paywall-status'));
+    });
+  }
+
+  async function startCheckout(planCode, statusEl) {
+    if (!isAuthorized() || !state.user) {
+      if (statusEl) statusEl.textContent = 'Сначала войдите через Яндекс.';
+      showAuthScreen('Чтобы оформить доступ, войдите через Яндекс.');
+      return;
+    }
+    if (statusEl) statusEl.textContent = 'Создаём оплату…';
+    try {
+      const returnUrl = `${window.location.origin}${window.location.pathname}?payment=return`;
+      const payment = await API.createPayment(planCode, returnUrl);
+      if (payment.test || state.paymentProvider === 'mock') {
+        if (statusEl) statusEl.textContent = 'Активируем тестовую подписку…';
+        await API.completeMockPayment(payment.paymentId);
+        await loadSession();
+        await loadContent();
+        await loadChatRooms();
+        closePortal();
+        renderScreen();
+        window.alert('Тестовая подписка активирована.');
+        return;
+      }
+      if (!payment.confirmationUrl) {
+        throw new Error('Нет ссылки на оплату ЮKassa');
+      }
+      window.location.href = payment.confirmationUrl;
+    } catch (error) {
+      if (statusEl) {
+        statusEl.textContent = error instanceof Error ? error.message : 'Не удалось создать оплату';
+      }
+    }
+  }
+
+  async function handlePaymentReturn() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const paymentFlag = params.get('payment');
+      const paymentId = params.get('paymentId');
+      if (!paymentFlag && !paymentId) return;
+
+      const clean = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', clean || './');
+
+      if (paymentFlag === 'mock' && paymentId) {
+        await API.completeMockPayment(paymentId);
+      }
+
+      await loadSession();
+      await loadContent();
+      await loadChatRooms();
+      renderScreen();
+    } catch {
+      /* ignore return sync errors */
+    }
   }
 
   function closeMaterial() {
@@ -794,12 +916,15 @@
 
     const roomButtons = state.chatRooms.map((room, i) => {
       const last = room.messages?.[room.messages.length - 1];
-      const preview = last ? (last.body || last.text || '') : (room.description || 'Пока нет сообщений');
-      const time = last ? `<time>${formatBubbleTime(last.createdAt)}</time>` : '';
-      return `<button type="button" class="${room.id === selectedRoom?.id ? 'active' : ''}" data-room="${esc(room.id)}">
+      const preview = room.locked
+        ? 'Доступно в тарифе «Клуб»'
+        : (last ? (last.body || last.text || '') : (room.description || 'Пока нет сообщений'));
+      const time = !room.locked && last ? `<time>${formatBubbleTime(last.createdAt)}</time>` : '';
+      const lock = room.locked ? '<span class="access-badge locked">Клуб</span>' : '';
+      return `<button type="button" class="${room.id === selectedRoom?.id ? 'active' : ''}${room.locked ? ' is-locked' : ''}" data-room="${esc(room.id)}" data-locked="${room.locked ? '1' : '0'}">
         <span class="telegram-room-avatar" style="background-image:url(${bgImage(i)})"></span>
         <span class="telegram-room-copy"><strong>${esc(room.title)}</strong><small>${esc(preview)}</small></span>
-        ${time}
+        ${lock}${time}
       </button>`;
     }).join('');
 
@@ -848,7 +973,21 @@
 
   function bindChat(root) {
     $$('[data-room]', root).forEach((b) => {
-      b.onclick = () => { state.selectedRoomId = b.dataset.room; state.chatView = 'thread'; renderScreen(); setImmersive(); };
+      b.onclick = () => {
+        if (b.dataset.locked === '1') {
+          openPaywall({
+            reason: 'chat',
+            title: 'Закрытый чат клуба',
+            text: 'Чаты практики и киноклуба открываются с тарифа «Клуб».',
+            preferPlan: 'club_30',
+          });
+          return;
+        }
+        state.selectedRoomId = b.dataset.room;
+        state.chatView = 'thread';
+        renderScreen();
+        setImmersive();
+      };
     });
     $('#chat-back', root)?.addEventListener('click', () => { state.chatView = 'rooms'; renderScreen(); setImmersive(); });
     $('#chat-settings', root)?.addEventListener('click', () => openChatBgPicker());
@@ -1056,7 +1195,12 @@
 
   function renderAi() {
     const chatting = state.aiMessages.length > 0;
-    const hero = !chatting ? `<div class="ai-coach-hero"><span class="eyebrow">AI-наставник Лозы</span><h1>Разбор семейной ситуации с опорой на материалы клуба</h1><p>Опишите ситуацию с подростком — я помогу разложить динамику и предложить бережные шаги.</p></div>` : '';
+    const limit = state.access?.capabilities?.aiWeeklyLimit;
+    const used = state.aiUsage?.used ?? 0;
+    const quotaText = !state.user
+      ? 'Войдите, чтобы учитывать лимит по тарифу'
+      : (limit == null ? 'AI без ограничений на вашем тарифе' : `${used} из ${limit} запросов на этой неделе`);
+    const hero = !chatting ? `<div class="ai-coach-hero"><span class="eyebrow">AI-наставник Лозы</span><h1>Разбор семейной ситуации с опорой на материалы клуба</h1><p>Опишите ситуацию с подростком — я помогу разложить динамику и предложить бережные шаги.</p><p class="ai-quota-line">${esc(quotaText)}</p></div>` : '';
     const starters = !chatting ? `<div class="ai-starters">${D.AI_STARTERS.map((s) => `<button type="button" data-starter="${esc(s)}"><span>Начать разговор</span>${esc(s)}</button>`).join('')}</div>` : '';
     const msgs = aiMessagesHtml();
     return `<section class="ai-coach-page">
@@ -1104,7 +1248,7 @@
     try {
       // 1) Preferred: token-by-token streaming.
       try {
-        await API.askAiPublicStream(payload, (event, data) => {
+        await API.askAiStream(payload, (event, data) => {
           const answer = state.aiMessages[state.aiMessages.length - 1];
           if (!answer || answer.role !== 'assistant') return;
           if (event === 'token' && data.token) {
@@ -1112,8 +1256,13 @@
             answer.content += data.token;
             refreshAiMessages();
           }
+          if (event === 'done' && data.aiUsage) {
+            state.aiUsage = data.aiUsage;
+          }
           if (event === 'error') {
-            throw new Error(data.error || 'AI_PROVIDER_ERROR');
+            const err = new Error(data.error || 'AI_PROVIDER_ERROR');
+            err.code = data.error;
+            throw err;
           }
         }, controller?.signal);
       } catch (streamError) {
@@ -1134,9 +1283,19 @@
           setAnswer('Не удалось получить ответ. Попробуйте переформулировать вопрос.');
         }
       }
-    } catch {
+    } catch (error) {
       if (!gotToken) {
-        setAnswer('Не удалось связаться с ИИ-наставником. Попробуйте ещё раз чуть позже.');
+        if (error?.code === 'AI_QUOTA_EXCEEDED') {
+          setAnswer('Лимит AI на этой неделе исчерпан. Откройте тариф «Клуб» для безлимитного доступа.');
+          openPaywall({
+            reason: 'club',
+            title: 'Лимит AI на неделе',
+            text: 'На базовом и медиатеке есть недельный лимит. В «Клубе» AI без ограничений.',
+            preferPlan: 'club_30',
+          });
+        } else {
+          setAnswer('Не удалось связаться с ИИ-наставником. Попробуйте ещё раз чуть позже.');
+        }
       }
     } finally {
       clearTimeout(timer);
@@ -1166,6 +1325,26 @@
     const subtitle = authed
       ? [email, phone].filter(Boolean).join(' · ') || 'Участник клуба «Лоза»'
       : 'Психологический клуб «Лоза» · войдите, чтобы сохранить прогресс';
+    const until = state.access?.accessUntil
+      ? new Date(state.access.accessUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+      : '';
+    const aiLimit = state.access?.capabilities?.aiWeeklyLimit;
+    const aiUsed = state.aiUsage?.used ?? 0;
+    const aiLine = aiLimit == null
+      ? 'AI без ограничений'
+      : `AI: ${aiUsed} / ${aiLimit} за неделю`;
+    const accessLine = until
+      ? `${tierLabel(currentTier())} · до ${until}`
+      : `${tierLabel(currentTier())} · ${aiLine}`;
+
+    const planCards = (state.plans || []).map((plan) => {
+      const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
+      return `<button type="button" class="plan-card" data-buy-plan="${esc(plan.code)}">
+        <strong>${esc(plan.planName)}</strong>
+        <span class="plan-card-price">${price}<small> / ${plan.planDays} дн.</small></span>
+        <span class="plan-card-desc">${esc(plan.description || '')}</span>
+      </button>`;
+    }).join('');
 
     return `<div class="profile-ios">
       <section class="profile-ios-hero">
@@ -1173,10 +1352,16 @@
         <div class="profile-ios-identity">
           <h1>${esc(name)}</h1>
           <p>${esc(subtitle)}</p>
+          <p class="profile-access-line">${esc(accessLine)}</p>
         </div>
       </section>
 
       <div class="profile-ios-aside">
+        <div class="ios-group">
+          <div class="ios-group-title">Подписка</div>
+          <div class="plan-grid profile-plan-grid">${planCards || '<p class="ios-footnote">Тарифы загрузятся после обновления.</p>'}</div>
+          <p class="ios-footnote" id="profile-pay-status">Оплата через ЮKassa. Автопродление по условиям тарифа.</p>
+        </div>
         <div class="ios-group">
           <div class="ios-group-title">Быстрый доступ</div>
           <div class="ios-list">
@@ -1247,6 +1432,9 @@
   }
 
   function bindProfile(root) {
+    $$('[data-buy-plan]', root).forEach((btn) => {
+      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#profile-pay-status', root));
+    });
     $$('[data-profile-action]', root).forEach((btn) => {
       btn.onclick = () => {
         const action = btn.dataset.profileAction;
@@ -1316,10 +1504,13 @@
               transcript: entry.transcript || entry.body || fallback.transcript,
               mediaUrl: entry.mediaUrl || fallback.mediaUrl,
               audioAssetPath: entry.audioAssetPath || fallback.audioAssetPath,
+              locked: Boolean(entry.locked),
+              requiredTier: entry.requiredTier || null,
             };
           })
         : [];
 
+      if (data.access) state.access = data.access;
       if (sections.length) state.librarySections = sections;
       if (apiItems.length) state.libraryItems = apiItems;
     } catch {
@@ -1535,25 +1726,46 @@
   async function loadSession() {
     if (!isAuthorized()) {
       state.user = null;
+      state.access = null;
+      state.aiUsage = null;
       return null;
     }
     try {
       const data = await API.me();
       state.user = data.user || null;
+      state.access = data.access || null;
+      state.aiUsage = data.aiUsage || null;
+      state.paymentProvider = data.paymentProvider || state.paymentProvider;
       if (!state.user) {
         API.setToken('');
+        state.access = null;
+        state.aiUsage = null;
       }
       return state.user;
     } catch {
       state.user = null;
+      state.access = null;
+      state.aiUsage = null;
       return null;
+    }
+  }
+
+  async function loadPublicConfig() {
+    try {
+      const cfg = await API.publicConfig();
+      state.plans = Array.isArray(cfg.plans) ? cfg.plans : [];
+      state.freeTier = cfg.freeTier || null;
+      state.paymentProvider = cfg.paymentProvider || state.paymentProvider;
+    } catch {
+      /* keep defaults */
     }
   }
 
   async function init() {
     const authReturn = captureAuthFromUrl();
     bindAuth();
-    await loadSession();
+    await Promise.all([loadSession(), loadPublicConfig()]);
+    await handlePaymentReturn();
     renderNav();
     setTab('home');
 
