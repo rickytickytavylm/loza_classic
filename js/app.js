@@ -544,7 +544,7 @@
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
       <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item))}</p>
         <div class="media-feed-card-actions">
-          <button type="button" class="${item.locked ? 'media-cta-locked' : ''}" data-open-item="${esc(item.id)}">${item.locked ? ic('lock', 18) : ic('play', 18)}<span>${ctaLabel}</span></button>
+          <button type="button" class="${item.locked ? 'media-cta-locked' : 'media-cta-open'}" data-open-item="${esc(item.id)}">${item.locked ? ic('lock', 16) : ic('play', 16)}<span>${ctaLabel}</span></button>
           <button class="${liked ? 'media-action-liked' : ''}" type="button" data-like-item="${esc(item.id)}">${ic('heart', 18, { fill: liked ? 'currentColor' : 'none' })}</button>
           <button type="button" data-share-item="${esc(item.id)}">${ic('share2', 18)}</button>
         </div>
