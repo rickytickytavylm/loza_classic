@@ -1813,7 +1813,10 @@
     const terms = $('#auth-consent-terms');
     const privacy = $('#auth-consent-privacy');
     if (!btn || !terms || !privacy) return;
-    btn.disabled = !(terms.checked && privacy.checked);
+    if (btn.classList.contains('is-loading')) return;
+    const allowed = terms.checked && privacy.checked;
+    btn.disabled = !allowed;
+    btn.setAttribute('aria-disabled', allowed ? 'false' : 'true');
   }
 
   function bindAuth() {
@@ -1827,6 +1830,7 @@
       const privacy = $('#auth-consent-privacy')?.checked;
       if (!terms || !privacy) {
         showAuthScreen('Чтобы войти, примите условия и политику конфиденциальности.');
+        syncAuthConsentButton();
         return;
       }
       try {
@@ -1839,7 +1843,9 @@
         showAuthScreen('Ссылка входа недоступна. Обновите страницу.');
         return;
       }
+      btn.classList.add('is-loading');
       btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
       const label = btn.querySelector('span:last-child');
       if (label) label.textContent = 'Переходим…';
       window.location.href = url;

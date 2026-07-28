@@ -245,11 +245,6 @@ body.auth-open {
   text-underline-offset: 2px;
 }
 
-.auth-yandex-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 .auth-screen-lead {
   margin: 0 0 6px;
   max-width: 280px;
@@ -282,17 +277,26 @@ body.auth-open {
   transition: transform 0.12s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
-.auth-yandex-btn:hover {
+.auth-yandex-btn:hover:not(:disabled) {
   box-shadow: 0 16px 40px rgba(8, 12, 24, 0.34);
 }
 
-.auth-yandex-btn:active {
+.auth-yandex-btn:active:not(:disabled) {
   transform: scale(0.98);
 }
 
 .auth-yandex-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  pointer-events: none;
+}
+
+.auth-yandex-btn.is-loading:disabled {
   opacity: 0.72;
   cursor: wait;
+  pointer-events: none;
 }
 
 .auth-yandex-icon {
