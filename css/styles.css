@@ -2136,6 +2136,14 @@ body.rules-open {
   backdrop-filter: blur(8px);
 }
 
+html.chat-no-select,
+html.chat-no-select body,
+html.chat-no-select body * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
 .telegram-messages,
 .telegram-messages *,
 .chat-bubble,
@@ -2153,6 +2161,9 @@ body.rules-open {
   gap: 4px;
   max-width: min(78%, 420px);
   transition: background-color 0.25s ease, transform 0.12s ease;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .chat-bubble.is-pressing .bubble-body {
@@ -2174,6 +2185,19 @@ body.rules-open {
   user-select: none;
   -webkit-touch-callout: none;
   touch-action: manipulation;
+}
+
+/* Text itself must not be a selection target on iOS long-press. */
+.bubble-body > p,
+.bubble-author,
+.bubble-meta,
+.bubble-meta *,
+.chat-hashtag,
+.bubble-edited {
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .bubble-reply {

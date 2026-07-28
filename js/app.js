@@ -1264,16 +1264,62 @@
     else room.messages.push(normalized);
   }
 
+  let chatSelectionLock = 0;
+  let chatSelectionObserverBound = false;
+  let chatSelectionClearTimer = null;
+
   function clearNativeSelection() {
     try {
       const selection = window.getSelection?.();
-      selection?.removeAllRanges?.();
+      if (selection && selection.rangeCount) selection.removeAllRanges();
     } catch {
       /* ignore */
     }
   }
 
+  function ensureChatSelectionGuard() {
+    if (chatSelectionObserverBound) return;
+    chatSelectionObserverBound = true;
+    document.addEventListener('selectionchange', () => {
+      if (!chatSelectionLock) return;
+      clearNativeSelection();
+    });
+    document.addEventListener('selectstart', (event) => {
+      if (!chatSelectionLock) return;
+      event.preventDefault();
+    }, true);
+    document.addEventListener('contextmenu', (event) => {
+      if (!chatSelectionLock) return;
+      if (event.target?.closest?.('.chat-bubble, .chat-msg-menu, .telegram-messages')) {
+        event.preventDefault();
+      }
+    }, true);
+  }
+
+  function lockChatSelection() {
+    ensureChatSelectionGuard();
+    chatSelectionLock += 1;
+    document.documentElement.classList.add('chat-no-select');
+    document.body.classList.add('chat-no-select');
+    clearNativeSelection();
+    if (chatSelectionClearTimer) window.clearInterval(chatSelectionClearTimer);
+    chatSelectionClearTimer = window.setInterval(clearNativeSelection, 50);
+  }
+
+  function unlockChatSelection() {
+    chatSelectionLock = Math.max(0, chatSelectionLock - 1);
+    if (chatSelectionLock > 0) return;
+    document.documentElement.classList.remove('chat-no-select');
+    document.body.classList.remove('chat-no-select');
+    if (chatSelectionClearTimer) {
+      window.clearInterval(chatSelectionClearTimer);
+      chatSelectionClearTimer = null;
+    }
+    clearNativeSelection();
+  }
+
   function openChatMessageMenu(message) {
+    if (!chatSelectionLock) lockChatSelection();
     clearNativeSelection();
     const mine = isMyChatMessage(message);
     const emojis = (D.CHAT_QUICK_EMOJIS || []).map((emoji) =>
@@ -1296,11 +1342,20 @@
     </div>`;
     clearNativeSelection();
     window.setTimeout(clearNativeSelection, 0);
-    window.setTimeout(clearNativeSelection, 50);
+    window.setTimeout(clearNativeSelection, 120);
     bindModalClose();
+
+    const releaseMenuLock = () => {
+      while (chatSelectionLock > 0) unlockChatSelection();
+    };
+    $('#modal-close')?.addEventListener('click', (event) => {
+      if (event.target.id === 'modal-close') releaseMenuLock();
+    });
+    $('#modal-x')?.addEventListener('click', releaseMenuLock);
 
     $$('.chat-emoji-pick', $('#portal')).forEach((btn) => {
       btn.onclick = async () => {
+        releaseMenuLock();
         closePortal();
         try {
           const data = await API.toggleChatReaction(message.id, btn.dataset.emoji);
@@ -1315,6 +1370,7 @@
     $$('[data-chat-action]', $('#portal')).forEach((btn) => {
       btn.onclick = async () => {
         const action = btn.dataset.chatAction;
+        releaseMenuLock();
         closePortal();
         if (action === 'reply') {
           setChatReply(message);
@@ -1347,26 +1403,26 @@
       const messageId = bubble.dataset.messageId;
       let pressTimer = null;
       let armed = false;
+      let locked = false;
       let startX = 0;
       let startY = 0;
 
-      const resetPress = () => {
+      const resetPress = ({ keepLock = false } = {}) => {
         if (pressTimer) window.clearTimeout(pressTimer);
         pressTimer = null;
         armed = false;
         bubble.classList.remove('is-pressing');
-      };
-
-      const openMenu = (event) => {
-        event?.preventDefault?.();
-        clearNativeSelection();
-        const found = findChatMessage(messageId);
-        if (found) openChatMessageMenu(found.message);
+        if (!keepLock && locked) {
+          unlockChatSelection();
+          locked = false;
+        }
       };
 
       bubble.addEventListener('contextmenu', (event) => {
         event.preventDefault();
-        openMenu(event);
+        clearNativeSelection();
+        const found = findChatMessage(messageId);
+        if (found) openChatMessageMenu(found.message);
       });
       bubble.addEventListener('selectstart', (event) => event.preventDefault());
       bubble.addEventListener('dragstart', (event) => event.preventDefault());
@@ -1380,33 +1436,52 @@
         pressTimer = window.setTimeout(() => {
           armed = true;
           bubble.classList.add('is-pressing');
+          if (!locked) {
+            lockChatSelection();
+            locked = true;
+          }
           clearNativeSelection();
           if (navigator.vibrate) {
             try { navigator.vibrate(12); } catch { /* ignore */ }
           }
-        }, 380);
+        }, 280);
       }, { passive: true });
 
+      // Non-passive: once armed, cancel iOS text-selection gesture.
       bubble.addEventListener('touchmove', (event) => {
-        if (!pressTimer && !armed) return;
+        if (armed) {
+          event.preventDefault();
+          clearNativeSelection();
+          return;
+        }
+        if (!pressTimer) return;
         const touch = event.touches[0];
         if (!touch) return;
-        if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) {
+        if (Math.abs(touch.clientX - startX) > 8 || Math.abs(touch.clientY - startY) > 8) {
           resetPress();
         }
-      }, { passive: true });
+      }, { passive: false });
 
       bubble.addEventListener('touchend', (event) => {
         const shouldOpen = armed;
-        resetPress();
-        if (!shouldOpen) return;
+        if (!shouldOpen) {
+          resetPress();
+          return;
+        }
         event.preventDefault();
+        event.stopPropagation();
+        bubble.classList.remove('is-pressing');
+        pressTimer = null;
+        armed = false;
         clearNativeSelection();
-        // Open after finger lifts so iOS doesn't select menu text under the touch.
-        window.setTimeout(() => openMenu(event), 10);
-      });
+        const found = findChatMessage(messageId);
+        // Keep selection lock through the menu lifetime.
+        locked = false;
+        if (found) openChatMessageMenu(found.message);
+        else unlockChatSelection();
+      }, { passive: false });
 
-      bubble.addEventListener('touchcancel', resetPress);
+      bubble.addEventListener('touchcancel', () => resetPress());
     });
 
     $$('[data-react]', root).forEach((chip) => {
@@ -1964,6 +2039,9 @@
 
   function closePortal() {
     document.body.classList.remove('paywall-open', 'rules-open');
+    document.documentElement.classList.remove('chat-no-select');
+    document.body.classList.remove('chat-no-select');
+    while (chatSelectionLock > 0) unlockChatSelection();
     $('#portal').innerHTML = '';
   }
   function bindModalClose() {
