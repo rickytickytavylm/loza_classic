@@ -2136,12 +2136,28 @@ body.rules-open {
   backdrop-filter: blur(8px);
 }
 
+.telegram-messages,
+.telegram-messages *,
+.chat-bubble,
+.chat-bubble *,
+.chat-msg-menu-backdrop,
+.chat-msg-menu-backdrop * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .chat-bubble {
   display: flex;
   flex-direction: column;
   gap: 4px;
   max-width: min(78%, 420px);
-  transition: background-color 0.25s ease;
+  transition: background-color 0.25s ease, transform 0.12s ease;
+}
+
+.chat-bubble.is-pressing .bubble-body {
+  transform: scale(0.98);
+  filter: brightness(0.97);
 }
 
 .chat-bubble.is-flash .bubble-body {
@@ -2156,6 +2172,7 @@ body.rules-open {
   box-shadow: 0 1px 0 rgba(30, 21, 40, 0.06);
   -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
   touch-action: manipulation;
 }
 
@@ -2314,6 +2331,9 @@ body.rules-open {
   padding: 12px;
   background: rgba(18, 14, 24, 0.45);
   backdrop-filter: blur(4px);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .chat-msg-menu {
@@ -2323,6 +2343,17 @@ body.rules-open {
   background: #f4f5f7;
   box-shadow: 0 18px 40px rgba(18, 14, 24, 0.28);
   margin-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.chat-msg-menu button,
+.chat-msg-menu span,
+.chat-msg-menu strong {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .chat-msg-menu-emojis {

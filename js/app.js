@@ -1264,7 +1264,17 @@
     else room.messages.push(normalized);
   }
 
+  function clearNativeSelection() {
+    try {
+      const selection = window.getSelection?.();
+      selection?.removeAllRanges?.();
+    } catch {
+      /* ignore */
+    }
+  }
+
   function openChatMessageMenu(message) {
+    clearNativeSelection();
     const mine = isMyChatMessage(message);
     const emojis = (D.CHAT_QUICK_EMOJIS || []).map((emoji) =>
       `<button type="button" class="chat-emoji-pick" data-emoji="${esc(emoji)}">${esc(emoji)}</button>`,
@@ -1284,6 +1294,9 @@
         <button type="button" class="chat-msg-menu-cancel" id="modal-x">Отмена</button>
       </section>
     </div>`;
+    clearNativeSelection();
+    window.setTimeout(clearNativeSelection, 0);
+    window.setTimeout(clearNativeSelection, 50);
     bindModalClose();
 
     $$('.chat-emoji-pick', $('#portal')).forEach((btn) => {
@@ -1333,23 +1346,67 @@
     $$('.chat-bubble[data-message-id]', root).forEach((bubble) => {
       const messageId = bubble.dataset.messageId;
       let pressTimer = null;
+      let armed = false;
+      let startX = 0;
+      let startY = 0;
+
+      const resetPress = () => {
+        if (pressTimer) window.clearTimeout(pressTimer);
+        pressTimer = null;
+        armed = false;
+        bubble.classList.remove('is-pressing');
+      };
+
       const openMenu = (event) => {
-        event.preventDefault();
+        event?.preventDefault?.();
+        clearNativeSelection();
         const found = findChatMessage(messageId);
         if (found) openChatMessageMenu(found.message);
       };
-      bubble.addEventListener('contextmenu', openMenu);
+
+      bubble.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        openMenu(event);
+      });
+      bubble.addEventListener('selectstart', (event) => event.preventDefault());
+      bubble.addEventListener('dragstart', (event) => event.preventDefault());
+
       bubble.addEventListener('touchstart', (event) => {
         if (event.touches.length !== 1) return;
-        pressTimer = window.setTimeout(() => openMenu(event), 420);
+        const touch = event.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        armed = false;
+        pressTimer = window.setTimeout(() => {
+          armed = true;
+          bubble.classList.add('is-pressing');
+          clearNativeSelection();
+          if (navigator.vibrate) {
+            try { navigator.vibrate(12); } catch { /* ignore */ }
+          }
+        }, 380);
       }, { passive: true });
-      const clearPress = () => {
-        if (pressTimer) window.clearTimeout(pressTimer);
-        pressTimer = null;
-      };
-      bubble.addEventListener('touchend', clearPress);
-      bubble.addEventListener('touchmove', clearPress);
-      bubble.addEventListener('touchcancel', clearPress);
+
+      bubble.addEventListener('touchmove', (event) => {
+        if (!pressTimer && !armed) return;
+        const touch = event.touches[0];
+        if (!touch) return;
+        if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) {
+          resetPress();
+        }
+      }, { passive: true });
+
+      bubble.addEventListener('touchend', (event) => {
+        const shouldOpen = armed;
+        resetPress();
+        if (!shouldOpen) return;
+        event.preventDefault();
+        clearNativeSelection();
+        // Open after finger lifts so iOS doesn't select menu text under the touch.
+        window.setTimeout(() => openMenu(event), 10);
+      });
+
+      bubble.addEventListener('touchcancel', resetPress);
     });
 
     $$('[data-react]', root).forEach((chip) => {
