@@ -262,7 +262,7 @@
         <footer class="editorial-card-footer">
           <img alt="" class="editorial-icon" src="${asset('/assets/webp/new_logo.webp')}" />
           <div class="editorial-meta"><strong>${esc(item.meta || '')}</strong><span>${item.kind === 'video' ? 'Видеоответ' : item.kind === 'audio' ? 'Аудио' : 'Текст'}</span></div>
-          <button class="editorial-cta" type="button" data-open-media="${esc(item.id)}">Читать</button>
+          <button class="editorial-cta" type="button" data-open-media="${esc(item.id)}">${item.kind === 'video' ? 'Смотреть' : item.kind === 'audio' ? 'Слушать' : 'Читать'}</button>
         </footer>
       </article>`).join('');
 
@@ -606,6 +606,32 @@
     });
   }
 
+  function showAppToast(message, { title = 'Лоза', tone = 'ok' } = {}) {
+    let host = $('#app-toast-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'app-toast-host';
+      document.body.appendChild(host);
+    }
+    host.innerHTML = `<div class="app-toast app-toast-${esc(tone)}" role="status">
+      <div class="app-toast-copy"><strong>${esc(title)}</strong><p>${esc(message)}</p></div>
+      <button type="button" class="app-toast-close" id="app-toast-close">Закрыть</button>
+    </div>`;
+    const close = () => { host.innerHTML = ''; };
+    $('#app-toast-close', host)?.addEventListener('click', close);
+    window.setTimeout(close, 4200);
+  }
+
+  function isExternalCheckoutUrl(url) {
+    try {
+      const parsed = new URL(String(url || ''), window.location.href);
+      if (!/^https?:$/i.test(parsed.protocol)) return false;
+      return parsed.host !== window.location.host;
+    } catch {
+      return false;
+    }
+  }
+
   async function startCheckout(planCode, statusEl) {
     if (!isAuthorized() || !state.user) {
       if (statusEl) statusEl.textContent = 'Сначала войдите через Яндекс.';
@@ -616,7 +642,15 @@
     try {
       const returnUrl = `${window.location.origin}${window.location.pathname}?payment=return`;
       const payment = await API.createPayment(planCode, returnUrl);
-      if (payment.test || state.paymentProvider === 'mock') {
+
+      // Prefer real YooKassa redirect whenever we got an external confirmation URL.
+      if (payment.confirmationUrl && isExternalCheckoutUrl(payment.confirmationUrl) && payment.test !== true) {
+        if (statusEl) statusEl.textContent = 'Переходим в ЮKassa…';
+        window.location.href = payment.confirmationUrl;
+        return;
+      }
+
+      if (payment.test === true || state.paymentProvider === 'mock') {
         if (statusEl) statusEl.textContent = 'Активируем тестовую подписку…';
         await API.completeMockPayment(payment.paymentId);
         await loadSession();
@@ -624,9 +658,10 @@
         await loadChatRooms();
         closePortal();
         renderScreen();
-        window.alert('Тестовая подписка активирована.');
+        showAppToast('Тестовая подписка активирована.', { title: 'Оплата' });
         return;
       }
+
       if (!payment.confirmationUrl) {
         throw new Error('Нет ссылки на оплату ЮKassa');
       }
