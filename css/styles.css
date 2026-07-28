@@ -255,6 +255,18 @@ button {
   line-height: 1;
 }
 
+.profile-pill-inner.has-avatar {
+  overflow: hidden;
+}
+
+.profile-pill-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
 .shell {
   position: relative;
   z-index: 1;
@@ -5103,6 +5115,18 @@ body.material-immersive-open {
   font-weight: 800;
   background: linear-gradient(150deg, var(--action), #6c5b7b);
   box-shadow: 0 10px 24px rgba(108, 91, 123, 0.35);
+  overflow: hidden;
+}
+
+.profile-ios-avatar.has-photo {
+  background: #ddd6cf;
+}
+
+.profile-ios-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .profile-ios-identity h1 {

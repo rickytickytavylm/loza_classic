@@ -1,5 +1,5 @@
-const CACHE = 'loza-classic-v22';
-const IMAGE_CACHE = 'loza-classic-images-v6';
+const CACHE = 'loza-classic-v25';
+const IMAGE_CACHE = 'loza-classic-images-v9';
 const PRECACHE = [
   './',
   './index.html',
@@ -15,7 +15,12 @@ const PRECACHE = [
   './manifest.json',
   './assets/webp/new_logo.webp',
   './assets/webp/hero_logo.webp',
+  './assets/webp/auth_back.webp',
   './assets/favicon.png',
+  './assets/favicon-32.png',
+  './assets/apple-touch-icon.png',
+  './assets/icon-192.png',
+  './assets/icon-512.png',
   './assets/brand-avatar.png',
   './assets/webp/onboarding/onboarding_one.webp',
 ];

@@ -56,6 +56,8 @@
     booting: true,
     onboardingStep: 0,
     onboardingDone: false,
+    authDone: false,
+    user: null,
     selectedItemId: '',
     selectedMovieId: '',
     feedPosts: [...D.FEED_POSTS],
@@ -146,6 +148,32 @@
     setImmersive();
   }
 
+  function userDisplayName() {
+    return state.user?.name || 'Гость';
+  }
+
+  function userAvatarUrl() {
+    return state.user?.avatarUrl || state.user?.yandexAvatarUrl || '';
+  }
+
+  function userInitial() {
+    const name = userDisplayName();
+    return (name[0] || '?').toUpperCase();
+  }
+
+  function syncHeaderIdentity() {
+    const pill = $('#header-initial');
+    if (!pill) return;
+    const avatar = userAvatarUrl();
+    if (avatar) {
+      pill.innerHTML = `<img class="profile-pill-avatar" src="${esc(avatar)}" alt="" />`;
+      pill.classList.add('has-avatar');
+    } else {
+      pill.textContent = userInitial();
+      pill.classList.remove('has-avatar');
+    }
+  }
+
   function renderNav() {
     const desk = $('#desktop-nav');
     const mobile = $('#mobile-nav');
@@ -158,8 +186,7 @@
     $$('[data-tab]').forEach((btn) => {
       btn.onclick = () => setTab(btn.dataset.tab);
     });
-    const initial = 'В';
-    $('#header-initial').textContent = initial;
+    syncHeaderIdentity();
   }
 
   function renderScreen() {
@@ -261,7 +288,10 @@
       const likes = (liked ? pseudoLikes(post.id) + 1 : pseudoLikes(post.id));
       const localOnly = (state.feedComments[post.id] || []).filter((c) => String(c.id).startsWith('l-')).length;
       const comments = (post.comments || 0) + localOnly;
-      const image = asset(post.imageUrl) || bgImage(index);
+      const rawImage = post.imageUrl || '';
+      const image = (/^https?:\/\//i.test(rawImage) || rawImage.startsWith('data:'))
+        ? rawImage
+        : (asset(rawImage) || bgImage(index));
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
           <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? `<img class="insta-post-brand-mark" src="${localAsset('assets/brand-avatar.png')}" alt="Лоза" />` : esc(authorName[0])}</div>
@@ -1125,12 +1155,24 @@
   }
 
   function renderProfile() {
+    const authed = Boolean(state.user);
+    const avatar = userAvatarUrl();
+    const name = userDisplayName();
+    const email = state.user?.email || '';
+    const phone = state.user?.phone || '';
+    const avatarHtml = avatar
+      ? `<img src="${esc(avatar)}" alt="" />`
+      : esc(userInitial());
+    const subtitle = authed
+      ? [email, phone].filter(Boolean).join(' · ') || 'Участник клуба «Лоза»'
+      : 'Психологический клуб «Лоза» · войдите, чтобы сохранить прогресс';
+
     return `<div class="profile-ios">
       <section class="profile-ios-hero">
-        <div class="profile-ios-avatar">Г</div>
+        <div class="profile-ios-avatar${avatar ? ' has-photo' : ''}">${avatarHtml}</div>
         <div class="profile-ios-identity">
-          <h1>Гость</h1>
-          <p>Психологический клуб «Лоза» · открытый доступ</p>
+          <h1>${esc(name)}</h1>
+          <p>${esc(subtitle)}</p>
         </div>
       </section>
 
@@ -1155,9 +1197,53 @@
             ${iosRow('messageCircle', 'Поддержка', 'Написать в чат клуба', 'support')}
           </div>
         </div>
-        <p class="ios-footnote">Сейчас вы в гостевом режиме — весь контент открыт. Авторизация и личный кабинет появятся позже.</p>
+        ${authed ? `<div class="ios-group">
+          <div class="ios-group-title">Аккаунт</div>
+          <div class="ios-list">
+            ${iosRow('logOut', 'Выйти', 'Завершить сессию на этом устройстве', 'logout')}
+            ${iosRow('trash', 'Удалить аккаунт', 'Данные удалятся без возможности восстановления', 'delete-account')}
+          </div>
+        </div>
+        <p class="ios-footnote">Вы вошли через Яндекс. Удаление аккаунта сбрасывает доступ и снова показывает онбординг.</p>`
+    : `<p class="ios-footnote">Чтобы сохранить профиль и прогресс, войдите через Яндекс после онбординга.</p>`}
       </div>
     </div>`;
+  }
+
+  async function resetToOnboarding() {
+    try {
+      API.setToken('');
+      localStorage.removeItem('loza_session_token');
+      localStorage.removeItem('loza_onboarding_done');
+    } catch {
+      /* ignore */
+    }
+    state.user = null;
+    state.authDone = false;
+    state.onboardingDone = false;
+    state.onboardingStep = 0;
+    hideAuthScreen(false);
+    syncHeaderIdentity();
+    renderOnboarding();
+    bindOnboarding();
+    setTab('home');
+  }
+
+  async function handleLogout() {
+    try { await API.logout(); } catch { /* ignore */ }
+    await resetToOnboarding();
+  }
+
+  async function handleDeleteAccount() {
+    const ok = window.confirm('Удалить аккаунт навсегда? Это действие нельзя отменить.');
+    if (!ok) return;
+    try {
+      await API.deleteAccount();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось удалить аккаунт');
+      return;
+    }
+    await resetToOnboarding();
   }
 
   function bindProfile(root) {
@@ -1170,6 +1256,14 @@
         }
         if (action === 'support') {
           setTab('chat');
+          return;
+        }
+        if (action === 'logout') {
+          handleLogout();
+          return;
+        }
+        if (action === 'delete-account') {
+          handleDeleteAccount();
           return;
         }
         if (['home', 'feed', 'media', 'chat', 'movies', 'ai'].includes(action)) {
@@ -1309,16 +1403,70 @@
     state.chatStream = stream;
   }
 
-  function clearLocalSessions() {
+  function captureAuthFromUrl() {
     try {
-      localStorage.removeItem('loza_session_token');
-      localStorage.removeItem('loza_chat_guest_id');
-      // Temporary: always show onboarding until auth gating is wired.
-      // localStorage.removeItem('loza_onboarding_done');
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      const auth = params.get('auth');
+      if (token && API && typeof API.setToken === 'function') {
+        API.setToken(token);
+      }
+      if (token || auth === 'yandex_ok' || auth === 'failed' || auth === 'no_email') {
+        const clean = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, '', clean || './');
+      }
+      if (auth === 'failed') return { ok: false, error: 'Не удалось войти через Яндекс. Попробуйте ещё раз.' };
+      if (auth === 'no_email') return { ok: false, error: 'У аккаунта Яндекса нет email. Добавьте почту и повторите вход.' };
+      if (token || auth === 'yandex_ok') return { ok: true };
     } catch {
       /* ignore */
     }
-    if (API && typeof API.setToken === 'function') API.setToken('');
+    return null;
+  }
+
+  function showAuthScreen(errorText) {
+    const root = $('#auth-screen');
+    if (!root) return;
+    root.hidden = false;
+    document.body.classList.add('auth-open');
+    document.body.classList.remove('onboarding-open');
+    const err = $('#auth-screen-error');
+    if (err) {
+      if (errorText) {
+        err.hidden = false;
+        err.textContent = errorText;
+      } else {
+        err.hidden = true;
+        err.textContent = '';
+      }
+    }
+  }
+
+  function hideAuthScreen(markDone = true) {
+    const root = $('#auth-screen');
+    if (root) root.hidden = true;
+    document.body.classList.remove('auth-open');
+    if (markDone) state.authDone = true;
+  }
+
+  function bindAuth() {
+    const btn = $('#auth-yandex-btn');
+    if (!btn) return;
+    btn.onclick = () => {
+      const url = API && API.yandexLoginUrl;
+      if (!url) {
+        showAuthScreen('Ссылка входа недоступна. Обновите страницу.');
+        return;
+      }
+      btn.disabled = true;
+      const label = btn.querySelector('span:last-child');
+      if (label) label.textContent = 'Переходим…';
+      window.location.href = url;
+    };
+  }
+
+  function isAuthorized() {
+    return Boolean(API && typeof API.getToken === 'function' && API.getToken());
   }
 
   function renderOnboarding() {
@@ -1360,7 +1508,11 @@
     const root = $('#onboarding');
     if (root) root.hidden = true;
     document.body.classList.remove('onboarding-open');
-    // Later: localStorage.setItem('loza_onboarding_done', '1') when user is authorized.
+    if (isAuthorized()) {
+      hideAuthScreen();
+      return;
+    }
+    showAuthScreen();
   }
 
   function bindOnboarding() {
@@ -1377,22 +1529,51 @@
   }
 
   function shouldShowOnboarding() {
-    // Temporary: every launch. Later skip when authorized / loza_onboarding_done.
-    return true;
+    return !isAuthorized();
+  }
+
+  async function loadSession() {
+    if (!isAuthorized()) {
+      state.user = null;
+      return null;
+    }
+    try {
+      const data = await API.me();
+      state.user = data.user || null;
+      if (!state.user) {
+        API.setToken('');
+      }
+      return state.user;
+    } catch {
+      state.user = null;
+      return null;
+    }
   }
 
   async function init() {
-    clearLocalSessions();
+    const authReturn = captureAuthFromUrl();
+    bindAuth();
+    await loadSession();
     renderNav();
     setTab('home');
 
-    if (shouldShowOnboarding()) {
+    if (isAuthorized() && state.user) {
+      state.onboardingDone = true;
+      state.authDone = true;
+      hideAuthScreen();
+      const onboarding = $('#onboarding');
+      if (onboarding) onboarding.hidden = true;
+    } else if (authReturn && authReturn.ok === false) {
+      state.onboardingDone = true;
+      showAuthScreen(authReturn.error);
+    } else if (shouldShowOnboarding()) {
       renderOnboarding();
       bindOnboarding();
     }
 
     await Promise.all([loadContent(), loadFeed(), loadChatRooms()]);
     startChatStream();
+    syncHeaderIdentity();
     renderScreen();
     setTimeout(() => {
       state.booting = false;

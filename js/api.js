@@ -69,10 +69,13 @@
   window.LOZA_API = {
     API_URL,
     API_ORIGIN,
+    yandexLoginUrl: `${API_ORIGIN}/api/auth/yandex`,
     getToken,
     setToken,
     getGuestId,
     me: () => request('/me'),
+    logout: () => request('/auth/logout', { method: 'POST', body: '{}' }),
+    deleteAccount: () => request('/me', { method: 'DELETE' }),
     publicConfig: () => request('/config/public'),
     content: () => request('/content'),
     feedComments: (postId) => request(`/feed/${postId}/comments`),

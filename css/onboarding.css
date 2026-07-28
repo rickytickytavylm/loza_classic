@@ -107,11 +107,167 @@
 body.onboarding-open .topbar,
 body.onboarding-open .mobile-nav,
 body.onboarding-open .shell,
-body.onboarding-open .pwa-install-banner {
+body.onboarding-open .pwa-install-banner,
+body.auth-open .topbar,
+body.auth-open .mobile-nav,
+body.auth-open .shell,
+body.auth-open .pwa-install-banner {
   visibility: hidden;
   pointer-events: none;
 }
 
-body.onboarding-open {
+body.onboarding-open,
+body.auth-open {
   overflow: hidden;
+}
+
+/* Auth — full-bleed after onboarding */
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 230;
+  display: grid;
+  place-items: end stretch;
+  background: #6ea8d8;
+  color: #1a1520;
+}
+
+.auth-screen[hidden] {
+  display: none !important;
+}
+
+.auth-screen-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.auth-screen-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.05) 42%,
+    rgba(18, 16, 28, 0.28) 72%,
+    rgba(18, 16, 28, 0.55) 100%
+  );
+  pointer-events: none;
+}
+
+.auth-screen-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  padding: 28px 24px calc(36px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  animation: auth-rise 0.55s cubic-bezier(0.22, 0.85, 0.32, 1) both;
+}
+
+.auth-screen-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-shadow: 0 2px 16px rgba(12, 18, 32, 0.35);
+}
+
+.auth-screen-brand img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 10px rgba(12, 18, 32, 0.25));
+}
+
+.auth-screen-brand strong {
+  font-family: "Unbounded", "Onest", system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.auth-screen-lead {
+  margin: 0 0 6px;
+  max-width: 280px;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: "Onest", "Manrope", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-shadow: 0 1px 12px rgba(12, 18, 32, 0.35);
+}
+
+.auth-yandex-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: min(100%, 320px);
+  min-height: 54px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 16px;
+  color: #fff;
+  background: #000;
+  box-shadow: 0 14px 36px rgba(8, 12, 24, 0.28);
+  font-family: "Onest", "Manrope", system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.auth-yandex-btn:hover {
+  box-shadow: 0 16px 40px rgba(8, 12, 24, 0.34);
+}
+
+.auth-yandex-btn:active {
+  transform: scale(0.98);
+}
+
+.auth-yandex-btn:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.auth-yandex-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.auth-yandex-icon svg {
+  display: block;
+  border-radius: 6px;
+}
+
+.auth-screen-error {
+  margin: 0;
+  max-width: 300px;
+  color: #fff;
+  background: rgba(180, 35, 24, 0.88);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

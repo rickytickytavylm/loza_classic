@@ -18,8 +18,9 @@
     <meta name="twitter:title" content="Лоза — психологический клуб для родителей подростков" />
     <meta name="twitter:description" content="Бережная опора, когда подростковый возраст становится штормом." />
     <meta name="twitter:image" content="https://loza-club.ru/assets/social/loza-social-share-mockup.png" />
-    <link rel="icon" type="image/png" href="assets/favicon.png" />
-    <link rel="apple-touch-icon" href="assets/favicon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="assets/favicon.png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Лоза" />
     <link rel="manifest" href="manifest.json" />
@@ -46,6 +47,28 @@
           <button type="button" class="onboarding-next" id="onboarding-next">Далее</button>
         </div>
         <div class="onboarding-slides" id="onboarding-slides"></div>
+      </div>
+
+      <div id="auth-screen" class="auth-screen" hidden aria-label="Вход">
+        <img class="auth-screen-bg" src="assets/webp/auth_back.webp" alt="" decoding="async" />
+        <div class="auth-screen-veil" aria-hidden="true"></div>
+        <div class="auth-screen-body">
+          <div class="auth-screen-brand">
+            <img src="assets/webp/new_logo.webp" alt="" />
+            <strong>Лоза</strong>
+          </div>
+          <p class="auth-screen-lead">Войдите, чтобы сохранить прогресс и открыть клуб</p>
+          <button type="button" class="auth-yandex-btn" id="auth-yandex-btn">
+            <span class="auth-yandex-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22">
+                <rect width="24" height="24" rx="6" fill="#FC3F1D" />
+                <path d="M13.32 6.2h-1.7c-1.62 0-2.54.86-2.54 2.34 0 1.2.58 1.86 1.78 2.62l.98.62-2.84 4.22H7.1l2.5-3.72c-1.46-1.02-2.28-2.1-2.28-3.84 0-2.34 1.62-3.84 4.42-3.84h3.58V18.2h-1.98V6.2Z" fill="#fff" />
+              </svg>
+            </span>
+            <span>Войти через Яндекс</span>
+          </button>
+          <p class="auth-screen-error" id="auth-screen-error" hidden></p>
+        </div>
       </div>
 
       <header class="topbar">
