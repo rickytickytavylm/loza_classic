@@ -44,11 +44,26 @@
   }
 
   const ONBOARDING_SLIDES = [
-    'assets/webp/onboarding/onboarding_one.webp',
-    'assets/webp/onboarding/onboarding_two.webp',
-    'assets/webp/onboarding/onboarding_three.webp',
-    'assets/webp/onboarding/onboarding_four.webp',
-    'assets/webp/onboarding/onboarding_five.webp',
+    {
+      mobile: 'assets/webp/onboarding/onboarding_one.webp',
+      desktop: 'assets/webp/onboarding/onboarding_one_desktop.webp',
+    },
+    {
+      mobile: 'assets/webp/onboarding/onboarding_two.webp',
+      desktop: 'assets/webp/onboarding/onboarding_two_desktop.webp',
+    },
+    {
+      mobile: 'assets/webp/onboarding/onboarding_three.webp',
+      desktop: 'assets/webp/onboarding/onboarding_three_desktop.webp',
+    },
+    {
+      mobile: 'assets/webp/onboarding/onboarding_four.webp',
+      desktop: 'assets/webp/onboarding/onboarding_four_desktop.webp',
+    },
+    {
+      mobile: 'assets/webp/onboarding/onboarding_five.webp',
+      desktop: 'assets/webp/onboarding/onboarding_five_desktop.webp',
+    },
   ];
 
   const state = {
@@ -1702,9 +1717,12 @@
     const nextBtn = $('#onboarding-next');
     if (!root || !slidesHost || !dotsHost || !nextBtn) return;
 
-    slidesHost.innerHTML = ONBOARDING_SLIDES.map((src, i) =>
+    slidesHost.innerHTML = ONBOARDING_SLIDES.map((slide, i) =>
       `<div class="onboarding-slide${i === state.onboardingStep ? ' is-active' : ''}" data-step="${i}">
-        <img src="${localAsset(src)}" alt="" decoding="async" ${i === 0 ? '' : 'loading="lazy"'} />
+        <picture>
+          <source media="(min-width: 981px)" srcset="${localAsset(slide.desktop)}" type="image/webp" />
+          <img src="${localAsset(slide.mobile)}" alt="" decoding="async" ${i === 0 ? '' : 'loading="lazy"'} />
+        </picture>
       </div>`,
     ).join('');
 

@@ -50,7 +50,10 @@
       </div>
 
       <div id="auth-screen" class="auth-screen" hidden aria-label="Вход">
-        <img class="auth-screen-bg" src="assets/webp/auth_back.webp" alt="" decoding="async" />
+        <picture class="auth-screen-bg-picture">
+          <source media="(min-width: 981px)" srcset="assets/webp/auth_back_desktop.webp" type="image/webp" />
+          <img class="auth-screen-bg" src="assets/webp/auth_back.webp" alt="" decoding="async" />
+        </picture>
         <div class="auth-screen-veil" aria-hidden="true"></div>
         <div class="auth-screen-body">
           <div class="auth-screen-brand">
