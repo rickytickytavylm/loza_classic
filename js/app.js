@@ -83,6 +83,8 @@
     chatStream: null,
     chatView: 'rooms',
     selectedRoomId: '',
+    chatCompose: null, // { mode: 'reply'|'edit', messageId, preview, authorName, body? }
+    myChatMessageIds: new Set(),
     chatBg: localStorage.getItem('chat-bg') || 'aurora',
     mediaSection: 'all',
     mediaQuery: '',
@@ -1061,14 +1063,111 @@
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   }
 
+  function currentChatUserId() {
+    return state.user?.id || '';
+  }
+
+  function rememberMyChatMessage(messageId) {
+    if (!messageId) return;
+    state.myChatMessageIds.add(messageId);
+  }
+
+  function isMyChatMessage(message) {
+    if (!message) return false;
+    if (state.myChatMessageIds.has(message.id)) return true;
+    if (message.mine) return true;
+    const myId = currentChatUserId();
+    return Boolean(myId && message.authorId === myId);
+  }
+
+  function formatChatBody(text) {
+    return esc(text).replace(
+      /#([\p{L}\p{N}_]{2,40})/gu,
+      '<span class="chat-hashtag">#$1</span>',
+    );
+  }
+
+  function findChatMessage(messageId) {
+    for (const room of state.chatRooms) {
+      const message = (room.messages || []).find((item) => item.id === messageId);
+      if (message) return { room, message };
+    }
+    return null;
+  }
+
+  function clearChatCompose() {
+    state.chatCompose = null;
+  }
+
+  function setChatReply(message) {
+    state.chatCompose = {
+      mode: 'reply',
+      messageId: message.id,
+      preview: String(message.body || '').slice(0, 120),
+      authorName: message.authorName || message.author?.name || 'Участник',
+    };
+    renderScreen();
+    window.setTimeout(() => $('#chat-draft')?.focus(), 30);
+  }
+
+  function setChatEdit(message) {
+    state.chatCompose = {
+      mode: 'edit',
+      messageId: message.id,
+      preview: String(message.body || '').slice(0, 120),
+      authorName: 'Редактирование',
+      body: message.body || '',
+    };
+    renderScreen();
+    window.setTimeout(() => {
+      const input = $('#chat-draft');
+      if (!input) return;
+      input.value = message.body || '';
+      input.focus();
+    }, 30);
+  }
+
   function renderChatBubble(message, mine) {
-    const author = !mine ? `<strong class="bubble-author">${esc(message.authorName || message.author || 'Участник клуба')}</strong>` : '';
+    const author = !mine
+      ? `<strong class="bubble-author">${esc(message.authorName || message.author?.name || 'Участник клуба')}</strong>`
+      : '';
+    const reply = message.replyTo
+      ? `<button type="button" class="bubble-reply" data-scroll-to="${esc(message.replyTo.id)}">
+          <strong>${esc(message.replyTo.deleted ? 'Сообщение удалено' : (message.replyTo.authorName || 'Участник'))}</strong>
+          <span>${esc(message.replyTo.deleted ? '' : (message.replyTo.body || '').slice(0, 140))}</span>
+        </button>`
+      : '';
+    const reactions = (message.reactions || []).map((item) => `
+      <button type="button" class="chat-reaction-chip${item.mine ? ' is-mine' : ''}" data-react="${esc(message.id)}" data-emoji="${esc(item.emoji)}">
+        <span>${esc(item.emoji)}</span><small>${item.count}</small>
+      </button>
+    `).join('');
+    const edited = message.editedAt ? '<span class="bubble-edited">изм.</span>' : '';
     const check = mine ? ic('checkCheck', 15) : '';
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}"><div class="bubble-body">${author}<p>${esc(message.body || message.text || '')}</p><div class="bubble-meta"><time>${formatBubbleTime(message.createdAt)}</time>${check}</div></div></article>`;
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}" data-message-id="${esc(message.id)}">
+      <div class="bubble-body">
+        ${author}${reply}
+        <p>${formatChatBody(message.body || message.text || '')}</p>
+        <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${check}</div>
+      </div>
+      ${reactions ? `<div class="chat-reaction-row">${reactions}</div>` : ''}
+    </article>`;
+  }
+
+  function renderChatComposeBar() {
+    const compose = state.chatCompose;
+    if (!compose) return '';
+    const title = compose.mode === 'edit' ? 'Редактирование' : `Ответ · ${compose.authorName}`;
+    return `<div class="telegram-compose-bar" id="chat-compose-bar">
+      <div class="telegram-compose-bar-copy">
+        <strong>${esc(title)}</strong>
+        <span>${esc(compose.preview || '')}</span>
+      </div>
+      <button type="button" id="chat-compose-cancel" aria-label="Отменить">${ic('x', 18)}</button>
+    </div>`;
   }
 
   function renderChat() {
-    const guestId = API.getGuestId();
     const selectedRoom = state.chatRooms.find((r) => r.id === state.selectedRoomId) || state.chatRooms[0];
     const preset = D.CHAT_BG_PRESETS.find((p) => p.id === state.chatBg) || D.CHAT_BG_PRESETS[0];
 
@@ -1094,7 +1193,7 @@
         timeline.push(`<div class="telegram-date-pill">${esc(chatDateLabel(message.createdAt || Date.now()))}</div>`);
         lastDateKey = dateKey;
       }
-      timeline.push(renderChatBubble(message, message.authorId === guestId));
+      timeline.push(renderChatBubble(message, isMyChatMessage(message)));
     });
 
     const emptyThread = !(selectedRoom?.messages || []).length
@@ -1104,6 +1203,8 @@
     const roomsListInner = roomButtons
       ? `<div class="telegram-room-group">${roomButtons}</div>`
       : '<p class="chat-muted">Комнаты пока не созданы в базе.</p>';
+
+    const placeholder = state.chatCompose?.mode === 'edit' ? 'Изменить сообщение' : 'Сообщение';
 
     return `<div class="telegram-chat-layout ${state.chatView === 'rooms' ? 'rooms-open' : 'thread-open'}">
       <aside class="telegram-room-list">
@@ -1121,12 +1222,159 @@
           ${timeline.join('')}
           ${emptyThread}
         </div>
+        ${renderChatComposeBar()}
         <form class="telegram-composer" id="chat-form">
-          <input placeholder="Сообщение" id="chat-draft" />
+          <input placeholder="${esc(placeholder)}" id="chat-draft" autocomplete="off" />
           <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>
       </section>
     </div>`;
+  }
+
+  function upsertChatMessageLocal(message, { trustMine = false } = {}) {
+    const room = state.chatRooms.find((item) => item.id === (message.roomId || state.selectedRoomId));
+    if (!room) return;
+    const index = room.messages.findIndex((item) => item.id === message.id);
+    const previous = index >= 0 ? room.messages[index] : null;
+    const authorId = message.author?.id || message.authorId;
+    const mine = Boolean(
+      state.myChatMessageIds.has(message.id)
+      || (trustMine && message.mine)
+      || (currentChatUserId() && authorId === currentChatUserId()),
+    );
+    if (mine) rememberMyChatMessage(message.id);
+
+    const prevMineEmojis = new Set(
+      (previous?.reactions || []).filter((item) => item.mine).map((item) => item.emoji),
+    );
+    const reactions = (message.reactions || []).map((item) => ({
+      ...item,
+      mine: trustMine ? Boolean(item.mine) : prevMineEmojis.has(item.emoji),
+    }));
+
+    const normalized = {
+      ...message,
+      authorId,
+      authorName: message.author?.name || message.authorName || 'Участник клуба',
+      replyTo: message.replyTo || null,
+      reactions,
+      mine,
+    };
+    if (index >= 0) room.messages[index] = { ...previous, ...normalized };
+    else room.messages.push(normalized);
+  }
+
+  function openChatMessageMenu(message) {
+    const mine = isMyChatMessage(message);
+    const emojis = (D.CHAT_QUICK_EMOJIS || []).map((emoji) =>
+      `<button type="button" class="chat-emoji-pick" data-emoji="${esc(emoji)}">${esc(emoji)}</button>`,
+    ).join('');
+    const ownActions = mine
+      ? `<button type="button" data-chat-action="edit">${ic('pencil', 18)}<span>Изменить</span></button>
+         <button type="button" class="is-danger" data-chat-action="delete">${ic('trash', 18)}<span>Удалить</span></button>`
+      : '';
+
+    $('#portal').innerHTML = `<div class="chat-msg-menu-backdrop" id="modal-close">
+      <section class="chat-msg-menu" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+        <div class="chat-msg-menu-emojis">${emojis}</div>
+        <div class="chat-msg-menu-actions">
+          <button type="button" data-chat-action="reply">${ic('reply', 18)}<span>Ответить</span></button>
+          ${ownActions}
+        </div>
+        <button type="button" class="chat-msg-menu-cancel" id="modal-x">Отмена</button>
+      </section>
+    </div>`;
+    bindModalClose();
+
+    $$('.chat-emoji-pick', $('#portal')).forEach((btn) => {
+      btn.onclick = async () => {
+        closePortal();
+        try {
+          const data = await API.toggleChatReaction(message.id, btn.dataset.emoji);
+          if (data.message) upsertChatMessageLocal(data.message, { trustMine: true });
+          if (state.tab === 'chat') renderScreen();
+        } catch {
+          window.alert('Не удалось поставить реакцию.');
+        }
+      };
+    });
+
+    $$('[data-chat-action]', $('#portal')).forEach((btn) => {
+      btn.onclick = async () => {
+        const action = btn.dataset.chatAction;
+        closePortal();
+        if (action === 'reply') {
+          setChatReply(message);
+          return;
+        }
+        if (action === 'edit') {
+          setChatEdit(message);
+          return;
+        }
+        if (action === 'delete') {
+          if (!window.confirm('Удалить сообщение?')) return;
+          try {
+            await API.deleteChatMessage(message.id);
+            const found = findChatMessage(message.id);
+            if (found) {
+              found.room.messages = found.room.messages.filter((item) => item.id !== message.id);
+            }
+            if (state.chatCompose?.messageId === message.id) clearChatCompose();
+            if (state.tab === 'chat') renderScreen();
+          } catch {
+            window.alert('Не удалось удалить сообщение.');
+          }
+        }
+      };
+    });
+  }
+
+  function bindChatMessageGestures(root) {
+    $$('.chat-bubble[data-message-id]', root).forEach((bubble) => {
+      const messageId = bubble.dataset.messageId;
+      let pressTimer = null;
+      const openMenu = (event) => {
+        event.preventDefault();
+        const found = findChatMessage(messageId);
+        if (found) openChatMessageMenu(found.message);
+      };
+      bubble.addEventListener('contextmenu', openMenu);
+      bubble.addEventListener('touchstart', (event) => {
+        if (event.touches.length !== 1) return;
+        pressTimer = window.setTimeout(() => openMenu(event), 420);
+      }, { passive: true });
+      const clearPress = () => {
+        if (pressTimer) window.clearTimeout(pressTimer);
+        pressTimer = null;
+      };
+      bubble.addEventListener('touchend', clearPress);
+      bubble.addEventListener('touchmove', clearPress);
+      bubble.addEventListener('touchcancel', clearPress);
+    });
+
+    $$('[data-react]', root).forEach((chip) => {
+      chip.onclick = async (event) => {
+        event.stopPropagation();
+        try {
+          const data = await API.toggleChatReaction(chip.dataset.react, chip.dataset.emoji);
+          if (data.message) upsertChatMessageLocal(data.message, { trustMine: true });
+          if (state.tab === 'chat') renderScreen();
+        } catch {
+          window.alert('Не удалось обновить реакцию.');
+        }
+      };
+    });
+
+    $$('[data-scroll-to]', root).forEach((btn) => {
+      btn.onclick = (event) => {
+        event.stopPropagation();
+        const target = root.querySelector(`[data-message-id="${btn.dataset.scrollTo}"]`);
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('is-flash');
+        window.setTimeout(() => target.classList.remove('is-flash'), 1200);
+      };
+    });
   }
 
   function bindChat(root) {
@@ -1143,26 +1391,64 @@
         }
         state.selectedRoomId = b.dataset.room;
         state.chatView = 'thread';
+        clearChatCompose();
         renderScreen();
         setImmersive();
       };
     });
-    $('#chat-back', root)?.addEventListener('click', () => { state.chatView = 'rooms'; renderScreen(); setImmersive(); });
+    $('#chat-back', root)?.addEventListener('click', () => {
+      state.chatView = 'rooms';
+      clearChatCompose();
+      renderScreen();
+      setImmersive();
+    });
     $('#chat-settings', root)?.addEventListener('click', () => openChatBgPicker());
+    $('#chat-compose-cancel', root)?.addEventListener('click', () => {
+      clearChatCompose();
+      renderScreen();
+    });
+
     const messages = $('.telegram-messages', root);
     if (messages) messages.scrollTop = messages.scrollHeight;
+    bindChatMessageGestures(root);
+
+    if (state.chatCompose?.mode === 'edit' && state.chatCompose.body) {
+      const input = $('#chat-draft', root);
+      if (input && !input.value) input.value = state.chatCompose.body;
+    }
+
     $('#chat-form', root)?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = $('#chat-draft', root);
       const body = input?.value.trim();
       if (!body || !state.selectedRoomId) return;
+      const compose = state.chatCompose;
       try {
-        await API.sendChatMessage(state.selectedRoomId, body);
+        if (compose?.mode === 'edit') {
+          const data = await API.editChatMessage(compose.messageId, body);
+          if (data.message) {
+            rememberMyChatMessage(data.message.id);
+            upsertChatMessageLocal(data.message, { trustMine: true });
+          }
+        } else {
+          const data = await API.sendChatMessage(
+            state.selectedRoomId,
+            body,
+            compose?.mode === 'reply' ? compose.messageId : undefined,
+          );
+          if (data.message) {
+            rememberMyChatMessage(data.message.id);
+            upsertChatMessageLocal(data.message, { trustMine: true });
+          }
+        }
         input.value = '';
+        clearChatCompose();
         await loadChatRooms();
         renderScreen();
       } catch {
-        window.alert('Не удалось отправить сообщение. Попробуйте ещё раз.');
+        window.alert(compose?.mode === 'edit'
+          ? 'Не удалось изменить сообщение.'
+          : 'Не удалось отправить сообщение. Попробуйте ещё раз.');
       }
     });
   }
@@ -1716,11 +2002,23 @@
       const data = await API.chatRooms();
       state.chatRooms = (data.rooms || []).map((room) => ({
         ...room,
-        messages: (room.messages || []).map((message) => ({
-          ...message,
-          authorId: message.author?.id || message.authorId,
-          authorName: message.author?.name || message.authorName || 'Участник клуба',
-        })),
+        messages: (room.messages || []).map((message) => {
+          const authorId = message.author?.id || message.authorId;
+          const mine = Boolean(
+            message.mine
+            || state.myChatMessageIds.has(message.id)
+            || (currentChatUserId() && authorId === currentChatUserId()),
+          );
+          if (mine) rememberMyChatMessage(message.id);
+          return {
+            ...message,
+            authorId,
+            authorName: message.author?.name || message.authorName || 'Участник клуба',
+            replyTo: message.replyTo || null,
+            reactions: message.reactions || [],
+            mine,
+          };
+        }),
       }));
       if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
     } catch {
@@ -1739,15 +2037,9 @@
 
         if (payload.type === 'deleted') {
           room.messages = room.messages.filter((message) => message.id !== payload.messageId);
+          if (state.chatCompose?.messageId === payload.messageId) clearChatCompose();
         } else if (payload.message) {
-          const message = {
-            ...payload.message,
-            authorId: payload.message.author?.id || payload.message.authorId,
-            authorName: payload.message.author?.name || payload.message.authorName || 'Участник клуба',
-          };
-          const index = room.messages.findIndex((item) => item.id === message.id);
-          if (index >= 0) room.messages[index] = message;
-          else room.messages.push(message);
+          upsertChatMessageLocal(payload.message, { trustMine: false });
         }
         if (state.tab === 'chat') renderScreen();
       } catch {

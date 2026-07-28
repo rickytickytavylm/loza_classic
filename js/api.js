@@ -84,11 +84,30 @@
     feed: () => request('/feed'),
     addFeedComment: (postId, body) =>
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
-    chatRooms: () => request('/chat/rooms'),
-    sendChatMessage: (roomId, body) =>
+    chatRooms: () => request(`/chat/rooms?guestId=${encodeURIComponent(getGuestId())}`),
+    sendChatMessage: (roomId, body, replyToId) =>
       request(`/chat/rooms/${roomId}/messages`, {
         method: 'POST',
+        body: JSON.stringify({
+          body,
+          replyToId: replyToId || undefined,
+          guestId: getGuestId(),
+        }),
+      }),
+    editChatMessage: (messageId, body) =>
+      request(`/chat/messages/${messageId}`, {
+        method: 'PATCH',
         body: JSON.stringify({ body, guestId: getGuestId() }),
+      }),
+    deleteChatMessage: (messageId) =>
+      request(`/chat/messages/${messageId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ guestId: getGuestId() }),
+      }),
+    toggleChatReaction: (messageId, emoji) =>
+      request(`/chat/messages/${messageId}/reactions`, {
+        method: 'POST',
+        body: JSON.stringify({ emoji, guestId: getGuestId() }),
       }),
     chatStreamUrl: () => `${API_URL}/chat/stream`,
     createPayment: (planCode, returnUrl) =>
