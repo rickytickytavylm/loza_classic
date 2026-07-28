@@ -683,7 +683,12 @@
       window.location.href = payment.confirmationUrl;
     } catch (error) {
       if (statusEl) {
-        statusEl.textContent = error instanceof Error ? error.message : 'Не удалось создать оплату';
+        const code = error instanceof Error ? error.message : '';
+        if (code === 'YOOKASSA_INVALID_CREDENTIALS') {
+          statusEl.textContent = 'ЮKassa: неверный ShopID или секретный ключ. Проверьте переменные на Railway.';
+        } else {
+          statusEl.textContent = code || 'Не удалось создать оплату';
+        }
       }
     }
   }
