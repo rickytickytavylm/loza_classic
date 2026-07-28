@@ -1610,6 +1610,9 @@ button {
 
 .app.immersive-chat .shell {
   max-width: none;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   padding: var(--topbar-offset) 0 0;
 }
 
@@ -1619,7 +1622,7 @@ button {
   }
 
   .app.immersive-chat .shell {
-    padding-top: 0;
+    padding: 0;
   }
 
   .app.immersive-chat .telegram-header {
@@ -1632,18 +1635,18 @@ button {
   padding: 0;
 }
 
-.app.immersive-chat .page-shell {
+.app.immersive-chat .page-shell,
+.app.immersive-chat .page-shell-chat {
+  flex: 1;
   gap: 0;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   padding: 0;
 }
 
 .app.immersive-chat.immersive-ai .page-shell {
   height: 100%;
-}
-
-.app.immersive-chat .page-shell-chat {
-  padding-bottom: 0;
 }
 
 .app.immersive-chat .telegram-chat-layout {
@@ -1659,6 +1662,11 @@ button {
   min-height: 0;
   height: 100%;
   max-height: 100%;
+}
+
+.app.immersive-chat .telegram-messages {
+  min-height: 0;
+  height: 100%;
 }
 
 .telegram-header-back {
@@ -1833,7 +1841,8 @@ button {
   flex-direction: column;
   gap: 6px;
   min-height: 0;
-  padding: 10px 12px 14px;
+  /* No padding here — gutters are on bubbles/dates so .chat-background can go edge-to-edge. */
+  padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1843,6 +1852,15 @@ button {
 .telegram-messages > *:not(.chat-background) {
   position: relative;
   z-index: 1;
+  margin-inline: 12px;
+}
+
+.telegram-messages > .chat-background + * {
+  margin-top: 10px;
+}
+
+.telegram-messages > *:not(.chat-background):last-child {
+  margin-bottom: 14px;
 }
 
 /* Sticky + negative margin keeps the pattern covering the full scroll height
@@ -3037,6 +3055,10 @@ button {
     padding-inline: 10px;
   }
 
+  .app.immersive-chat .shell {
+    padding-inline: 0;
+  }
+
   .hero,
   .profile-grid {
     grid-template-columns: 1fr;
@@ -3072,8 +3094,17 @@ button {
     padding: var(--topbar-offset) 12px 0;
   }
 
+  .app.immersive-chat .shell {
+    padding: 0;
+  }
+
   .page-shell {
     padding-top: 8px;
+  }
+
+  .app.immersive-chat .page-shell,
+  .app.immersive-chat .page-shell-chat {
+    padding: 0;
   }
 
   .page-shell-media {
