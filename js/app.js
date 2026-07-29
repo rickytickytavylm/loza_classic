@@ -1682,10 +1682,12 @@
       return `<a class="chat-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${trailing}`;
     });
 
-    return html.replace(
+    html = html.replace(
       /#([\p{L}\p{N}_]{2,40})/gu,
       '<span class="chat-hashtag">#$1</span>',
     );
+    // Keep line breaks from textarea (Telegram-style multi-line messages).
+    return html.replace(/\n/g, '<br>');
   }
 
   function findChatMessage(messageId) {
@@ -1944,7 +1946,7 @@
         <form class="telegram-composer" id="chat-form">
           <input type="file" id="chat-file" accept="image/*" multiple hidden />
           <button class="telegram-composer-attach" type="button" id="chat-attach" aria-label="Прикрепить фото">${ic('paperclip', 21)}</button>
-          <input placeholder="${esc(placeholder)}" id="chat-draft" autocomplete="off" />
+          <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter"></textarea>
           <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>
       </section>
@@ -2264,10 +2266,11 @@
     if (messages) messages.scrollTop = messages.scrollHeight;
     bindChatMessageGestures(root);
 
+    const draft = $('#chat-draft', root);
     if (state.chatCompose?.mode === 'edit' && state.chatCompose.body) {
-      const input = $('#chat-draft', root);
-      if (input && !input.value) input.value = state.chatCompose.body;
+      if (draft && !draft.value) draft.value = state.chatCompose.body;
     }
+    bindChatDraftAutosize(draft);
 
     const fileInput = $('#chat-file', root);
     $('#chat-attach', root)?.addEventListener('click', () => fileInput?.click());
@@ -2303,6 +2306,7 @@
       if (!body && !attachmentIds.length) return;
 
       input.value = '';
+      resizeChatDraft(input);
       if (!editing) clearChatAttachments();
       try {
         if (editing) {
@@ -2327,10 +2331,33 @@
         renderChatLive();
       } catch {
         input.value = body;
+        resizeChatDraft(input);
         window.alert(editing
           ? 'Не удалось изменить сообщение.'
           : 'Не удалось отправить сообщение. Попробуйте ещё раз.');
       }
+    });
+  }
+
+  function resizeChatDraft(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    const max = Math.round(window.innerHeight * 0.34);
+    const next = Math.min(Math.max(el.scrollHeight, 42), max);
+    el.style.height = `${next}px`;
+    el.classList.toggle('is-expanded', next > 48);
+  }
+
+  function bindChatDraftAutosize(el) {
+    if (!el) return;
+    resizeChatDraft(el);
+    el.addEventListener('input', () => resizeChatDraft(el));
+    // Enter = new line (Telegram mobile). Send only via the arrow button.
+    // On desktop Shift+Enter also makes a line; plain Enter inserts a line too.
+    el.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      // Never submit the form from Enter inside the textarea.
+      event.stopPropagation();
     });
   }
 
@@ -2993,6 +3020,7 @@
     const nextDraft = $('#chat-draft');
     if (nextDraft && draft !== null) {
       nextDraft.value = draft;
+      resizeChatDraft(nextDraft);
       if (hadFocus) {
         nextDraft.focus();
         if (selectionStart !== null) {

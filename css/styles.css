@@ -2913,7 +2913,7 @@ html.chat-no-select body * {
 .telegram-composer {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: end;
   flex-shrink: 0;
   width: 100%;
   max-width: 100%;
@@ -2937,26 +2937,39 @@ html.chat-no-select body * {
   backdrop-filter: none;
 }
 
-.composer.telegram-composer input,
-.telegram-composer input {
+.composer.telegram-composer input:not([type="file"]),
+.telegram-composer input:not([type="file"]),
+.composer.telegram-composer textarea,
+.telegram-composer textarea {
   width: 100%;
   min-width: 0;
   max-width: 100%;
   height: 42px;
   min-height: 42px;
-  max-height: 42px;
+  max-height: 34vh;
   flex: none;
   margin: 0;
   padding: 10px 14px;
   border: 0;
   outline: 0;
   border-radius: 22px;
+  font: inherit;
   font-size: 16px;
+  line-height: 1.35;
   color: var(--ink);
   background: #fff;
+  resize: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  field-sizing: content;
 }
 
-.app.immersive-chat .telegram-composer input {
+.telegram-composer textarea.is-expanded {
+  border-radius: 18px;
+}
+
+.app.immersive-chat .telegram-composer input:not([type="file"]),
+.app.immersive-chat .telegram-composer textarea {
   padding: 10px 14px;
   background: #fff;
 }
