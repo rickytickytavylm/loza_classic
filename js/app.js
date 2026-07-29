@@ -509,19 +509,22 @@
       b.onclick = () => openComments(b.dataset.comments);
     });
     $$('[data-share]', root).forEach((b) => {
-      b.onclick = () => {
+      b.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         const post = state.feedPosts.find((p) => p.id === b.dataset.share);
         if (!post) return;
         const index = Math.max(0, state.feedPosts.findIndex((p) => p.id === post.id));
         const authorName = post.authorName || post.author || 'Лоза';
-        const caption = String(post.body || post.text || '').trim();
-        const title = shareSnippet(caption.split('\n')[0] || 'Пост клуба Лоза', 90);
+        // No post body on the card/message — only cover + link (Telegram-friendly).
         shareWithPreview({
-          title,
-          text: shareSnippet(caption || title, 220),
+          title: 'Лоза',
+          cardTitle: '',
           eyebrow: authorName === 'Лоза' ? 'Лоза · лента' : `${authorName} · Лоза`,
           url: `${window.location.origin}${window.location.pathname}?post=${encodeURIComponent(post.id)}`,
           imageUrl: resolveShareImageUrl(post.imageUrl || post.image || post.coverUrl, index),
+        }).catch(() => {
+          showAppToast('Не удалось поделиться', { title: 'Поделиться', tone: 'warn' });
         });
       };
     });
@@ -625,6 +628,16 @@
     return asset(value) || bgImage(fallbackIndex);
   }
 
+  function formatShareUrlForCard(url) {
+    try {
+      const u = new URL(url, window.location.origin);
+      const path = `${u.pathname}${u.search}`.replace(/\/$/, '');
+      return `${u.host}${path === '/' ? '' : path}`;
+    } catch {
+      return String(url || 'loza-club.ru').replace(/^https?:\/\//i, '');
+    }
+  }
+
   function loadShareImage(src) {
     return new Promise((resolve, reject) => {
       if (!src) {
@@ -632,11 +645,33 @@
         return;
       }
       const img = new Image();
-      if (!src.startsWith('data:') && !src.startsWith('blob:')) img.crossOrigin = 'anonymous';
+      // blob:/data: never need CORS; same-origin paths are fine without it too.
+      if (/^https?:\/\//i.test(src) && !src.startsWith(window.location.origin)) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('image load failed'));
       img.src = src;
     });
+  }
+
+  async function loadShareImageSafe(src) {
+    const url = String(src || '').trim();
+    if (!url) throw new Error('no image');
+    // Fetch→blob keeps the canvas untainted when the host sends CORS headers.
+    try {
+      const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'force-cache' });
+      if (!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      try {
+        return await loadShareImage(objectUrl);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch {
+      return loadShareImage(url);
+    }
   }
 
   function wrapShareCardLines(ctx, text, maxWidth, maxLines) {
@@ -666,14 +701,15 @@
   }
 
   /**
-   * Branded share card (Instagram/Spotify pattern): cover + title baked into the image,
-   * because many apps drop text/url when a file is attached.
+   * Branded share card: cover + optional short label + deep link on the image.
+   * Telegram/WhatsApp often split file+text into two messages, so we share the
+   * file alone and put the URL on the card itself.
    */
   async function buildShareCardFile({
-    title,
+    title = '',
     eyebrow = 'Лоза',
     imageUrl,
-    footer = 'loza-club.ru',
+    shareUrl = '',
   }) {
     const W = 1080;
     const H = 1350;
@@ -686,9 +722,9 @@
     ctx.fillStyle = '#1c1724';
     ctx.fillRect(0, 0, W, H);
 
-    const mediaH = Math.round(H * 0.64);
+    const mediaH = Math.round(H * 0.68);
     try {
-      const img = await loadShareImage(imageUrl);
+      const img = await loadShareImageSafe(imageUrl);
       const scale = Math.max(W / img.naturalWidth, mediaH / img.naturalHeight);
       const dw = img.naturalWidth * scale;
       const dh = img.naturalHeight * scale;
@@ -701,10 +737,9 @@
       ctx.fillRect(0, 0, W, mediaH);
     }
 
-    const veil = ctx.createLinearGradient(0, mediaH * 0.35, 0, H);
+    const veil = ctx.createLinearGradient(0, mediaH * 0.4, 0, H);
     veil.addColorStop(0, 'rgba(28, 23, 36, 0)');
-    veil.addColorStop(0.42, 'rgba(28, 23, 36, 0.55)');
-    veil.addColorStop(0.72, 'rgba(28, 23, 36, 0.94)');
+    veil.addColorStop(0.5, 'rgba(28, 23, 36, 0.72)');
     veil.addColorStop(1, '#1c1724');
     ctx.fillStyle = veil;
     ctx.fillRect(0, 0, W, H);
@@ -716,20 +751,27 @@
     }
 
     const pad = 72;
-    ctx.fillStyle = 'rgba(243, 235, 227, 0.72)';
+    const hasTitle = Boolean(String(title || '').trim());
+
+    ctx.fillStyle = 'rgba(243, 235, 227, 0.78)';
     ctx.font = '600 34px Onest, Manrope, sans-serif';
-    ctx.fillText(shareSnippet(eyebrow, 42).toUpperCase(), pad, H - 318);
+    ctx.fillText(shareSnippet(eyebrow, 42).toUpperCase(), pad, hasTitle ? H - 292 : H - 168);
 
-    ctx.fillStyle = '#fffaf4';
-    ctx.font = '700 58px Unbounded, Onest, sans-serif';
-    const titleLines = wrapShareCardLines(ctx, title || 'Лоза', W - pad * 2, 3);
-    titleLines.forEach((line, i) => {
-      ctx.fillText(line, pad, H - 250 + i * 72);
+    if (hasTitle) {
+      ctx.fillStyle = '#fffaf4';
+      ctx.font = '700 52px Unbounded, Onest, sans-serif';
+      const titleLines = wrapShareCardLines(ctx, title, W - pad * 2, 2);
+      titleLines.forEach((line, i) => {
+        ctx.fillText(line, pad, H - 230 + i * 64);
+      });
+    }
+
+    ctx.fillStyle = 'rgba(255, 250, 244, 0.55)';
+    ctx.font = '600 28px Onest, Manrope, sans-serif';
+    const linkLines = wrapShareCardLines(ctx, formatShareUrlForCard(shareUrl), W - pad * 2, 2);
+    linkLines.forEach((line, i) => {
+      ctx.fillText(line, pad, H - 88 + i * 36);
     });
-
-    ctx.fillStyle = 'rgba(255, 250, 244, 0.45)';
-    ctx.font = '500 30px Onest, Manrope, sans-serif';
-    ctx.fillText(footer, pad, H - 56);
 
     const blob = await new Promise((resolve, reject) => {
       canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.92);
@@ -737,65 +779,43 @@
     return new File([blob], 'loza-share.jpg', { type: 'image/jpeg' });
   }
 
-  async function shareWithPreview({ title, text, url, imageUrl, eyebrow }) {
-    const shareUrl = url || `${window.location.origin}${window.location.pathname}#share`;
-    const shareTitle = title || 'Лоза';
-    const shareText = text || shareTitle;
-    const payload = {
-      title: shareTitle,
-      text: `${shareText}${shareText.includes(shareUrl) ? '' : `\n${shareUrl}`}`,
-      url: shareUrl,
-    };
+  async function shareWithPreview({ title, url, imageUrl, eyebrow, cardTitle }) {
+    const shareUrl = url || `${window.location.origin}${window.location.pathname}`;
+    const labelOnCard = cardTitle !== undefined ? cardTitle : (title || '');
 
     if (navigator.share) {
       try {
         const card = await buildShareCardFile({
-          title: shareTitle,
+          title: labelOnCard,
           eyebrow: eyebrow || 'Лоза',
           imageUrl: resolveShareImageUrl(imageUrl),
+          shareUrl,
         });
-        if (navigator.canShare?.({ files: [card] })) {
-          // Prefer files-only + text: card already carries title/cover for apps that strip url.
-          await navigator.share({
-            files: [card],
-            title: payload.title,
-            text: payload.text,
-          });
+        // Files ONLY — text/url alongside a file becomes a second Telegram message.
+        if (!navigator.canShare || navigator.canShare({ files: [card] })) {
+          await navigator.share({ files: [card] });
           return;
         }
       } catch (err) {
         if (err?.name === 'AbortError') return;
-        /* fall through */
-      }
-
-      // Fallback: raw image file, then text/url only.
-      if (imageUrl) {
-        try {
-          const response = await fetch(resolveShareImageUrl(imageUrl), { mode: 'cors', credentials: 'omit' });
-          if (response.ok) {
-            const blob = await response.blob();
-            const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-            const file = new File([blob], `loza.${ext}`, { type: blob.type || 'image/jpeg' });
-            if (navigator.canShare?.({ files: [file] })) {
-              await navigator.share({ ...payload, files: [file] });
-              return;
-            }
-          }
-        } catch {
-          /* continue */
-        }
       }
 
       try {
-        await navigator.share(payload);
+        await navigator.share({ title: title || 'Лоза', url: shareUrl });
         return;
       } catch (err) {
         if (err?.name === 'AbortError') return;
+        try {
+          await navigator.share({ title: title || 'Лоза', text: shareUrl });
+          return;
+        } catch (err2) {
+          if (err2?.name === 'AbortError') return;
+        }
       }
     }
 
     try {
-      await navigator.clipboard?.writeText(`${payload.text}`);
+      await navigator.clipboard?.writeText(shareUrl);
       showAppToast('Ссылка скопирована', { title: 'Поделиться' });
     } catch {
       showAppToast('Не удалось поделиться', { title: 'Поделиться', tone: 'warn' });
@@ -853,21 +873,24 @@
       b.onclick = () => openItem(b.dataset.openItem);
     });
     $$('[data-share-item]', root).forEach((b) => {
-      b.onclick = () => {
+      b.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         const item = state.libraryItems.find((x) => x.id === b.dataset.shareItem);
         if (!item) return;
-        const index = Math.max(0, state.libraryItems.findIndex((x) => x.id === item.id));
+        // Use the same local cover the card shows — avoids CORS/tainted-canvas failures.
+        const filtered = filteredMediaItems();
+        const visualIndex = Math.max(0, filtered.findIndex((x) => x.id === item.id));
         const kindLabel = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Материал';
-        const cover = item.kind === 'audio'
-          ? audioCoverForItem(item.id)
-          : (item.coverUrl || item.imageUrl || bgImageForItem(item.id) || bgImage(index));
-        const summary = M.getMaterialSummary?.(item) || '';
+        const cover = item.kind === 'audio' ? audioCoverForItem(item.id) : bgImage(visualIndex);
         shareWithPreview({
-          title: shareSnippet(M.cleanDisplayText?.(item.title) || item.title, 90),
-          text: shareSnippet(summary || `${item.title} — Лоза`, 220),
-          eyebrow: `Лоза · ${sectionTitle(item.sectionId)} · ${kindLabel}`,
+          title: shareSnippet(M.cleanDisplayText?.(item.title) || item.title, 72),
+          cardTitle: shareSnippet(M.cleanDisplayText?.(item.title) || item.title, 72),
+          eyebrow: `Лоза · ${kindLabel}`,
           url: `${window.location.origin}${window.location.pathname}?media=${encodeURIComponent(item.id)}`,
-          imageUrl: resolveShareImageUrl(cover, index),
+          imageUrl: resolveShareImageUrl(cover, visualIndex),
+        }).catch(() => {
+          showAppToast('Не удалось поделиться', { title: 'Поделиться', tone: 'warn' });
         });
       };
     });
