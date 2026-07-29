@@ -88,6 +88,7 @@
     chatView: 'rooms',
     selectedRoomId: '',
     chatCompose: null, // { mode: 'reply'|'edit', messageId, preview, authorName, body? }
+    chatAttachments: [], // { localId, previewUrl, status: 'uploading'|'ready'|'error', id? }
     myChatMessageIds: new Set(),
     seenIntroIds: new Set(),
     introSeeded: false,
@@ -181,6 +182,8 @@
     if (tab !== 'chat') {
       state.chatView = 'rooms';
       state.selectedRoomId = '';
+      clearChatCompose();
+      clearChatAttachments();
     }
     const shell = $('#page-shell');
     shell.scrollTop = 0;
@@ -1549,11 +1552,105 @@
     state.chatCompose = null;
   }
 
+  const MAX_CHAT_ATTACHMENTS = 4;
+
+  function clearChatAttachments() {
+    state.chatAttachments.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+    state.chatAttachments = [];
+  }
+
+  function removeChatAttachment(localId) {
+    const item = state.chatAttachments.find((entry) => entry.localId === localId);
+    if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    state.chatAttachments = state.chatAttachments.filter((entry) => entry.localId !== localId);
+    renderChatLive();
+  }
+
+  async function addChatAttachments(files) {
+    const free = MAX_CHAT_ATTACHMENTS - state.chatAttachments.length;
+    if (free <= 0) {
+      showAppToast(`Можно прикрепить не больше ${MAX_CHAT_ATTACHMENTS} фото`, { title: 'Чат', tone: 'warn' });
+      return;
+    }
+    const picked = [...files].filter((file) => /^image\//i.test(file.type)).slice(0, free);
+    if (!picked.length) return;
+
+    // Optimistic previews first, then upload each in the background.
+    const pending = picked.map((file) => ({
+      localId: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      previewUrl: URL.createObjectURL(file),
+      status: 'uploading',
+      file,
+    }));
+    state.chatAttachments = [...state.chatAttachments, ...pending];
+    renderChatLive();
+
+    await Promise.all(pending.map(async (entry) => {
+      try {
+        const data = await API.uploadChatImage(entry.file);
+        const current = state.chatAttachments.find((item) => item.localId === entry.localId);
+        if (!current) return;
+        current.id = data.attachment?.id;
+        current.status = current.id ? 'ready' : 'error';
+      } catch (error) {
+        const current = state.chatAttachments.find((item) => item.localId === entry.localId);
+        if (current) current.status = 'error';
+        showAppToast(
+          String(error?.message) === 'IMAGE_TOO_LARGE'
+            ? 'Фото больше 6 МБ — выберите другое'
+            : 'Не удалось загрузить фото',
+          { title: 'Чат', tone: 'warn' },
+        );
+      }
+    }));
+    renderChatLive();
+  }
+
+  function renderChatAttachmentTray() {
+    if (!state.chatAttachments.length) return '';
+    const items = state.chatAttachments.map((item) => `
+      <div class="chat-attach-chip${item.status === 'uploading' ? ' is-uploading' : ''}${item.status === 'error' ? ' is-error' : ''}">
+        <img src="${esc(item.previewUrl)}" alt="" />
+        ${item.status === 'uploading' ? '<span class="chat-attach-spinner" aria-label="Загрузка"></span>' : ''}
+        ${item.status === 'error' ? `<span class="chat-attach-error" aria-hidden="true">${ic('x', 16)}</span>` : ''}
+        <button type="button" class="chat-attach-remove" data-attach-remove="${esc(item.localId)}" aria-label="Убрать фото">${ic('x', 14)}</button>
+      </div>`).join('');
+    return `<div class="chat-attach-tray" id="chat-attach-tray">${items}</div>`;
+  }
+
+  function chatAttachmentsHtml(message) {
+    const images = (message.attachments || []).filter((item) => (
+      !item.mimeType || /^image\//i.test(item.mimeType)
+    ));
+    if (!images.length) return '';
+    const tiles = images.map((item) => `
+      <button type="button" class="bubble-photo" data-photo="${esc(item.url)}">
+        <img src="${esc(item.url)}" alt="${esc(item.fileName || 'Фото')}" loading="lazy" decoding="async" />
+      </button>`).join('');
+    return `<div class="bubble-photos${images.length > 1 ? ' is-grid' : ''}">${tiles}</div>`;
+  }
+
+  function openChatPhoto(url) {
+    $('#portal').innerHTML = `<div class="photo-viewer-backdrop" id="modal-close">
+      <button type="button" class="photo-viewer-close" id="modal-x" aria-label="Закрыть">${ic('x', 22)}</button>
+      <img class="photo-viewer-image" src="${esc(url)}" alt="" onclick="event.stopPropagation()" />
+    </div>`;
+    bindModalClose();
+  }
+
+  function chatMessagePreview(message) {
+    const body = String(message?.body || message?.text || '').trim();
+    if (body) return body;
+    return (message?.attachments || []).length ? 'Фото' : '';
+  }
+
   function setChatReply(message) {
     state.chatCompose = {
       mode: 'reply',
       messageId: message.id,
-      preview: String(message.body || '').slice(0, 120),
+      preview: chatMessagePreview(message).slice(0, 120),
       authorName: message.authorName || message.author?.name || 'Участник',
     };
     renderScreen();
@@ -1610,9 +1707,13 @@
     const introClass = intro ? ` is-intro${freshIntro ? ' is-intro-new' : ''}` : '';
     const meetingClass = meetingOnly ? ' is-meeting-only' : '';
 
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}" data-message-id="${esc(message.id)}">
+    const photos = chatAttachmentsHtml(message);
+    const photoClass = photos ? ' has-photos' : '';
+
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}" data-message-id="${esc(message.id)}">
       <div class="bubble-body">
         ${author}${reply}${introBadge}
+        ${photos}
         ${bodyHtml}
         ${meetingCards}
         <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${check}</div>
@@ -1642,7 +1743,7 @@
       const last = room.messages?.[room.messages.length - 1];
       const preview = room.locked
         ? 'Доступно в тарифе «Клуб»'
-        : (last ? (last.body || last.text || '') : (room.description || 'Пока нет сообщений'));
+        : (last ? chatMessagePreview(last) : (room.description || 'Пока нет сообщений'));
       const time = !room.locked && last ? `<time>${formatBubbleTime(last.createdAt)}</time>` : '';
       const lock = room.locked ? '<span class="access-badge locked">Клуб</span>' : '';
       return `<button type="button" class="${room.id === selectedRoom?.id ? 'active' : ''}${room.locked ? ' is-locked' : ''}" data-room="${esc(room.id)}" data-locked="${room.locked ? '1' : '0'}">
@@ -1691,7 +1792,10 @@
           </div>
         </div>
         ${renderChatComposeBar()}
+        ${renderChatAttachmentTray()}
         <form class="telegram-composer" id="chat-form">
+          <input type="file" id="chat-file" accept="image/*" multiple hidden />
+          <button class="telegram-composer-attach" type="button" id="chat-attach" aria-label="Прикрепить фото">${ic('paperclip', 21)}</button>
           <input placeholder="${esc(placeholder)}" id="chat-draft" autocomplete="off" />
           <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>
@@ -2017,15 +2121,43 @@
       if (input && !input.value) input.value = state.chatCompose.body;
     }
 
+    const fileInput = $('#chat-file', root);
+    $('#chat-attach', root)?.addEventListener('click', () => fileInput?.click());
+    fileInput?.addEventListener('change', () => {
+      const files = fileInput.files;
+      if (files?.length) addChatAttachments(files);
+      fileInput.value = '';
+    });
+    $$('[data-attach-remove]', root).forEach((b) => {
+      b.onclick = () => removeChatAttachment(b.dataset.attachRemove);
+    });
+    $$('[data-photo]', root).forEach((b) => {
+      b.onclick = (event) => {
+        event.stopPropagation();
+        openChatPhoto(b.dataset.photo);
+      };
+    });
+
     $('#chat-form', root)?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = $('#chat-draft', root);
-      const body = input?.value.trim();
-      if (!body || !state.selectedRoomId) return;
+      const body = input?.value.trim() || '';
+      if (!state.selectedRoomId) return;
+
       const compose = state.chatCompose;
+      const editing = compose?.mode === 'edit';
+      const attachments = editing ? [] : state.chatAttachments;
+      if (attachments.some((item) => item.status === 'uploading')) {
+        showAppToast('Фото ещё загружается', { title: 'Чат' });
+        return;
+      }
+      const attachmentIds = attachments.filter((item) => item.id).map((item) => item.id);
+      if (!body && !attachmentIds.length) return;
+
       input.value = '';
+      if (!editing) clearChatAttachments();
       try {
-        if (compose?.mode === 'edit') {
+        if (editing) {
           const data = await API.editChatMessage(compose.messageId, body);
           if (data.message) {
             rememberMyChatMessage(data.message.id);
@@ -2036,6 +2168,7 @@
             state.selectedRoomId,
             body,
             compose?.mode === 'reply' ? compose.messageId : undefined,
+            attachmentIds,
           );
           if (data.message) {
             rememberMyChatMessage(data.message.id);
@@ -2046,7 +2179,7 @@
         renderChatLive();
       } catch {
         input.value = body;
-        window.alert(compose?.mode === 'edit'
+        window.alert(editing
           ? 'Не удалось изменить сообщение.'
           : 'Не удалось отправить сообщение. Попробуйте ещё раз.');
       }

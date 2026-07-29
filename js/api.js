@@ -85,15 +85,34 @@
     addFeedComment: (postId, body) =>
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
     chatRooms: () => request(`/chat/rooms?guestId=${encodeURIComponent(getGuestId())}`),
-    sendChatMessage: (roomId, body, replyToId) =>
+    sendChatMessage: (roomId, body, replyToId, attachmentIds) =>
       request(`/chat/rooms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify({
-          body,
+          body: body || '',
           replyToId: replyToId || undefined,
+          attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
           guestId: getGuestId(),
         }),
       }),
+    uploadChatImage: async (file) => {
+      // FormData sets its own multipart boundary — never send a JSON content type.
+      const form = new FormData();
+      form.append('file', file);
+      form.append('guestId', getGuestId());
+      const response = await fetch(`${API_URL}/chat/upload`, {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'include',
+        headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `API ${response.status}`);
+      }
+      return response.json();
+    },
     editChatMessage: (messageId, body) =>
       request(`/chat/messages/${messageId}`, {
         method: 'PATCH',
