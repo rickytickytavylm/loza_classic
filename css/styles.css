@@ -4,6 +4,8 @@
   color-scheme: light;
   font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
   --font-display: "Unbounded", "Onest", "Manrope", sans-serif;
+  /* Paratype Golos Text — first-class Cyrillic, readable display headlines */
+  --font-headline: "Golos Text", "Onest", "Manrope", sans-serif;
   color: #1e1528;
   background: #fbf7fd;
   font-synthesis: none;
@@ -405,9 +407,6 @@ button {
   text-transform: uppercase;
 }
 
-/* Display font only for secondary section titles — not brand wordmark / hero
-   (Unbounded is too wide and was crushing the hero layout). */
-.section-header h2,
 .profile-hero h1,
 .material-page-immersive h1,
 .movie-detail-body h1 {
@@ -428,14 +427,19 @@ button {
   margin: 10px 0 0;
   color: var(--ink);
   font-size: clamp(22px, 4.2vw, 32px);
-  line-height: 1.18;
-  letter-spacing: -0.03em;
-  font-weight: 750;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  font-family: var(--font-headline);
 }
 
+/* Home hero + materials: Golos Text — top Cyrillic, easier to read than Unbounded */
 .hero h1 {
-  font-family: "Onest", "Manrope", "Segoe UI", system-ui, sans-serif;
-  max-width: 14ch;
+  font-family: var(--font-headline);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+  max-width: 16ch;
   overflow-wrap: normal;
   word-break: normal;
   hyphens: manual;
@@ -3987,11 +3991,11 @@ html.chat-no-select body * {
   }
 
   .hero h1 {
-    font-family: var(--font-display);
-    font-size: clamp(25px, 6.4vw, 33px);
+    font-family: var(--font-headline);
+    font-size: clamp(26px, 6.6vw, 34px);
     font-weight: 700;
-    letter-spacing: -0.025em;
-    line-height: 1.14;
+    letter-spacing: -0.02em;
+    line-height: 1.16;
     max-width: none;
   }
 
