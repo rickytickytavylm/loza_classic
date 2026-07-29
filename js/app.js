@@ -1255,20 +1255,26 @@
     });
   }
 
-  function showAppToast(message, { title = 'Лоза', tone = 'ok' } = {}) {
+  function showAppToast(message, { title = 'Лоза', tone = 'ok', onOpen = null, hold = 4200 } = {}) {
     let host = $('#app-toast-host');
     if (!host) {
       host = document.createElement('div');
       host.id = 'app-toast-host';
       document.body.appendChild(host);
     }
-    host.innerHTML = `<div class="app-toast app-toast-${esc(tone)}" role="status">
-      <div class="app-toast-copy"><strong>${esc(title)}</strong><p>${esc(message)}</p></div>
-      <button type="button" class="app-toast-close" id="app-toast-close">Закрыть</button>
+    host.innerHTML = `<div class="app-toast app-toast-${esc(tone)}${onOpen ? ' is-clickable' : ''}" role="status">
+      <div class="app-toast-copy"${onOpen ? ' id="app-toast-open" role="button" tabindex="0"' : ''}><strong>${esc(title)}</strong><p>${esc(message)}</p></div>
+      <button type="button" class="app-toast-close" id="app-toast-close" aria-label="Закрыть">${onOpen ? ic('x', 16) : 'Закрыть'}</button>
     </div>`;
     const close = () => { host.innerHTML = ''; };
     $('#app-toast-close', host)?.addEventListener('click', close);
-    window.setTimeout(close, 4200);
+    if (onOpen) {
+      $('#app-toast-open', host)?.addEventListener('click', () => {
+        close();
+        onOpen();
+      });
+    }
+    window.setTimeout(close, hold);
   }
 
   function isExternalCheckoutUrl(url) {
@@ -1989,7 +1995,13 @@
     const photos = chatAttachmentsHtml(message);
     const photoClass = photos ? ' has-photos' : '';
 
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}${message.pending ? ' is-pending' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}>
+    // Photos and link cards bring their own frame, so the coloured bubble around
+    // them is just visual noise. A quote or the intro badge still needs one.
+    const photoOnly = Boolean(photos) && !formattedBody && !meetings.length;
+    const mediaOnly = (photoOnly || meetingOnly) && !reply && !intro;
+    const mediaClass = `${mediaOnly ? ' is-media-only' : ''}${photoOnly && mediaOnly ? ' is-photo-only' : ''}`;
+
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}${mediaClass}${message.pending ? ' is-pending' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}>
       <div class="bubble-body">
         ${author}${reply}${introBadge}
         ${photos}
@@ -3505,6 +3517,58 @@
     }
   }
 
+  /** Notification tapped while the app is already running: no reload, just jump. */
+  async function openChatFromPush(roomId) {
+    if (state.tab !== 'chat') setTab('chat');
+    if (state.tab !== 'chat') return; // the rules sheet took over
+
+    if (roomId && !state.chatRooms.some((item) => item.id === roomId)) {
+      await pollChatRooms({ force: true });
+    }
+    const room = roomId ? state.chatRooms.find((item) => item.id === roomId) : null;
+    if (room && !room.locked) {
+      state.selectedRoomId = room.id;
+      state.chatView = 'thread';
+    } else {
+      state.chatView = 'rooms';
+    }
+    closePortal();
+    renderNav();
+    renderScreen();
+    setImmersive();
+    pollChatRooms({ force: true });
+  }
+
+  /**
+   * A push that arrives while the app is in the foreground: an OS banner would
+   * duplicate what the thread already shows, so surface a tappable in-app one.
+   */
+  function handleForegroundChatPush(data) {
+    const roomId = data.roomId || '';
+    const reading = state.tab === 'chat'
+      && state.chatView === 'thread'
+      && state.selectedRoomId === roomId;
+    pollChatRooms({ force: true });
+    if (reading) return;
+    showAppToast(data.body || 'Новое сообщение', {
+      title: data.title || 'Чат клуба',
+      hold: 6000,
+      onOpen: () => openChatFromPush(roomId),
+    });
+  }
+
+  function bindPushDeepLinks() {
+    if (!navigator.serviceWorker) return;
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const data = event.data;
+      if (data?.type === 'loza:open-chat') {
+        openChatFromPush(data.roomId || '');
+        return;
+      }
+      if (data?.type === 'loza:chat-push') handleForegroundChatPush(data);
+    });
+  }
+
   function showAuthScreen(errorText) {
     const root = $('#auth-screen');
     if (!root) return;
@@ -3731,6 +3795,7 @@
     await Promise.all([loadContent(), loadFeed(), loadChatRooms()]);
     startChatStream();
     bindChatLiveRefresh();
+    bindPushDeepLinks();
     syncHeaderIdentity();
     applyDeepLinkFromUrl();
     renderScreen();

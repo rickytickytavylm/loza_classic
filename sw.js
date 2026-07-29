@@ -1,6 +1,6 @@
 // Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '27';
+const ASSET_VERSION = '28';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
 const IMAGE_CACHE = 'loza-classic-images-v10';
 const PRECACHE = [
@@ -68,30 +68,65 @@ function cacheFirstImage(request) {
   );
 }
 
-// Show push/local notifications in the background. Click focuses the app.
-self.addEventListener('push', (event) => {
-  const data = event.data?.json() || {};
+// Static legal pages have no app script, so they cannot handle our messages.
+function appWindows(windows) {
+  return windows.filter((client) => !/\/(privacy|terms)\.html/i.test(client.url));
+}
+
+// Show push notifications in the background. Click focuses the app.
+async function showChatPush(data) {
+  // App in the foreground? Hand it over for an in-app banner instead of a
+  // system one, so a message never lands twice in front of the same person.
+  if (data.roomId) {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const active = appWindows(windows).find((c) => c.focused && c.visibilityState === 'visible');
+    if (active) {
+      active.postMessage({ type: 'loza:chat-push', ...data });
+      return;
+    }
+  }
+
   const title = data.title || 'Лоза';
   const options = {
     body: data.body || 'Новое сообщение в клубе',
     icon: data.icon || './assets/icon-192.png',
     badge: data.badge || './assets/favicon-32.png',
+    // A photo message shows the photo itself where the platform supports it.
+    image: data.image || undefined,
     tag: data.tag || 'loza-default',
+    // Collapse per chat, but still alert on every new message.
+    renotify: Boolean(data.renotify),
+    timestamp: data.timestamp || Date.now(),
+    vibrate: data.vibrate || [12, 60, 12],
+    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : undefined,
     requireInteraction: false,
     data: { url: data.url || './', roomId: data.roomId || null },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  await self.registration.showNotification(title, options);
+}
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data?.json() || {};
+  } catch {
+    data = {};
+  }
+  event.waitUntil(showChatPush(data));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || './';
+  const { url: targetUrl = './', roomId = null } = event.notification.data || {};
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const focused = clients.find((c) => c.focused);
-      if (focused) return focused.navigate(targetUrl).then((c) => c.focus());
-      const existing = clients.find((c) => c.url === targetUrl);
-      if (existing) return existing.focus();
+      // Reusing an open window keeps the chat warm — no cold reload on tap.
+      const candidates = appWindows(clients);
+      const open = candidates.find((c) => c.focused) || candidates[0];
+      if (open) {
+        open.postMessage({ type: 'loza:open-chat', roomId, url: targetUrl });
+        return open.focus();
+      }
       return self.clients.openWindow(targetUrl);
     }),
   );

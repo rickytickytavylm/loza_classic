@@ -498,6 +498,31 @@ button {
   font-weight: 700;
 }
 
+/* Chat banner variant: the whole copy opens the room. */
+.app-toast.is-clickable .app-toast-copy {
+  cursor: pointer;
+}
+
+.app-toast.is-clickable .app-toast-copy strong {
+  color: var(--olive-dark);
+}
+
+.app-toast.is-clickable .app-toast-copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.app-toast.is-clickable .app-toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
 .hero p,
 .section-header p,
 .glass-card p,
@@ -3141,6 +3166,54 @@ html.chat-no-select body * {
 
 .chat-bubble.has-photos .bubble-body {
   padding-top: 6px;
+}
+
+/* Photos and link cards are their own surface — a coloured bubble around them
+   only adds a box. Declared last so it wins over .mine / .incoming fills. */
+.chat-bubble.is-media-only .bubble-body {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-bubble.is-media-only .bubble-photos,
+.chat-bubble.is-media-only .chat-meeting-card {
+  margin: 0;
+}
+
+.chat-bubble.is-photo-only .bubble-photos {
+  border-radius: 16px;
+}
+
+/* Author and timestamp ride on top of the photo instead of a bubble strip. */
+.chat-bubble.is-photo-only .bubble-author,
+.chat-bubble.is-photo-only .bubble-meta {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(12, 8, 16, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.chat-bubble.is-photo-only .bubble-author {
+  top: 8px;
+  left: 8px;
+  font-size: 12px;
+}
+
+.chat-bubble.is-photo-only .bubble-meta {
+  right: 8px;
+  bottom: 8px;
+  float: none;
+}
+
+.chat-bubble.is-photo-only .bubble-meta,
+.chat-bubble.is-photo-only .bubble-meta svg {
+  color: #fff;
 }
 
 .photo-viewer-backdrop {
