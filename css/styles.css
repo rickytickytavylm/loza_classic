@@ -2901,6 +2901,28 @@ html.chat-no-select body * {
   color: #5fae4d;
 }
 
+.chat-bubble.is-pending {
+  opacity: 0.72;
+}
+
+.bubble-sending {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0.7;
+  animation: bubble-sending-spin 0.7s linear infinite;
+}
+
+@keyframes bubble-sending-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-sending { animation-duration: 2s; }
+}
+
 .empty-chat {
   margin: auto;
   padding: 12px 16px;

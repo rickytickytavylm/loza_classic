@@ -83,7 +83,9 @@
     chatStream: null,
     chatStreamReady: false,
     chatStreamRetry: 0,
+    chatStreamSeenAt: 0,
     chatPollTimer: null,
+    chatPollTick: 0,
     chatPollBusy: false,
     chatView: 'rooms',
     selectedRoomId: '',
@@ -1702,6 +1704,18 @@
     state.chatCompose = null;
   }
 
+  /** Cancel reply/edit from the compose bar and drop the borrowed draft text. */
+  function cancelChatCompose() {
+    const wasEdit = state.chatCompose?.mode === 'edit';
+    clearChatCompose();
+    const draft = $('#chat-draft');
+    if (wasEdit && draft) {
+      draft.value = '';
+      resizeChatDraft(draft);
+    }
+    renderChatLive();
+  }
+
   const MAX_CHAT_ATTACHMENTS = 4;
 
   function clearChatAttachments() {
@@ -1709,6 +1723,45 @@
       if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     });
     state.chatAttachments = [];
+  }
+
+  function releaseChatAttachmentPreviews(items) {
+    // Let the optimistic bubble keep its blob preview until the real one loads.
+    window.setTimeout(() => {
+      (items || []).forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+    }, 10000);
+  }
+
+  /** Local-only bubble shown while the request is in flight. */
+  function addPendingChatMessage(body, attachments, compose) {
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+    if (!room) return null;
+    const message = {
+      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      roomId: room.id,
+      body,
+      createdAt: new Date().toISOString(),
+      authorId: currentChatUserId(),
+      authorName: state.user?.name || 'Вы',
+      reactions: [],
+      attachments: (attachments || []).map((item) => ({ url: item.previewUrl, mimeType: 'image/*' })),
+      replyTo: compose?.mode === 'reply'
+        ? { id: compose.messageId, authorName: compose.authorName, body: compose.preview }
+        : null,
+      mine: true,
+      pending: true,
+    };
+    room.messages.push(message);
+    return message;
+  }
+
+  function removePendingChatMessage(message) {
+    if (!message) return;
+    const room = state.chatRooms.find((item) => item.id === message.roomId);
+    if (!room) return;
+    room.messages = room.messages.filter((item) => item.id !== message.id);
   }
 
   function removeChatAttachment(localId) {
@@ -1770,6 +1823,14 @@
     return `<div class="chat-attach-tray" id="chat-attach-tray">${items}</div>`;
   }
 
+  function chatComposeSlotSignature() {
+    const compose = state.chatCompose;
+    return shortHash([
+      compose ? `${compose.mode}:${compose.messageId}:${compose.preview || ''}` : '',
+      state.chatAttachments.map((item) => `${item.localId}:${item.status}`).join(','),
+    ].join('\u0001'));
+  }
+
   function chatAttachmentsHtml(message) {
     const images = (message.attachments || []).filter((item) => (
       !item.mimeType || /^image\//i.test(item.mimeType)
@@ -1803,7 +1864,7 @@
       preview: chatMessagePreview(message).slice(0, 120),
       authorName: message.authorName || message.author?.name || 'Участник',
     };
-    renderScreen();
+    renderChatLive();
     window.setTimeout(() => $('#chat-draft')?.focus(), 30);
   }
 
@@ -1815,7 +1876,7 @@
       authorName: 'Редактирование',
       body: message.body || '',
     };
-    renderScreen();
+    renderChatLive();
     window.setTimeout(() => {
       const input = $('#chat-draft');
       if (!input) return;
@@ -1824,7 +1885,74 @@
     }, 30);
   }
 
-  function renderChatBubble(message, mine) {
+  /** Compact ASCII digest: attribute values normalise newlines, raw text cannot. */
+  function shortHash(input) {
+    let h1 = 0x811c9dc5;
+    let h2 = 0x1000193;
+    const text = String(input);
+    for (let i = 0; i < text.length; i += 1) {
+      const code = text.charCodeAt(i);
+      h1 = ((h1 ^ code) * 0x01000193) >>> 0;
+      h2 = ((h2 + code) * 0x85ebca6b) >>> 0;
+    }
+    return `${h1.toString(36)}${h2.toString(36)}`;
+  }
+
+  /** Everything that changes a bubble's markup — used to skip untouched DOM. */
+  function chatBubbleSignature(message, mine) {
+    return shortHash([
+      message.body || message.text || '',
+      message.editedAt || '',
+      mine ? 'm' : 'i',
+      message.authorName || message.author?.name || '',
+      (message.attachments || []).map((item) => item.url).join(','),
+      (message.reactions || []).map((r) => `${r.emoji}${r.count}${r.mine ? '*' : ''}`).join(''),
+      message.replyTo
+        ? `${message.replyTo.id}${message.replyTo.deleted ? 'd' : ''}${message.replyTo.body || ''}`
+        : '',
+      message.createdAt || '',
+      message.pending ? 'p' : '',
+    ].join('\u0001'));
+  }
+
+  /** Keyed timeline entries so the thread can be patched instead of rebuilt. */
+  function chatTimelineItems(room) {
+    const messages = room?.messages || [];
+    if (!messages.length) {
+      return [{
+        key: 'empty',
+        sig: 'empty',
+        html: '<div class="empty-chat" data-key="empty" data-sig="empty"><p>Напишите первое сообщение.</p></div>',
+      }];
+    }
+
+    const items = [];
+    let lastDateKey = '';
+    messages.forEach((message) => {
+      const stamp = message.createdAt || Date.now();
+      const dateKey = new Date(stamp).toDateString();
+      if (dateKey !== lastDateKey) {
+        const key = `date-${dateKey}`;
+        items.push({
+          key,
+          sig: dateKey,
+          html: `<div class="telegram-date-pill" data-key="${esc(key)}" data-sig="${esc(dateKey)}">${esc(chatDateLabel(stamp))}</div>`,
+        });
+        lastDateKey = dateKey;
+      }
+      const mine = isMyChatMessage(message);
+      const sig = chatBubbleSignature(message, mine);
+      items.push({
+        key: `msg-${message.id}`,
+        sig,
+        html: renderChatBubble(message, mine, sig),
+      });
+    });
+    return items;
+  }
+
+  function renderChatBubble(message, mine, sig) {
+    const signature = sig ?? chatBubbleSignature(message, mine);
     const author = !mine
       ? `<strong class="bubble-author">${esc(message.authorName || message.author?.name || 'Участник клуба')}</strong>`
       : '';
@@ -1840,7 +1968,8 @@
       </button>
     `).join('');
     const edited = message.editedAt ? '<span class="bubble-edited">изм.</span>' : '';
-    const check = mine ? ic('checkCheck', 15) : '';
+    const check = mine && !message.pending ? ic('checkCheck', 15) : '';
+    const sending = message.pending ? '<span class="bubble-sending" aria-label="Отправляется"></span>' : '';
     const body = message.body || message.text || '';
     const meetings = detectMeetingLinks(body);
     const meetingCards = meetings.map((meeting, i) => meetingCardHtml(meeting, i)).join('');
@@ -1860,13 +1989,13 @@
     const photos = chatAttachmentsHtml(message);
     const photoClass = photos ? ' has-photos' : '';
 
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}" data-message-id="${esc(message.id)}">
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}${message.pending ? ' is-pending' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}>
       <div class="bubble-body">
         ${author}${reply}${introBadge}
         ${photos}
         ${bodyHtml}
         ${meetingCards}
-        <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${check}</div>
+        <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${sending}${check}</div>
       </div>
       ${reactions ? `<div class="chat-reaction-row">${reactions}</div>` : ''}
     </article>`;
@@ -1903,20 +2032,7 @@
       </button>`;
     }).join('');
 
-    const timeline = [];
-    let lastDateKey = '';
-    (selectedRoom?.messages || []).forEach((message) => {
-      const dateKey = new Date(message.createdAt || Date.now()).toDateString();
-      if (dateKey !== lastDateKey) {
-        timeline.push(`<div class="telegram-date-pill">${esc(chatDateLabel(message.createdAt || Date.now()))}</div>`);
-        lastDateKey = dateKey;
-      }
-      timeline.push(renderChatBubble(message, isMyChatMessage(message)));
-    });
-
-    const emptyThread = !(selectedRoom?.messages || []).length
-      ? '<div class="empty-chat"><p>Напишите первое сообщение.</p></div>'
-      : '';
+    const timeline = chatTimelineItems(selectedRoom).map((item) => item.html);
 
     const roomsListInner = roomButtons
       ? `<div class="telegram-room-group">${roomButtons}</div>`
@@ -1938,11 +2054,9 @@
         <div class="telegram-messages">
           <div class="telegram-messages-canvas chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
             ${timeline.join('')}
-            ${emptyThread}
           </div>
         </div>
-        ${renderChatComposeBar()}
-        ${renderChatAttachmentTray()}
+        <div id="chat-compose-slot" data-sig="${esc(chatComposeSlotSignature())}">${renderChatComposeBar()}${renderChatAttachmentTray()}</div>
         <form class="telegram-composer" id="chat-form">
           <input type="file" id="chat-file" accept="image/*" multiple hidden />
           <button class="telegram-composer-attach" type="button" id="chat-attach" aria-label="Прикрепить фото">${ic('paperclip', 21)}</button>
@@ -1982,8 +2096,26 @@
       reactions,
       mine,
     };
-    if (index >= 0) room.messages[index] = { ...previous, ...normalized };
-    else room.messages.push(normalized);
+    if (index >= 0) {
+      room.messages[index] = { ...previous, ...normalized };
+      return;
+    }
+    // The stream can echo our own message before the POST resolves; drop the
+    // matching optimistic bubble so it never shows up twice.
+    if (mine) {
+      const twin = room.messages.findIndex((item) => (
+        item.pending
+        && (item.body || '') === (normalized.body || '')
+        && (item.attachments || []).length === (normalized.attachments || []).length
+      ));
+      if (twin >= 0) room.messages.splice(twin, 1);
+    }
+
+    // Stream events can arrive out of order, so keep the timeline chronological.
+    const stamp = new Date(normalized.createdAt || Date.now()).getTime();
+    let at = room.messages.length;
+    while (at > 0 && new Date(room.messages[at - 1].createdAt || 0).getTime() > stamp) at -= 1;
+    room.messages.splice(at, 0, normalized);
   }
 
   let chatSelectionLock = 0;
@@ -2122,6 +2254,9 @@
 
   function bindChatMessageGestures(root) {
     $$('.chat-bubble[data-message-id]', root).forEach((bubble) => {
+      // Optimistic bubbles have no server id yet, so no menu actions for them.
+      if (bubble.dataset.pending === '1' || bubble.dataset.gesturesBound === '1') return;
+      bubble.dataset.gesturesBound = '1';
       const messageId = bubble.dataset.messageId;
       let pressTimer = null;
       let armed = false;
@@ -2231,6 +2366,17 @@
     });
   }
 
+  /** Handlers that every bubble needs, safe to call again after a patch. */
+  function bindChatThreadInteractions(scope) {
+    bindChatMessageGestures(scope);
+    $$('[data-photo]', scope).forEach((b) => {
+      b.onclick = (event) => {
+        event.stopPropagation();
+        openChatPhoto(b.dataset.photo);
+      };
+    });
+  }
+
   function bindChat(root) {
     $$('[data-room]', root).forEach((b) => {
       b.onclick = () => {
@@ -2257,14 +2403,11 @@
       setImmersive();
     });
     $('#chat-settings', root)?.addEventListener('click', () => openChatBgPicker());
-    $('#chat-compose-cancel', root)?.addEventListener('click', () => {
-      clearChatCompose();
-      renderScreen();
-    });
+    $('#chat-compose-cancel', root)?.addEventListener('click', () => cancelChatCompose());
 
     const messages = $('.telegram-messages', root);
     if (messages) messages.scrollTop = messages.scrollHeight;
-    bindChatMessageGestures(root);
+    bindChatThreadInteractions(root);
 
     const draft = $('#chat-draft', root);
     if (state.chatCompose?.mode === 'edit' && state.chatCompose.body) {
@@ -2281,12 +2424,6 @@
     });
     $$('[data-attach-remove]', root).forEach((b) => {
       b.onclick = () => removeChatAttachment(b.dataset.attachRemove);
-    });
-    $$('[data-photo]', root).forEach((b) => {
-      b.onclick = (event) => {
-        event.stopPropagation();
-        openChatPhoto(b.dataset.photo);
-      };
     });
 
     $('#chat-form', root)?.addEventListener('submit', async (e) => {
@@ -2307,7 +2444,14 @@
 
       input.value = '';
       resizeChatDraft(input);
-      if (!editing) clearChatAttachments();
+
+      // Show the bubble right away; the server copy replaces it on reply.
+      const pending = editing ? null : addPendingChatMessage(body, attachments, compose);
+      const sentAttachments = editing ? [] : attachments;
+      if (!editing) state.chatAttachments = [];
+      clearChatCompose();
+      renderChatLive();
+
       try {
         if (editing) {
           const data = await API.editChatMessage(compose.messageId, body);
@@ -2322,16 +2466,21 @@
             compose?.mode === 'reply' ? compose.messageId : undefined,
             attachmentIds,
           );
+          removePendingChatMessage(pending);
           if (data.message) {
             rememberMyChatMessage(data.message.id);
             upsertChatMessageLocal(data.message, { trustMine: true });
           }
+          releaseChatAttachmentPreviews(sentAttachments);
         }
-        clearChatCompose();
         renderChatLive();
       } catch {
+        removePendingChatMessage(pending);
+        if (!editing) state.chatAttachments = sentAttachments;
+        if (compose) state.chatCompose = compose;
         input.value = body;
         resizeChatDraft(input);
+        renderChatLive();
         window.alert(editing
           ? 'Не удалось изменить сообщение.'
           : 'Не удалось отправить сообщение. Попробуйте ещё раз.');
@@ -2348,16 +2497,43 @@
     el.classList.toggle('is-expanded', next > 48);
   }
 
+  /** Insert a line break at the caret, keeping native undo where possible. */
+  function insertNewlineAtCaret(el) {
+    const before = el.value;
+    let handled = false;
+    try {
+      handled = document.execCommand('insertText', false, '\n');
+    } catch {
+      handled = false;
+    }
+    if (!handled || el.value === before) {
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? start;
+      el.value = `${el.value.slice(0, start)}\n${el.value.slice(end)}`;
+      const caret = start + 1;
+      try { el.setSelectionRange(caret, caret); } catch { /* ignore */ }
+    }
+    resizeChatDraft(el);
+    el.scrollTop = el.scrollHeight;
+  }
+
   function bindChatDraftAutosize(el) {
     if (!el) return;
     resizeChatDraft(el);
     el.addEventListener('input', () => resizeChatDraft(el));
-    // Enter = new line (Telegram mobile). Send only via the arrow button.
-    // On desktop Shift+Enter also makes a line; plain Enter inserts a line too.
+    // Enter always makes a line break; sending is the arrow button (or Ctrl/⌘+Enter
+    // on desktop). Some mobile keyboards fire a submit action on Enter even inside
+    // a textarea, so the break is inserted by hand instead of relying on default.
     el.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter') return;
-      // Never submit the form from Enter inside the textarea.
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
       event.stopPropagation();
+      if (event.ctrlKey || event.metaKey) {
+        if (el.form?.requestSubmit) el.form.requestSubmit();
+        else $('.telegram-composer-send', el.form || document)?.click();
+        return;
+      }
+      insertNewlineAtCaret(el);
     });
   }
 
@@ -2954,6 +3130,11 @@
   }
 
   async function loadChatRooms() {
+    const pendingByRoom = new Map();
+    state.chatRooms.forEach((room) => {
+      const pending = (room.messages || []).filter((message) => message.pending);
+      if (pending.length) pendingByRoom.set(room.id, pending);
+    });
     try {
       const data = await API.chatRooms();
       state.chatRooms = (data.rooms || []).map((room) => ({
@@ -2976,6 +3157,11 @@
           };
         }),
       }));
+      // Messages still in flight are not on the server yet — keep them visible.
+      pendingByRoom.forEach((pending, roomId) => {
+        const room = state.chatRooms.find((item) => item.id === roomId);
+        if (room) room.messages = [...room.messages, ...pending];
+      });
       if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
       // Only greet messages that arrive after the first load.
       if (!state.introSeeded) {
@@ -2985,7 +3171,7 @@
         state.introSeeded = true;
       }
     } catch {
-      state.chatRooms = [];
+      // A failed refresh must not blank the thread; keep what we already have.
     }
   }
 
@@ -2994,16 +3180,132 @@
       const messages = room.messages || [];
       const tail = messages.map((message) => [
         message.id,
-        message.body,
-        message.editedAt || '',
-        (message.reactions || []).map((r) => `${r.emoji}${r.count}${r.mine ? '*' : ''}`).join(''),
+        chatBubbleSignature(message, isMyChatMessage(message)),
       ].join('.')).join('|');
       return `${room.id}#${messages.length}#${tail}`;
     }).join('~');
   }
 
+  /**
+   * Patch the open thread in place: only new, changed and removed bubbles touch
+   * the DOM, so the composer, keyboard, images and scroll position stay put.
+   * Returns false when the thread markup is not on screen yet.
+   */
+  function patchChatThread() {
+    const scroller = $('.telegram-messages');
+    const canvas = $('.telegram-messages-canvas');
+    if (!scroller || !canvas) return false;
+
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId) || state.chatRooms[0];
+    const items = chatTimelineItems(room);
+    const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+
+    const stale = new Map();
+    [...canvas.children].forEach((node) => {
+      const key = node.dataset?.key;
+      if (key) stale.set(key, node);
+      else node.remove();
+    });
+
+    const oven = document.createElement('div');
+    const fresh = [];
+    let cursor = null;
+    let touched = false;
+
+    items.forEach((item) => {
+      let node = stale.get(item.key);
+      stale.delete(item.key);
+      if (node && node.dataset.sig !== item.sig) {
+        oven.innerHTML = item.html;
+        const next = oven.firstElementChild;
+        node.replaceWith(next);
+        node = next;
+        fresh.push(node);
+        touched = true;
+      } else if (!node) {
+        oven.innerHTML = item.html;
+        node = oven.firstElementChild;
+        fresh.push(node);
+        touched = true;
+      }
+      const misplaced = cursor ? cursor.nextElementSibling !== node : canvas.firstElementChild !== node;
+      if (misplaced) {
+        if (cursor) cursor.after(node);
+        else canvas.prepend(node);
+      }
+      cursor = node;
+    });
+
+    stale.forEach((node) => node.remove());
+
+    if (touched) bindChatThreadInteractions(canvas);
+    if (atBottom && touched) {
+      scroller.scrollTop = scroller.scrollHeight;
+      // Photos gain their height late; stay pinned while they decode.
+      fresh.forEach((node) => $$('img', node).forEach((img) => {
+        if (img.complete) return;
+        img.addEventListener('load', () => {
+          const stillDown = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 300;
+          if (stillDown) scroller.scrollTop = scroller.scrollHeight;
+        }, { once: true });
+      }));
+    }
+    return true;
+  }
+
+  function patchChatComposeSlot() {
+    const slot = $('#chat-compose-slot');
+    if (!slot) return;
+    const sig = chatComposeSlotSignature();
+    if (slot.dataset.sig === sig) return;
+    slot.dataset.sig = sig;
+    slot.innerHTML = `${renderChatComposeBar()}${renderChatAttachmentTray()}`;
+    $('#chat-compose-cancel', slot)?.addEventListener('click', () => cancelChatCompose());
+    $$('[data-attach-remove]', slot).forEach((b) => {
+      b.onclick = () => removeChatAttachment(b.dataset.attachRemove);
+    });
+
+    const draft = $('#chat-draft');
+    if (draft) {
+      draft.placeholder = state.chatCompose?.mode === 'edit' ? 'Изменить сообщение' : 'Сообщение';
+      if (state.chatCompose?.mode === 'edit' && state.chatCompose.body && !draft.value) {
+        draft.value = state.chatCompose.body;
+        resizeChatDraft(draft);
+      }
+    }
+  }
+
+  /** Refresh room previews without rebuilding the list buttons. */
+  function patchChatRoomPreviews() {
+    const list = $('.telegram-room-list');
+    if (!list) return;
+    $$('[data-room]', list).forEach((button) => {
+      const room = state.chatRooms.find((item) => item.id === button.dataset.room);
+      if (!room) return;
+      const last = room.messages?.[room.messages.length - 1];
+      const preview = room.locked
+        ? 'Доступно в тарифе «Клуб»'
+        : (last ? chatMessagePreview(last) : (room.description || 'Пока нет сообщений'));
+      const previewEl = button.querySelector('.telegram-room-copy small');
+      if (previewEl && previewEl.textContent !== preview) previewEl.textContent = preview;
+      const timeEl = button.querySelector('time');
+      const time = !room.locked && last ? formatBubbleTime(last.createdAt) : '';
+      if (timeEl && timeEl.textContent !== time) timeEl.textContent = time;
+    });
+  }
+
   /** Re-render the chat without losing the draft, focus or scroll position. */
   function renderChatLive() {
+    if (state.tab !== 'chat') return;
+    if (patchChatThread()) {
+      patchChatComposeSlot();
+      patchChatRoomPreviews();
+      return;
+    }
+    renderChatFull();
+  }
+
+  function renderChatFull() {
     if (state.tab !== 'chat') return;
     const draftEl = $('#chat-draft');
     const draft = draftEl ? draftEl.value : null;
@@ -3063,13 +3365,35 @@
     }
   }
 
+  const CHAT_STREAM_STALE_MS = 50000;
+
+  /**
+   * Watchdog + fallback poll on one timer: fast polling while the stream is
+   * down, a slow reconcile while it is alive, and a reconnect when the socket
+   * goes quiet (mobile proxies often kill SSE without firing an error).
+   */
   function ensureChatPolling() {
     if (state.chatPollTimer) return;
     state.chatPollTimer = window.setInterval(() => {
       if (document.hidden) return;
-      if (state.chatStreamReady) return;
-      pollChatRooms();
+      state.chatPollTick += 1;
+      if (!state.chatStreamReady) {
+        pollChatRooms();
+        return;
+      }
+      if (Date.now() - state.chatStreamSeenAt > CHAT_STREAM_STALE_MS) {
+        restartChatStream();
+        return;
+      }
+      if (state.chatPollTick % 8 === 0) pollChatRooms({ force: true });
     }, 4000);
+  }
+
+  function restartChatStream() {
+    try { state.chatStream?.close(); } catch { /* ignore */ }
+    state.chatStream = null;
+    state.chatStreamReady = false;
+    startChatStream();
   }
 
   function startChatStream() {
@@ -3087,14 +3411,21 @@
       return;
     }
 
+    const noteAlive = () => { state.chatStreamSeenAt = Date.now(); };
+
     stream.addEventListener('ready', () => {
       state.chatStreamReady = true;
       state.chatStreamRetry = 0;
+      noteAlive();
       // A dropped stream may have missed events while offline.
       pollChatRooms({ force: true });
     });
 
+    stream.addEventListener('ping', noteAlive);
+    stream.addEventListener('message', noteAlive);
+
     stream.addEventListener('chat.message', (event) => {
+      noteAlive();
       try {
         const payload = JSON.parse(event.data);
         if (applyChatEvent(payload)) renderChatLive();
@@ -3105,7 +3436,7 @@
 
     stream.onerror = () => {
       stream.close();
-      state.chatStream = null;
+      if (state.chatStream === stream) state.chatStream = null;
       state.chatStreamReady = false;
       state.chatStreamRetry = Math.min((state.chatStreamRetry || 0) + 1, 6);
       window.setTimeout(startChatStream, 1000 * state.chatStreamRetry);
@@ -3119,6 +3450,7 @@
       if (document.hidden) return;
       pollChatRooms({ force: true });
       if (!state.chatStream) startChatStream();
+      else if (Date.now() - state.chatStreamSeenAt > CHAT_STREAM_STALE_MS) restartChatStream();
     };
     document.addEventListener('visibilitychange', wake);
     window.addEventListener('focus', wake);
