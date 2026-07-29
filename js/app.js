@@ -304,9 +304,12 @@
 
   function openChatRules() {
     document.body.classList.add('rules-open');
-    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop">
+    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
       <section class="paywall-modal glass-panel consent-modal club-rules-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
-        <span class="paywall-kicker">Чаты клуба</span>
+        <header class="paywall-modal-head">
+          <span class="paywall-kicker">Чаты клуба</span>
+          <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
+        </header>
         <h2>${esc(D.CLUB_RULES_TITLE || 'Правила клуба')}</h2>
         ${clubRulesHtml()}
         <p class="club-rules-outro">${esc(D.CLUB_RULES_OUTRO || '')}</p>
@@ -315,6 +318,7 @@
         <button type="button" class="primary-button" id="rules-accept">Принимаю правила</button>
       </section>
     </div>`;
+    bindModalClose();
     $('#rules-accept')?.addEventListener('click', async () => {
       const status = $('#rules-status');
       try {
@@ -507,7 +511,14 @@
     $$('[data-share]', root).forEach((b) => {
       b.onclick = () => {
         const post = state.feedPosts.find((p) => p.id === b.dataset.share);
-        if (post && navigator.share) navigator.share({ title: 'Лоза', text: (post.body || post.text || '').slice(0, 300) }).catch(() => {});
+        if (!post) return;
+        const image = post.imageUrl || post.image || post.coverUrl || '';
+        shareWithPreview({
+          title: 'Лоза',
+          text: (post.body || post.text || 'Пост клуба Лоза').slice(0, 220),
+          url: `${window.location.origin}${window.location.pathname}?post=${encodeURIComponent(post.id)}`,
+          imageUrl: image ? asset(image) : asset('/assets/webp/background1.webp'),
+        });
       };
     });
   }
@@ -517,10 +528,18 @@
     return `<li class="comments-item"><div class="comments-item-avatar">${esc((name[0] || '?').toUpperCase())}</div><div class="comments-item-copy"><strong>${esc(name)}</strong><p>${esc(c.body)}</p></div></li>`;
   }
 
+  function commentsSkeletonHtml() {
+    return `<div class="comments-skeleton" aria-hidden="true">
+      <div class="comments-skeleton-row"><i></i><span><b></b><b></b></span></div>
+      <div class="comments-skeleton-row"><i></i><span><b></b><b></b></span></div>
+      <div class="comments-skeleton-row"><i></i><span><b></b><b></b></span></div>
+    </div>`;
+  }
+
   function renderCommentsBody(postId, loading) {
     const list = (state.feedComments[postId] || []).map(commentItemHtml).join('');
+    if (loading) return commentsSkeletonHtml();
     if (list) return `<ul class="comments-list">${list}</ul>`;
-    if (loading) return `<div class="comments-empty">${ic('messageCircle', 40, { strokeWidth: 1.5 })}<p>Загружаем комментарии…</p></div>`;
     return `<div class="comments-empty">${ic('messageCircle', 40, { strokeWidth: 1.5 })}<p>Пока нет комментариев</p><span>Будьте первым</span></div>`;
   }
 
@@ -554,12 +573,23 @@
       </div></div>`;
     bindModalClose();
 
+    // Lock sheet height early so the body swap does not jump the modal.
+    const sheet = $('.comments-sheet');
+    if (sheet) {
+      const locked = Math.max(sheet.getBoundingClientRect().height, window.innerHeight * 0.62);
+      sheet.style.height = `${Math.min(locked, window.innerHeight * 0.82)}px`;
+    }
+
     function refreshBody() {
       const body = $('#comments-body');
       if (body) body.innerHTML = renderCommentsBody(postId, false);
     }
 
-    if (needsLoad) loadComments(postId).then(refreshBody);
+    if (needsLoad) {
+      window.requestAnimationFrame(() => {
+        loadComments(postId).then(refreshBody);
+      });
+    }
 
     $('#comment-form').onsubmit = (e) => {
       e.preventDefault();
@@ -573,6 +603,48 @@
       refreshBody();
       renderScreen();
     };
+  }
+
+  async function shareWithPreview({ title, text, url, imageUrl }) {
+    const shareUrl = url || `${window.location.origin}${window.location.pathname}#share`;
+    const payload = {
+      title: title || 'Лоза',
+      text: text || title || 'Лоза',
+      url: shareUrl,
+    };
+
+    if (navigator.share && imageUrl) {
+      try {
+        const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
+        if (response.ok) {
+          const blob = await response.blob();
+          const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+          const file = new File([blob], `loza.${ext}`, { type: blob.type || 'image/jpeg' });
+          if (navigator.canShare?.({ files: [file] })) {
+            await navigator.share({ ...payload, files: [file] });
+            return;
+          }
+        }
+      } catch {
+        /* fall through to text/url share */
+      }
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share(payload);
+        return;
+      } catch {
+        /* user cancelled or unsupported */
+      }
+    }
+
+    try {
+      await navigator.clipboard?.writeText(`${payload.text}\n${payload.url}`);
+      showAppToast('Ссылка скопирована', { title: 'Поделиться' });
+    } catch {
+      showAppToast('Не удалось поделиться', { title: 'Поделиться', tone: 'warn' });
+    }
   }
 
   function filteredMediaItems() {
@@ -628,7 +700,14 @@
     $$('[data-share-item]', root).forEach((b) => {
       b.onclick = () => {
         const item = state.libraryItems.find((x) => x.id === b.dataset.shareItem);
-        if (item && navigator.share) navigator.share({ title: item.title, text: `${item.title} — Лоза` }).catch(() => {});
+        if (!item) return;
+        const index = Math.max(0, state.libraryItems.findIndex((x) => x.id === item.id));
+        shareWithPreview({
+          title: item.title,
+          text: `${item.title} — Лоза`,
+          url: `${window.location.origin}${window.location.pathname}?media=${encodeURIComponent(item.id)}`,
+          imageUrl: bgImage(index),
+        });
       };
     });
   }
@@ -693,6 +772,45 @@
     });
     $$('[data-cat]', root).forEach((b) => { b.onclick = () => { state.mediaSection = b.dataset.cat; renderScreen(); }; });
     bindMediaCardActions(root);
+    bindMediaControlsAutoHide(root);
+  }
+
+  function bindMediaControlsAutoHide(root) {
+    const page = $('.media-feed-page', root);
+    const controls = $('.media-feed-controls', root);
+    const scroller = $('.media-feed-scroll', root);
+    if (!page || !controls || !scroller) return;
+
+    let lastTop = scroller.scrollTop;
+    let idleTimer = null;
+    const reveal = () => {
+      page.classList.remove('media-controls-hidden');
+      if (idleTimer) window.clearTimeout(idleTimer);
+      idleTimer = null;
+    };
+    const scheduleReveal = () => {
+      if (idleTimer) window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(reveal, 160);
+    };
+
+    scroller.addEventListener('scroll', () => {
+      const top = scroller.scrollTop;
+      const delta = top - lastTop;
+      lastTop = top;
+      if (top <= 8) {
+        reveal();
+        return;
+      }
+      if (delta > 8) {
+        page.classList.add('media-controls-hidden');
+        scheduleReveal();
+        return;
+      }
+      if (delta < -4) reveal();
+      else scheduleReveal();
+    }, { passive: true });
+
+    scroller.addEventListener('touchend', scheduleReveal, { passive: true });
   }
 
   function captureListScroll() {
@@ -765,10 +883,12 @@
     $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
       <section class="paywall-modal glass-panel" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <header class="paywall-modal-head">
-          <span class="paywall-kicker">Закрытый клуб</span>
-          <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 20)}</button>
+          <div class="paywall-modal-titles">
+            <span class="paywall-kicker">Закрытый клуб</span>
+            <h2>${esc(title || 'Открыть доступ')}</h2>
+          </div>
+          <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
         </header>
-        <h2>${esc(title || 'Открыть доступ')}</h2>
         <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
         <div class="paywall-benefits">
           <span>Медиатека</span><span>Чаты клуба</span><span>AI-наставник</span>
