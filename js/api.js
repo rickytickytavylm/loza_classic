@@ -134,6 +134,26 @@
       if (getToken()) params.set('access_token', getToken());
       return `${API_URL}/chat/stream?${params.toString()}`;
     },
+    pushVapidKey: () => request('/push/vapid-public-key'),
+    pushSubscribe: (subscription) =>
+      request('/push/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+          keys: subscription.keys,
+          guestId: getGuestId(),
+        }),
+      }),
+    pushUnsubscribe: (endpoint) =>
+      request('/push/subscribe', {
+        method: 'DELETE',
+        body: JSON.stringify({ endpoint, guestId: getGuestId() }),
+      }),
+    pushTest: () =>
+      request('/push/test', {
+        method: 'POST',
+        body: JSON.stringify({ guestId: getGuestId() }),
+      }),
     createPayment: (planCode, returnUrl) =>
       request('/payments/yookassa/create', {
         method: 'POST',

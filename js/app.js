@@ -119,7 +119,7 @@
     return 'Базовый';
   }
 
-  // Notification helpers
+  // Web Push helpers (server-sent notifications via VAPID)
   function isPWA() {
     return window.matchMedia('(display-mode: standalone)').matches
       || window.matchMedia('(display-mode: fullscreen)').matches
@@ -132,8 +132,13 @@
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
-  function canShowNotifications() {
-    return 'Notification' in window && 'serviceWorker' in navigator && isPWA();
+  function canUseWebPush() {
+    return Boolean(
+      isPWA()
+      && 'Notification' in window
+      && 'serviceWorker' in navigator
+      && 'PushManager' in window,
+    );
   }
 
   function getNotificationSetting() {
@@ -152,62 +157,114 @@
     }
   }
 
-  async function requestNotificationPermission() {
-    if (!('Notification' in window)) return 'unsupported';
-    const result = await Notification.requestPermission();
-    return result; // 'granted' | 'default' | 'denied'
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = window.atob(base64);
+    const output = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+    return output;
   }
 
   async function getPushSubscription() {
     const reg = await navigator.serviceWorker?.ready;
-    if (!reg) return null;
+    if (!reg?.pushManager) return null;
     return reg.pushManager.getSubscription();
   }
 
-  async function showLocalNotification({ title, body, icon, tag, url, roomId }) {
-    const reg = await navigator.serviceWorker?.ready;
-    if (!reg) return;
-    await reg.showNotification(title || 'Лоза', {
-      body: body || '',
-      icon: icon || asset('/assets/icon-192.png'),
-      badge: asset('/assets/favicon-32.png'),
-      tag: tag || 'loza-local',
-      requireInteraction: false,
-      data: { url: url || './', roomId: roomId || null },
-    });
+  async function subscribeWebPush() {
+    const keyData = await API.pushVapidKey();
+    const publicKey = keyData.publicKey;
+    if (!publicKey) throw new Error('PUSH_NOT_CONFIGURED');
+
+    const reg = await navigator.serviceWorker.ready;
+    let subscription = await reg.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+    await API.pushSubscribe(subscription.toJSON());
+    return subscription;
   }
 
-  function testNotification() {
-    showLocalNotification({
-      title: 'Лоза · уведомления активны',
-      body: 'Поздравляем! Теперь вы не пропустите новые сообщения в клубе.',
-      icon: asset('/assets/icon-192.png'),
-      tag: 'loza-test',
-    });
+  async function unsubscribeWebPush() {
+    const subscription = await getPushSubscription();
+    if (!subscription) {
+      setNotificationSetting(false);
+      return;
+    }
+    try {
+      await API.pushUnsubscribe(subscription.endpoint);
+    } catch {
+      /* still drop local subscription */
+    }
+    try {
+      await subscription.unsubscribe();
+    } catch {
+      /* ignore */
+    }
+    setNotificationSetting(false);
+  }
+
+  async function testPushNotification() {
+    try {
+      await API.pushTest();
+      showAppToast('Тестовое уведомление отправлено', { title: 'Уведомления' });
+    } catch (error) {
+      const code = String(error?.message || '');
+      if (code === 'NO_PUSH_SUBSCRIPTION') {
+        showAppToast('Сначала включите уведомления тумблером', { title: 'Уведомления', tone: 'warn' });
+      } else if (code === 'PUSH_NOT_CONFIGURED') {
+        showAppToast('Push ещё не настроен на сервере', { title: 'Уведомления', tone: 'warn' });
+      } else {
+        showAppToast('Не удалось отправить тест', { title: 'Уведомления', tone: 'warn' });
+      }
+    }
   }
 
   async function toggleNotifications(nextEnabled) {
-    if (!canShowNotifications()) {
-      if (isIOS()) {
-        showAppToast('В iOS разрешите уведомления в настройках устройства', { title: 'Уведомления' });
+    if (!canUseWebPush()) {
+      if (!isPWA()) {
+        showAppToast('Установите приложение на домашний экран', { title: 'Уведомления', tone: 'warn' });
+      } else if (isIOS()) {
+        showAppToast('Разрешите уведомления в настройках iPhone', { title: 'Уведомления', tone: 'warn' });
       } else {
-        showAppToast('Уведомления доступны только в установленном приложении', { title: 'Уведомления' });
+        showAppToast('Уведомления недоступны в этом браузере', { title: 'Уведомления', tone: 'warn' });
       }
       return false;
     }
-    if (nextEnabled) {
-      const permission = await requestNotificationPermission();
-      if (permission !== 'granted') {
-        setNotificationSetting(false);
-        showAppToast('Разрешите уведомления в настройках телефона', { title: 'Уведомления', tone: 'warn' });
-        return false;
-      }
-      setNotificationSetting(true);
-      testNotification();
-      return true;
+
+    if (!nextEnabled) {
+      await unsubscribeWebPush();
+      return false;
     }
-    setNotificationSetting(false);
-    return false;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      setNotificationSetting(false);
+      showAppToast('Разрешите уведомления в настройках телефона', { title: 'Уведомления', tone: 'warn' });
+      return false;
+    }
+
+    try {
+      await subscribeWebPush();
+      setNotificationSetting(true);
+      // Real server push with congratulations — not a local fake.
+      await testPushNotification();
+      return true;
+    } catch (error) {
+      setNotificationSetting(false);
+      const code = String(error?.message || '');
+      showAppToast(
+        code === 'PUSH_NOT_CONFIGURED'
+          ? 'Push ещё не настроен на сервере'
+          : 'Не удалось включить уведомления',
+        { title: 'Уведомления', tone: 'warn' },
+      );
+      return false;
+    }
   }
 
   function esc(s) {
@@ -2285,17 +2342,19 @@
       </button>`,
     ).join('');
 
-    const available = canShowNotifications();
+    const available = canUseWebPush();
     const enabled = getNotificationSetting();
     const notifyUnsupported = !available
-      ? (isPWA() ? 'Уведомления не поддерживаются в этом браузере' : 'Установите приложение, чтобы включить уведомления')
+      ? (isPWA()
+        ? 'Уведомления не поддерживаются в этом браузере'
+        : 'Установите приложение на домашний экран — в браузере push недоступен')
       : null;
 
     const notifyRow = `
       <div class="chat-settings-row">
         <div class="chat-settings-row-copy">
-          <strong>Уведомления</strong>
-          <span>${notifyUnsupported || (enabled ? 'Уведомления включены' : 'Получать уведомления о новых сообщениях')}</span>
+          <strong>Push-уведомления</strong>
+          <span>${notifyUnsupported || (enabled ? 'Будут приходить новые сообщения из чата' : 'Включите, чтобы не пропускать чат')}</span>
         </div>
         <label class="chat-settings-toggle${!available ? ' is-disabled' : ''}">
           <input type="checkbox" id="chat-notify-toggle" ${enabled ? 'checked' : ''} ${!available ? 'disabled' : ''} />
@@ -2323,13 +2382,18 @@
     });
     const toggle = $('#chat-notify-toggle', $('#portal'));
     toggle?.addEventListener('change', async () => {
+      toggle.disabled = true;
       const result = await toggleNotifications(toggle.checked);
+      toggle.disabled = false;
       toggle.checked = result;
       closePortal();
       openChatBgPicker();
     });
-    $('#chat-notify-test', $('#portal'))?.addEventListener('click', () => {
-      testNotification();
+    $('#chat-notify-test', $('#portal'))?.addEventListener('click', async (event) => {
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      await testPushNotification();
+      btn.disabled = false;
     });
   }
 
@@ -3055,6 +3119,32 @@
     return null;
   }
 
+  function applyDeepLinkFromUrl() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      const room = params.get('room');
+      if (!tab && !room) return;
+      if (tab === 'chat' || room) {
+        state.tab = 'chat';
+        state.chatView = room ? 'thread' : 'rooms';
+        if (room && state.chatRooms.some((item) => item.id === room)) {
+          state.selectedRoomId = room;
+          state.chatView = 'thread';
+        }
+      } else if (D.TAB_TITLES?.[tab]) {
+        state.tab = tab;
+      }
+      const clean = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', clean || './');
+      setImmersive();
+      renderNav();
+      renderScreen();
+    } catch {
+      /* ignore */
+    }
+  }
+
   function showAuthScreen(errorText) {
     const root = $('#auth-screen');
     if (!root) return;
@@ -3282,6 +3372,7 @@
     startChatStream();
     bindChatLiveRefresh();
     syncHeaderIdentity();
+    applyDeepLinkFromUrl();
     renderScreen();
     setTimeout(() => {
       state.booting = false;
