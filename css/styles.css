@@ -4984,8 +4984,9 @@ body.material-immersive-open {
 }
 
 /*
-  Pure overlay chrome: the feed is always underneath search/filters.
-  Showing/hiding only translates the bar — content never reflows or jumps.
+  Overlay chrome + constant spacer:
+  --media-controls-h reserves room for the first card at rest.
+  Hide/show only translates the bar; the spacer stays, so no content jump.
 */
 .media-feed-controls {
   position: absolute;
@@ -4995,7 +4996,7 @@ body.material-immersive-open {
   z-index: 6;
   padding-inline: 2px;
   background: var(--bg);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(16px) saturate(1.1);
   -webkit-backdrop-filter: blur(16px) saturate(1.1);
   border-bottom: 1px solid rgba(var(--plum-rgb), 0.08);
@@ -5022,6 +5023,8 @@ body.material-immersive-open {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
+  /* Constant — do not toggle this when the bar hides. */
+  padding-top: var(--media-controls-h, 148px);
 }
 
 .media-feed-header {
@@ -5152,7 +5155,6 @@ body.material-immersive-open {
 .media-feed-list {
   display: grid;
   gap: 28px;
-  /* Content starts under the overlay chrome — no reserved gap to collapse. */
   padding-top: 12px;
   opacity: 1;
   transition: opacity 0.2s ease;

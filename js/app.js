@@ -893,6 +893,7 @@
     } else if (noteHtml && header) {
       header.insertAdjacentHTML('beforeend', noteHtml);
     }
+    root._mediaControlsRemeasure?.();
   }
 
   function renderMedia() {
@@ -938,14 +939,22 @@
 
   function bindMediaControlsAutoHide(root) {
     const page = $('.media-feed-page', root);
+    const controls = $('.media-feed-controls', root);
     const scroller = $('.media-feed-scroll', root);
-    if (!page || !scroller) return;
+    if (!page || !controls || !scroller) return;
 
-    // Pure overlay: feed always lives under the search/filters. Hide/show is
-    // transform-only — no padding or scrollTop changes, so zero layout jump.
+    // Constant spacer under overlay chrome (Twitter/Instagram pattern):
+    // padding equals bar height and NEVER changes on hide/show — so the first
+    // card is visible at rest, and collapsing the bar is transform-only (no jump).
     let hidden = false;
     let lastTop = scroller.scrollTop;
     let ticking = false;
+
+    const syncPad = () => {
+      const h = Math.ceil(controls.scrollHeight || controls.getBoundingClientRect().height);
+      if (!h) return;
+      page.style.setProperty('--media-controls-h', `${h}px`);
+    };
 
     const setHidden = (next) => {
       if (next === hidden) return;
@@ -953,6 +962,10 @@
       hidden = next;
       page.classList.toggle('media-controls-hidden', hidden);
     };
+
+    syncPad();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncPad) : null;
+    ro?.observe(controls);
 
     scroller.addEventListener('scroll', () => {
       if (ticking) return;
@@ -970,6 +983,8 @@
         else if (delta < -6) setHidden(false);
       });
     }, { passive: true });
+
+    root._mediaControlsRemeasure = syncPad;
   }
 
   function captureListScroll() {
