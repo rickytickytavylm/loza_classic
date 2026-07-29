@@ -418,9 +418,9 @@ button {
 .profile-hero h1 {
   margin: 14px 0;
   color: var(--ink);
-  font-size: clamp(36px, 5vw, 64px);
-  line-height: 1.02;
-  letter-spacing: -0.05em;
+  font-size: clamp(32px, 3.6vw, 50px);
+  line-height: 1.06;
+  letter-spacing: -0.04em;
   font-weight: 800;
 }
 
@@ -1462,6 +1462,103 @@ body.rules-open {
   font-size: 15px;
 }
 
+.club-rules-modal h2 {
+  font-size: clamp(19px, 3.4vw, 24px);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.club-rules-list {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.club-rule {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.club-rule-num {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(180deg, #6b4488 0%, #3d1152 100%);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.club-rule-copy strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.club-rule-copy p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.club-rule-copy ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.club-rules-outro {
+  margin: 4px 0 0;
+  font-size: 15px !important;
+}
+
+.club-rules-sign {
+  margin: 10px 0 4px;
+  color: var(--olive-dark) !important;
+  font-size: 14px !important;
+  font-weight: 700;
+}
+
+.club-intro-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  padding-left: 20px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.club-intro-tag {
+  margin: 0 0 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(201, 167, 255, 0.22);
+  color: var(--olive-dark) !important;
+  font-size: 15px !important;
+}
+
+.club-intro-welcome {
+  margin: 0 0 18px;
+  font-weight: 700;
+}
+
+.club-intro-actions {
+  display: grid;
+  gap: 8px;
+}
+
 .consent-modal .auth-consent {
   margin: 10px 0;
 }
@@ -2241,6 +2338,182 @@ html.chat-no-select body * {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+.bubble-body > p a.chat-link {
+  pointer-events: auto;
+  color: #2f7cc0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+
+.chat-bubble.mine .bubble-body > p a.chat-link {
+  color: #2f7a28;
+}
+
+.chat-meeting-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 2px;
+  padding: 10px;
+  border: 1px solid rgba(var(--plum-rgb), 0.08);
+  border-radius: 16px;
+  text-decoration: none;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.5)),
+    linear-gradient(135deg, rgba(201, 167, 255, 0.32), rgba(217, 206, 190, 0.26));
+  box-shadow: 0 6px 18px rgba(var(--plum-rgb), 0.1);
+  pointer-events: auto;
+}
+
+.chat-meeting-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  /* App Store style squircle tile */
+  border-radius: 12px;
+  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 6px 14px rgba(18, 14, 24, 0.22);
+}
+
+.chat-meeting-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.chat-meeting-zoom .chat-meeting-icon {
+  background: linear-gradient(180deg, #4a8cff 0%, #2563eb 100%);
+}
+
+.chat-meeting-telemost .chat-meeting-icon {
+  background: linear-gradient(180deg, #ff5b39 0%, #e02f10 100%);
+}
+
+.chat-meeting-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-meeting-copy strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.chat-meeting-copy span {
+  overflow: hidden;
+  color: var(--olive-dark);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-meeting-go {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.intro-badge {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--olive-dark);
+  background: linear-gradient(120deg, rgba(201, 167, 255, 0.45), rgba(255, 214, 232, 0.5));
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.chat-bubble.is-intro .bubble-body {
+  background-image: linear-gradient(135deg, rgba(201, 167, 255, 0.22), rgba(255, 255, 255, 0));
+  box-shadow:
+    0 1px 0 rgba(30, 21, 40, 0.06),
+    0 0 0 1px rgba(201, 167, 255, 0.45);
+}
+
+.chat-bubble.is-intro-new .bubble-body {
+  animation: intro-pop 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chat-bubble.is-intro-new .bubble-body::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0) 20%,
+    rgba(255, 255, 255, 0.75) 46%,
+    rgba(255, 255, 255, 0) 72%
+  );
+  background-size: 220% 100%;
+  animation: intro-shine 1500ms ease-out 120ms 2;
+}
+
+.chat-bubble.is-intro-new .intro-badge {
+  animation: intro-badge-pop 700ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes intro-pop {
+  0% {
+    transform: scale(0.94);
+    box-shadow: 0 0 0 0 rgba(201, 167, 255, 0.7);
+  }
+  55% {
+    transform: scale(1.015);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 1px 0 rgba(30, 21, 40, 0.06),
+      0 0 0 1px rgba(201, 167, 255, 0.45);
+  }
+}
+
+@keyframes intro-shine {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+@keyframes intro-badge-pop {
+  0% {
+    transform: scale(0.6) rotate(-6deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08) rotate(2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble.is-intro-new .bubble-body,
+  .chat-bubble.is-intro-new .bubble-body::after,
+  .chat-bubble.is-intro-new .intro-badge {
+    animation: none;
+  }
 }
 
 .bubble-reply {
@@ -3637,10 +3910,10 @@ html.chat-no-select body * {
 
   .hero h1 {
     font-family: var(--font-display);
-    font-size: clamp(32px, 9vw, 44px);
+    font-size: clamp(25px, 6.4vw, 33px);
     font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.02;
+    letter-spacing: -0.025em;
+    line-height: 1.14;
     max-width: none;
   }
 

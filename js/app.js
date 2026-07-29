@@ -81,10 +81,16 @@
     movies: [...D.MOVIES],
     chatRooms: [],
     chatStream: null,
+    chatStreamReady: false,
+    chatStreamRetry: 0,
+    chatPollTimer: null,
+    chatPollBusy: false,
     chatView: 'rooms',
     selectedRoomId: '',
     chatCompose: null, // { mode: 'reply'|'edit', messageId, preview, authorName, body? }
     myChatMessageIds: new Set(),
+    seenIntroIds: new Set(),
+    introSeeded: false,
     chatBg: localStorage.getItem('chat-bg') || 'aurora',
     mediaSection: 'all',
     mediaQuery: '',
@@ -232,19 +238,79 @@
     });
   }
 
+  function enterChatTab() {
+    state.tab = 'chat';
+    const shell = $('#page-shell');
+    shell.scrollTop = 0;
+    shell.className = 'page-shell page-shell-chat';
+    shell.setAttribute('aria-label', D.TAB_TITLES.chat || 'Чаты');
+    renderNav();
+    renderScreen();
+    setImmersive();
+  }
+
+  function openChatIntroGuide({ afterRules = false } = {}) {
+    document.body.classList.add('rules-open');
+    const questions = (D.CHAT_INTRO_QUESTIONS || [])
+      .map((question) => `<li>${esc(question)}</li>`)
+      .join('');
+    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop">
+      <section class="paywall-modal glass-panel consent-modal club-intro-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+        <span class="paywall-kicker">Знакомство</span>
+        <h2>Расскажите немного о себе</h2>
+        <p>В чате для общения напишите пару слов о себе — так участникам легче поддержать друг друга.</p>
+        <ul class="club-intro-list">${questions}</ul>
+        <p class="club-intro-tag">Обязательно поставьте тег <strong>#знакомство</strong></p>
+        <p class="club-intro-welcome">Добро пожаловать в чат клуба!</p>
+        <div class="club-intro-actions">
+          <button type="button" class="primary-button" id="intro-write">Написать о себе</button>
+          <button type="button" class="paywall-later" id="intro-later">Позже</button>
+        </div>
+      </section>
+    </div>`;
+
+    const finish = (prefill) => {
+      closePortal();
+      if (afterRules) enterChatTab();
+      if (!prefill) return;
+      window.setTimeout(() => {
+        const input = $('#chat-draft');
+        if (!input) return;
+        input.value = D.CHAT_INTRO_TEMPLATE || '#знакомство';
+        input.focus();
+      }, 120);
+    };
+
+    $('#intro-write')?.addEventListener('click', () => finish(true));
+    $('#intro-later')?.addEventListener('click', () => finish(false));
+  }
+
+  function clubRulesHtml() {
+    const items = (D.CLUB_RULES || []).map((rule, index) => {
+      const list = rule.list
+        ? `<ul>${rule.list.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>`
+        : '';
+      return `<li class="club-rule">
+        <span class="club-rule-num">${index + 1}</span>
+        <div class="club-rule-copy">
+          <strong>${esc(rule.title)}</strong>
+          <p>${esc(rule.text)}</p>
+          ${list}
+        </div>
+      </li>`;
+    }).join('');
+    return `<ol class="club-rules-list">${items}</ol>`;
+  }
+
   function openChatRules() {
     document.body.classList.add('rules-open');
     $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop">
-      <section class="paywall-modal glass-panel consent-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+      <section class="paywall-modal glass-panel consent-modal club-rules-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <span class="paywall-kicker">Чаты клуба</span>
-        <h2>Правила общения</h2>
-        <div class="chat-rules-list">
-          <p>1. Уважаем друг друга: без оскорблений, давления и обесценивания.</p>
-          <p>2. Не публикуем личные данные детей и чужие истории без согласия.</p>
-          <p>3. Не даём медицинских диагнозов и не заменяем ими работу специалиста.</p>
-          <p>4. Реклама и спам запрещены. Для знакомства используйте хэштег <strong>#знакомство</strong>.</p>
-          <p>5. Модераторы могут скрывать сообщения, нарушающие правила клуба.</p>
-        </div>
+        <h2>${esc(D.CLUB_RULES_TITLE || 'Правила клуба')}</h2>
+        ${clubRulesHtml()}
+        <p class="club-rules-outro">${esc(D.CLUB_RULES_OUTRO || '')}</p>
+        <p class="club-rules-sign">С уважением,<br />${esc(D.CLUB_RULES_SIGN || '')}</p>
         <p class="checkout-note" id="rules-status"></p>
         <button type="button" class="primary-button" id="rules-accept">Принимаю правила</button>
       </section>
@@ -257,14 +323,7 @@
           state.user = data.user || state.user;
         }
         closePortal();
-        state.tab = 'chat';
-        const shell = $('#page-shell');
-        shell.scrollTop = 0;
-        shell.className = 'page-shell page-shell-chat';
-        shell.setAttribute('aria-label', D.TAB_TITLES.chat || 'Чаты');
-        renderNav();
-        renderScreen();
-        setImmersive();
+        openChatIntroGuide({ afterRules: true });
       } catch (error) {
         if (status) status.textContent = error instanceof Error ? error.message : 'Не удалось сохранить';
       }
@@ -1080,8 +1139,72 @@
     return Boolean(myId && message.authorId === myId);
   }
 
-  function formatChatBody(text) {
-    return esc(text).replace(
+  const MEETING_PROVIDERS = [
+    {
+      id: 'zoom',
+      label: 'Zoom',
+      pattern: /https?:\/\/(?:[a-z0-9-]+\.)*zoom\.(?:us|com)\/[^\s<]+/gi,
+    },
+    {
+      id: 'telemost',
+      label: 'Яндекс Телемост',
+      pattern: /https?:\/\/telemost\.yandex\.[a-z]{2,}\/[^\s<]+/gi,
+    },
+  ];
+
+  const URL_PATTERN = /https?:\/\/[^\s<]+/gi;
+
+  function detectMeetingLinks(text) {
+    const source = String(text || '');
+    const found = [];
+    const seen = new Set();
+    for (const provider of MEETING_PROVIDERS) {
+      const regex = new RegExp(provider.pattern.source, 'gi');
+      let match = regex.exec(source);
+      while (match) {
+        const url = match[0].replace(/[),.;]+$/, '');
+        if (!seen.has(url)) {
+          seen.add(url);
+          found.push({ id: provider.id, label: provider.label, url });
+        }
+        match = regex.exec(source);
+      }
+    }
+    return found;
+  }
+
+  function meetingGlyph() {
+    return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="3.4"/><path d="M17 10.4l4.1-2.5a.75.75 0 0 1 1.14.64v6.94a.75.75 0 0 1-1.14.64L17 13.6z"/></svg>';
+  }
+
+  function meetingCardHtml(meeting) {
+    return `<a class="chat-meeting-card chat-meeting-${esc(meeting.id)}" href="${esc(meeting.url)}" target="_blank" rel="noopener noreferrer">
+      <span class="chat-meeting-icon" aria-hidden="true">${meetingGlyph()}</span>
+      <span class="chat-meeting-copy">
+        <strong>${esc(meeting.label)}</strong>
+        <span>Подключиться к конференции</span>
+      </span>
+      <span class="chat-meeting-go" aria-hidden="true">${ic('chevronRight', 18)}</span>
+    </a>`;
+  }
+
+  function isIntroMessage(text) {
+    return /#знакомств/iu.test(String(text || ''));
+  }
+
+  function formatChatBody(text, meetings = []) {
+    const meetingUrls = new Set(meetings.map((item) => item.url));
+    let html = esc(text);
+
+    html = html.replace(URL_PATTERN, (rawUrl) => {
+      const trailing = rawUrl.match(/[),.;]+$/)?.[0] || '';
+      const url = trailing ? rawUrl.slice(0, -trailing.length) : rawUrl;
+      // Meeting links get their own card below the text.
+      if (meetingUrls.has(url)) return trailing;
+      return `<a class="chat-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${trailing}`;
+    });
+
+    return html.replace(
       /#([\p{L}\p{N}_]{2,40})/gu,
       '<span class="chat-hashtag">#$1</span>',
     );
@@ -1144,10 +1267,23 @@
     `).join('');
     const edited = message.editedAt ? '<span class="bubble-edited">изм.</span>' : '';
     const check = mine ? ic('checkCheck', 15) : '';
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}" data-message-id="${esc(message.id)}">
+    const body = message.body || message.text || '';
+    const meetings = detectMeetingLinks(body);
+    const meetingCards = meetings.map(meetingCardHtml).join('');
+
+    const intro = isIntroMessage(body);
+    const freshIntro = intro && !state.seenIntroIds.has(message.id);
+    if (intro) state.seenIntroIds.add(message.id);
+    const introBadge = intro
+      ? '<span class="intro-badge" aria-hidden="true">✨ Знакомство</span>'
+      : '';
+    const introClass = intro ? ` is-intro${freshIntro ? ' is-intro-new' : ''}` : '';
+
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}" data-message-id="${esc(message.id)}">
       <div class="bubble-body">
-        ${author}${reply}
-        <p>${formatChatBody(message.body || message.text || '')}</p>
+        ${author}${reply}${introBadge}
+        <p>${formatChatBody(body, meetings)}</p>
+        ${meetingCards}
         <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${check}</div>
       </div>
       ${reactions ? `<div class="chat-reaction-row">${reactions}</div>` : ''}
@@ -1360,7 +1496,7 @@
         try {
           const data = await API.toggleChatReaction(message.id, btn.dataset.emoji);
           if (data.message) upsertChatMessageLocal(data.message, { trustMine: true });
-          if (state.tab === 'chat') renderScreen();
+          renderChatLive();
         } catch {
           window.alert('Не удалось поставить реакцию.');
         }
@@ -1389,7 +1525,7 @@
               found.room.messages = found.room.messages.filter((item) => item.id !== message.id);
             }
             if (state.chatCompose?.messageId === message.id) clearChatCompose();
-            if (state.tab === 'chat') renderScreen();
+            renderChatLive();
           } catch {
             window.alert('Не удалось удалить сообщение.');
           }
@@ -1490,7 +1626,7 @@
         try {
           const data = await API.toggleChatReaction(chip.dataset.react, chip.dataset.emoji);
           if (data.message) upsertChatMessageLocal(data.message, { trustMine: true });
-          if (state.tab === 'chat') renderScreen();
+          renderChatLive();
         } catch {
           window.alert('Не удалось обновить реакцию.');
         }
@@ -1555,6 +1691,7 @@
       const body = input?.value.trim();
       if (!body || !state.selectedRoomId) return;
       const compose = state.chatCompose;
+      input.value = '';
       try {
         if (compose?.mode === 'edit') {
           const data = await API.editChatMessage(compose.messageId, body);
@@ -1573,11 +1710,10 @@
             upsertChatMessageLocal(data.message, { trustMine: true });
           }
         }
-        input.value = '';
         clearChatCompose();
-        await loadChatRooms();
-        renderScreen();
+        renderChatLive();
       } catch {
+        input.value = body;
         window.alert(compose?.mode === 'edit'
           ? 'Не удалось изменить сообщение.'
           : 'Не удалось отправить сообщение. Попробуйте ещё раз.');
@@ -2156,37 +2292,152 @@
         }),
       }));
       if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
+      // Only greet messages that arrive after the first load.
+      if (!state.introSeeded) {
+        state.chatRooms.forEach((room) => (room.messages || []).forEach((message) => {
+          if (isIntroMessage(message.body)) state.seenIntroIds.add(message.id);
+        }));
+        state.introSeeded = true;
+      }
     } catch {
       state.chatRooms = [];
     }
   }
 
+  function chatStateSignature() {
+    return state.chatRooms.map((room) => {
+      const messages = room.messages || [];
+      const tail = messages.map((message) => [
+        message.id,
+        message.body,
+        message.editedAt || '',
+        (message.reactions || []).map((r) => `${r.emoji}${r.count}${r.mine ? '*' : ''}`).join(''),
+      ].join('.')).join('|');
+      return `${room.id}#${messages.length}#${tail}`;
+    }).join('~');
+  }
+
+  /** Re-render the chat without losing the draft, focus or scroll position. */
+  function renderChatLive() {
+    if (state.tab !== 'chat') return;
+    const draftEl = $('#chat-draft');
+    const draft = draftEl ? draftEl.value : null;
+    const hadFocus = Boolean(draftEl && document.activeElement === draftEl);
+    const selectionStart = draftEl?.selectionStart ?? null;
+    const listEl = $('.telegram-messages');
+    const prevScroll = listEl ? listEl.scrollTop : 0;
+    const atBottom = listEl
+      ? listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 90
+      : true;
+
+    renderScreen();
+
+    const nextDraft = $('#chat-draft');
+    if (nextDraft && draft !== null) {
+      nextDraft.value = draft;
+      if (hadFocus) {
+        nextDraft.focus();
+        if (selectionStart !== null) {
+          try { nextDraft.setSelectionRange(selectionStart, selectionStart); } catch { /* ignore */ }
+        }
+      }
+    }
+    const nextList = $('.telegram-messages');
+    if (nextList) nextList.scrollTop = atBottom ? nextList.scrollHeight : prevScroll;
+  }
+
+  function applyChatEvent(payload) {
+    const room = state.chatRooms.find((item) => item.id === payload.roomId);
+    if (!room) return false;
+    if (payload.type === 'deleted') {
+      const before = room.messages.length;
+      room.messages = room.messages.filter((message) => message.id !== payload.messageId);
+      if (state.chatCompose?.messageId === payload.messageId) clearChatCompose();
+      return room.messages.length !== before;
+    }
+    if (payload.message) {
+      upsertChatMessageLocal(payload.message, { trustMine: false });
+      return true;
+    }
+    return false;
+  }
+
+  async function pollChatRooms({ force = false } = {}) {
+    if (state.chatPollBusy) return;
+    if (!force && state.chatStreamReady) return;
+    state.chatPollBusy = true;
+    const before = chatStateSignature();
+    try {
+      await loadChatRooms();
+      if (chatStateSignature() !== before) renderChatLive();
+    } catch {
+      /* keep the previous state, next tick retries */
+    } finally {
+      state.chatPollBusy = false;
+    }
+  }
+
+  function ensureChatPolling() {
+    if (state.chatPollTimer) return;
+    state.chatPollTimer = window.setInterval(() => {
+      if (document.hidden) return;
+      if (state.chatStreamReady) return;
+      pollChatRooms();
+    }, 4000);
+  }
+
   function startChatStream() {
-    if (state.chatStream || !window.EventSource) return;
-    const stream = new EventSource(API.chatStreamUrl());
+    if (state.chatStream || !window.EventSource) {
+      ensureChatPolling();
+      return;
+    }
+    ensureChatPolling();
+
+    let stream;
+    try {
+      stream = new EventSource(API.chatStreamUrl(), { withCredentials: true });
+    } catch {
+      state.chatStreamReady = false;
+      return;
+    }
+
+    stream.addEventListener('ready', () => {
+      state.chatStreamReady = true;
+      state.chatStreamRetry = 0;
+      // A dropped stream may have missed events while offline.
+      pollChatRooms({ force: true });
+    });
+
     stream.addEventListener('chat.message', (event) => {
       try {
         const payload = JSON.parse(event.data);
-        const room = state.chatRooms.find((item) => item.id === payload.roomId);
-        if (!room) return;
-
-        if (payload.type === 'deleted') {
-          room.messages = room.messages.filter((message) => message.id !== payload.messageId);
-          if (state.chatCompose?.messageId === payload.messageId) clearChatCompose();
-        } else if (payload.message) {
-          upsertChatMessageLocal(payload.message, { trustMine: false });
-        }
-        if (state.tab === 'chat') renderScreen();
+        if (applyChatEvent(payload)) renderChatLive();
       } catch {
-        // Ignore malformed stream events; the regular reload will recover state.
+        // Ignore malformed stream events; polling will recover state.
       }
     });
+
     stream.onerror = () => {
       stream.close();
       state.chatStream = null;
-      window.setTimeout(startChatStream, 3000);
+      state.chatStreamReady = false;
+      state.chatStreamRetry = Math.min((state.chatStreamRetry || 0) + 1, 6);
+      window.setTimeout(startChatStream, 1000 * state.chatStreamRetry);
     };
+
     state.chatStream = stream;
+  }
+
+  function bindChatLiveRefresh() {
+    const wake = () => {
+      if (document.hidden) return;
+      pollChatRooms({ force: true });
+      if (!state.chatStream) startChatStream();
+    };
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('focus', wake);
+    window.addEventListener('online', wake);
+    window.addEventListener('pageshow', wake);
   }
 
   function captureAuthFromUrl() {
@@ -2435,6 +2686,7 @@
 
     await Promise.all([loadContent(), loadFeed(), loadChatRooms()]);
     startChatStream();
+    bindChatLiveRefresh();
     syncHeaderIdentity();
     renderScreen();
     setTimeout(() => {

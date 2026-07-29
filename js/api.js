@@ -109,7 +109,12 @@
         method: 'POST',
         body: JSON.stringify({ emoji, guestId: getGuestId() }),
       }),
-    chatStreamUrl: () => `${API_URL}/chat/stream`,
+    chatStreamUrl: () => {
+      const params = new URLSearchParams({ guestId: getGuestId() });
+      // EventSource cannot send headers, and Safari blocks third-party cookies.
+      if (getToken()) params.set('access_token', getToken());
+      return `${API_URL}/chat/stream?${params.toString()}`;
+    },
     createPayment: (planCode, returnUrl) =>
       request('/payments/yookassa/create', {
         method: 'POST',
