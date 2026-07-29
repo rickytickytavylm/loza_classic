@@ -119,6 +119,97 @@
     return 'Базовый';
   }
 
+  // Notification helpers
+  function isPWA() {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || navigator.standalone === true
+      || document.referrer?.includes('android-app://');
+  }
+
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function canShowNotifications() {
+    return 'Notification' in window && 'serviceWorker' in navigator && isPWA();
+  }
+
+  function getNotificationSetting() {
+    try {
+      return localStorage.getItem('loza-notify-enabled') === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function setNotificationSetting(value) {
+    try {
+      localStorage.setItem('loza-notify-enabled', value ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function requestNotificationPermission() {
+    if (!('Notification' in window)) return 'unsupported';
+    const result = await Notification.requestPermission();
+    return result; // 'granted' | 'default' | 'denied'
+  }
+
+  async function getPushSubscription() {
+    const reg = await navigator.serviceWorker?.ready;
+    if (!reg) return null;
+    return reg.pushManager.getSubscription();
+  }
+
+  async function showLocalNotification({ title, body, icon, tag, url, roomId }) {
+    const reg = await navigator.serviceWorker?.ready;
+    if (!reg) return;
+    await reg.showNotification(title || 'Лоза', {
+      body: body || '',
+      icon: icon || asset('/assets/icon-192.png'),
+      badge: asset('/assets/favicon-32.png'),
+      tag: tag || 'loza-local',
+      requireInteraction: false,
+      data: { url: url || './', roomId: roomId || null },
+    });
+  }
+
+  function testNotification() {
+    showLocalNotification({
+      title: 'Лоза · уведомления активны',
+      body: 'Поздравляем! Теперь вы не пропустите новые сообщения в клубе.',
+      icon: asset('/assets/icon-192.png'),
+      tag: 'loza-test',
+    });
+  }
+
+  async function toggleNotifications(nextEnabled) {
+    if (!canShowNotifications()) {
+      if (isIOS()) {
+        showAppToast('В iOS разрешите уведомления в настройках устройства', { title: 'Уведомления' });
+      } else {
+        showAppToast('Уведомления доступны только в установленном приложении', { title: 'Уведомления' });
+      }
+      return false;
+    }
+    if (nextEnabled) {
+      const permission = await requestNotificationPermission();
+      if (permission !== 'granted') {
+        setNotificationSetting(false);
+        showAppToast('Разрешите уведомления в настройках телефона', { title: 'Уведомления', tone: 'warn' });
+        return false;
+      }
+      setNotificationSetting(true);
+      testNotification();
+      return true;
+    }
+    setNotificationSetting(false);
+    return false;
+  }
+
   function esc(s) {
     return String(s ?? '')
       .replace(/&/g, '&amp;')
@@ -2193,14 +2284,52 @@
         <strong>${esc(p.label)}</strong>
       </button>`,
     ).join('');
-    $('#portal').innerHTML = `<div class="chat-bg-picker-backdrop" id="modal-close"><section class="chat-bg-picker" aria-label="Настройки фона чата" onclick="event.stopPropagation()">
+
+    const available = canShowNotifications();
+    const enabled = getNotificationSetting();
+    const notifyUnsupported = !available
+      ? (isPWA() ? 'Уведомления не поддерживаются в этом браузере' : 'Установите приложение, чтобы включить уведомления')
+      : null;
+
+    const notifyRow = `
+      <div class="chat-settings-row">
+        <div class="chat-settings-row-copy">
+          <strong>Уведомления</strong>
+          <span>${notifyUnsupported || (enabled ? 'Уведомления включены' : 'Получать уведомления о новых сообщениях')}</span>
+        </div>
+        <label class="chat-settings-toggle${!available ? ' is-disabled' : ''}">
+          <input type="checkbox" id="chat-notify-toggle" ${enabled ? 'checked' : ''} ${!available ? 'disabled' : ''} />
+          <span aria-hidden="true"></span>
+        </label>
+      </div>
+      ${(available && enabled) ? `<button type="button" class="chat-settings-test" id="chat-notify-test">${ic('bell', 18)} Протестировать уведомление</button>` : ''}
+    `;
+
+    $('#portal').innerHTML = `<div class="chat-bg-picker-backdrop" id="modal-close"><section class="chat-bg-picker" aria-label="Настройки чата" onclick="event.stopPropagation()">
       <div class="chat-bg-picker-handle"></div>
-      <header class="chat-bg-picker-head"><div><span>Настройки чата</span><h2>Фон сообщений</h2></div><button type="button" id="modal-x" aria-label="Закрыть настройки">${ic('x', 20)}</button></header>
-      <div class="chat-bg-grid">${swatches}</div>
+      <header class="chat-bg-picker-head"><div><span>Настройки чата</span><h2>Фон и уведомления</h2></div><button type="button" id="modal-x" aria-label="Закрыть настройки">${ic('x', 20)}</button></header>
+      <div class="chat-settings-block">
+        <div class="chat-settings-label">Фон</div>
+        <div class="chat-bg-grid">${swatches}</div>
+      </div>
+      <div class="chat-settings-block">
+        <div class="chat-settings-label">Уведомления</div>
+        ${notifyRow}
+      </div>
     </section></div>`;
     bindModalClose();
     $$('[data-bg]', $('#portal')).forEach((b) => {
       b.onclick = () => { state.chatBg = b.dataset.bg; localStorage.setItem('chat-bg', state.chatBg); closePortal(); renderScreen(); };
+    });
+    const toggle = $('#chat-notify-toggle', $('#portal'));
+    toggle?.addEventListener('change', async () => {
+      const result = await toggleNotifications(toggle.checked);
+      toggle.checked = result;
+      closePortal();
+      openChatBgPicker();
+    });
+    $('#chat-notify-test', $('#portal'))?.addEventListener('click', () => {
+      testNotification();
     });
   }
 

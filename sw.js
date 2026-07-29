@@ -1,5 +1,5 @@
-const CACHE = 'loza-classic-v25';
-const IMAGE_CACHE = 'loza-classic-images-v9';
+const CACHE = 'loza-classic-v26';
+const IMAGE_CACHE = 'loza-classic-images-v10';
 const PRECACHE = [
   './',
   './index.html',
@@ -64,6 +64,35 @@ function cacheFirstImage(request) {
     }),
   );
 }
+
+// Show push/local notifications in the background. Click focuses the app.
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() || {};
+  const title = data.title || 'Лоза';
+  const options = {
+    body: data.body || 'Новое сообщение в клубе',
+    icon: data.icon || './assets/icon-192.png',
+    badge: data.badge || './assets/favicon-32.png',
+    tag: data.tag || 'loza-default',
+    requireInteraction: false,
+    data: { url: data.url || './', roomId: data.roomId || null },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || './';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const focused = clients.find((c) => c.focused);
+      if (focused) return focused.navigate(targetUrl).then((c) => c.focus());
+      const existing = clients.find((c) => c.url === targetUrl);
+      if (existing) return existing.focus();
+      return self.clients.openWindow(targetUrl);
+    }),
+  );
+});
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
