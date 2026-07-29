@@ -1173,18 +1173,28 @@
     return found;
   }
 
-  function meetingGlyph() {
-    return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="3.4"/><path d="M17 10.4l4.1-2.5a.75.75 0 0 1 1.14.64v6.94a.75.75 0 0 1-1.14.64L17 13.6z"/></svg>';
+  function meetingGlyph(id) {
+    if (id === 'telemost') {
+      return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.5 7.2A2.7 2.7 0 0 1 7.2 4.5h6.1A2.7 2.7 0 0 1 16 7.2v9.6a2.7 2.7 0 0 1-2.7 2.7H7.2A2.7 2.7 0 0 1 4.5 16.8V7.2Z"/><path d="M17.2 9.1 20.3 7a.9.9 0 0 1 1.4.75v8.5a.9.9 0 0 1-1.4.75l-3.1-2.1V9.1Z"/></svg>';
+    }
+    // Zoom-style camera
+    return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.8 7.4A2.6 2.6 0 0 1 6.4 4.8h7.2A2.6 2.6 0 0 1 16.2 7.4v9.2a2.6 2.6 0 0 1-2.6 2.6H6.4A2.6 2.6 0 0 1 3.8 16.6V7.4Z"/><path d="M17.4 9.3 21 7.05a.85.85 0 0 1 1.3.72v8.46a.85.85 0 0 1-1.3.72l-3.6-2.25V9.3Z"/></svg>';
   }
 
-  function meetingCardHtml(meeting) {
+  function meetingCardHtml(meeting, index = 0) {
+    const art = bgImage(meeting.id === 'telemost' ? index + 2 : index + 4);
+    const subtitle = meeting.id === 'telemost' ? 'Онлайн-встреча клуба' : 'Видеоконференция клуба';
     return `<a class="chat-meeting-card chat-meeting-${esc(meeting.id)}" href="${esc(meeting.url)}" target="_blank" rel="noopener noreferrer">
-      <span class="chat-meeting-icon" aria-hidden="true">${meetingGlyph()}</span>
-      <span class="chat-meeting-copy">
-        <strong>${esc(meeting.label)}</strong>
-        <span>Подключиться к конференции</span>
+      <span class="chat-meeting-art" style="background-image:url(${art})" aria-hidden="true"></span>
+      <span class="chat-meeting-veil" aria-hidden="true"></span>
+      <span class="chat-meeting-icon" aria-hidden="true">${meetingGlyph(meeting.id)}</span>
+      <span class="chat-meeting-footer">
+        <span class="chat-meeting-copy">
+          <strong>${esc(meeting.label)}</strong>
+          <span>${esc(subtitle)}</span>
+        </span>
+        <span class="chat-meeting-cta">Открыть</span>
       </span>
-      <span class="chat-meeting-go" aria-hidden="true">${ic('chevronRight', 18)}</span>
     </a>`;
   }
 
@@ -1269,7 +1279,10 @@
     const check = mine ? ic('checkCheck', 15) : '';
     const body = message.body || message.text || '';
     const meetings = detectMeetingLinks(body);
-    const meetingCards = meetings.map(meetingCardHtml).join('');
+    const meetingCards = meetings.map((meeting, i) => meetingCardHtml(meeting, i)).join('');
+    const formattedBody = formatChatBody(body, meetings).trim();
+    const bodyHtml = formattedBody ? `<p>${formattedBody}</p>` : '';
+    const meetingOnly = meetings.length > 0 && !formattedBody;
 
     const intro = isIntroMessage(body);
     const freshIntro = intro && !state.seenIntroIds.has(message.id);
@@ -1278,11 +1291,12 @@
       ? '<span class="intro-badge" aria-hidden="true">✨ Знакомство</span>'
       : '';
     const introClass = intro ? ` is-intro${freshIntro ? ' is-intro-new' : ''}` : '';
+    const meetingClass = meetingOnly ? ' is-meeting-only' : '';
 
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}" data-message-id="${esc(message.id)}">
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}" data-message-id="${esc(message.id)}">
       <div class="bubble-body">
         ${author}${reply}${introBadge}
-        <p>${formatChatBody(body, meetings)}</p>
+        ${bodyHtml}
         ${meetingCards}
         <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${check}</div>
       </div>
