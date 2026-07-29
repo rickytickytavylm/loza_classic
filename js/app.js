@@ -783,12 +783,18 @@
     if (!page || !controls || !scroller) return;
 
     // Instagram/Telegram pattern: transform-only chrome + scrollTop compensation
-    // so the feed does not jump when the bar hides/shows. Reveal on scroll-up
-    // only (never on idle) — idle reveal is what felt like a bright flash.
+    // so the feed does not jump. Reveal on scroll-up only (never on idle).
     let hidden = false;
     let lastTop = scroller.scrollTop;
     let ticking = false;
     let controlsH = 0;
+    // Programmatic scrollTop tweaks must not be read as user scroll direction,
+    // otherwise reveal (scrollTop += h) looks like a big scroll-down and re-hides.
+    let suppressScroll = false;
+
+    const syncLastTop = () => {
+      lastTop = scroller.scrollTop;
+    };
 
     const measure = () => {
       // scrollHeight is transform-independent, so we can measure while hidden.
@@ -801,20 +807,27 @@
       if (next === hidden) return;
       // Keep chrome visible while typing in search.
       if (next && document.activeElement?.closest?.('.media-feed-controls')) return;
-      const h = controlsH || Math.ceil(controls.getBoundingClientRect().height);
+      const h = controlsH || Math.ceil(controls.scrollHeight || controls.getBoundingClientRect().height);
       if (!h) return;
       hidden = next;
+      suppressScroll = true;
       if (hidden) {
         page.classList.add('media-controls-hidden');
         scroller.style.paddingTop = '0px';
         scroller.scrollTop = Math.max(0, scroller.scrollTop - h);
-        lastTop = scroller.scrollTop;
       } else {
         page.classList.remove('media-controls-hidden');
         scroller.style.paddingTop = `${h}px`;
         scroller.scrollTop += h;
-        lastTop = scroller.scrollTop;
       }
+      syncLastTop();
+      requestAnimationFrame(() => {
+        syncLastTop();
+        requestAnimationFrame(() => {
+          syncLastTop();
+          suppressScroll = false;
+        });
+      });
     };
 
     measure();
@@ -827,10 +840,18 @@
     ro?.observe(controls);
 
     scroller.addEventListener('scroll', () => {
+      if (suppressScroll) {
+        syncLastTop();
+        return;
+      }
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
         ticking = false;
+        if (suppressScroll) {
+          syncLastTop();
+          return;
+        }
         const top = scroller.scrollTop;
         const delta = top - lastTop;
         lastTop = top;
