@@ -512,12 +512,16 @@
       b.onclick = () => {
         const post = state.feedPosts.find((p) => p.id === b.dataset.share);
         if (!post) return;
-        const image = post.imageUrl || post.image || post.coverUrl || '';
+        const index = Math.max(0, state.feedPosts.findIndex((p) => p.id === post.id));
+        const authorName = post.authorName || post.author || 'Лоза';
+        const caption = String(post.body || post.text || '').trim();
+        const title = shareSnippet(caption.split('\n')[0] || 'Пост клуба Лоза', 90);
         shareWithPreview({
-          title: 'Лоза',
-          text: (post.body || post.text || 'Пост клуба Лоза').slice(0, 220),
+          title,
+          text: shareSnippet(caption || title, 220),
+          eyebrow: authorName === 'Лоза' ? 'Лоза · лента' : `${authorName} · Лоза`,
           url: `${window.location.origin}${window.location.pathname}?post=${encodeURIComponent(post.id)}`,
-          imageUrl: image ? asset(image) : asset('/assets/webp/background1.webp'),
+          imageUrl: resolveShareImageUrl(post.imageUrl || post.image || post.coverUrl, index),
         });
       };
     });
@@ -605,42 +609,193 @@
     };
   }
 
-  async function shareWithPreview({ title, text, url, imageUrl }) {
+  function shareSnippet(text, max = 96) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    if (clean.length <= max) return clean;
+    const cut = clean.slice(0, max - 1);
+    const sp = cut.lastIndexOf(' ');
+    return `${(sp > 40 ? cut.slice(0, sp) : cut).trim()}…`;
+  }
+
+  function resolveShareImageUrl(raw, fallbackIndex = 0) {
+    const value = String(raw || '').trim();
+    if (!value) return bgImage(fallbackIndex);
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) return value;
+    return asset(value) || bgImage(fallbackIndex);
+  }
+
+  function loadShareImage(src) {
+    return new Promise((resolve, reject) => {
+      if (!src) {
+        reject(new Error('no image'));
+        return;
+      }
+      const img = new Image();
+      if (!src.startsWith('data:') && !src.startsWith('blob:')) img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image load failed'));
+      img.src = src;
+    });
+  }
+
+  function wrapShareCardLines(ctx, text, maxWidth, maxLines) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const lines = [];
+    let line = '';
+    for (let i = 0; i < words.length; i += 1) {
+      const next = line ? `${line} ${words[i]}` : words[i];
+      if (ctx.measureText(next).width > maxWidth && line) {
+        lines.push(line);
+        line = words[i];
+        if (lines.length >= maxLines) {
+          line = '';
+          // leftover words → ellipsis on last line
+          let last = lines[maxLines - 1];
+          while (last.length > 1 && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
+          lines[maxLines - 1] = `${last.trim()}…`;
+          return lines;
+        }
+      } else {
+        line = next;
+      }
+    }
+    if (line) lines.push(line);
+    return lines.slice(0, maxLines);
+  }
+
+  /**
+   * Branded share card (Instagram/Spotify pattern): cover + title baked into the image,
+   * because many apps drop text/url when a file is attached.
+   */
+  async function buildShareCardFile({
+    title,
+    eyebrow = 'Лоза',
+    imageUrl,
+    footer = 'loza-club.ru',
+  }) {
+    const W = 1080;
+    const H = 1350;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas unsupported');
+
+    ctx.fillStyle = '#1c1724';
+    ctx.fillRect(0, 0, W, H);
+
+    const mediaH = Math.round(H * 0.64);
+    try {
+      const img = await loadShareImage(imageUrl);
+      const scale = Math.max(W / img.naturalWidth, mediaH / img.naturalHeight);
+      const dw = img.naturalWidth * scale;
+      const dh = img.naturalHeight * scale;
+      ctx.drawImage(img, (W - dw) / 2, (mediaH - dh) / 2, dw, dh);
+    } catch {
+      const fallback = ctx.createLinearGradient(0, 0, W, mediaH);
+      fallback.addColorStop(0, '#3d2a4a');
+      fallback.addColorStop(1, '#1c1724');
+      ctx.fillStyle = fallback;
+      ctx.fillRect(0, 0, W, mediaH);
+    }
+
+    const veil = ctx.createLinearGradient(0, mediaH * 0.35, 0, H);
+    veil.addColorStop(0, 'rgba(28, 23, 36, 0)');
+    veil.addColorStop(0.42, 'rgba(28, 23, 36, 0.55)');
+    veil.addColorStop(0.72, 'rgba(28, 23, 36, 0.94)');
+    veil.addColorStop(1, '#1c1724');
+    ctx.fillStyle = veil;
+    ctx.fillRect(0, 0, W, H);
+
+    try {
+      await document.fonts?.ready;
+    } catch {
+      /* keep system fallbacks */
+    }
+
+    const pad = 72;
+    ctx.fillStyle = 'rgba(243, 235, 227, 0.72)';
+    ctx.font = '600 34px Onest, Manrope, sans-serif';
+    ctx.fillText(shareSnippet(eyebrow, 42).toUpperCase(), pad, H - 318);
+
+    ctx.fillStyle = '#fffaf4';
+    ctx.font = '700 58px Unbounded, Onest, sans-serif';
+    const titleLines = wrapShareCardLines(ctx, title || 'Лоза', W - pad * 2, 3);
+    titleLines.forEach((line, i) => {
+      ctx.fillText(line, pad, H - 250 + i * 72);
+    });
+
+    ctx.fillStyle = 'rgba(255, 250, 244, 0.45)';
+    ctx.font = '500 30px Onest, Manrope, sans-serif';
+    ctx.fillText(footer, pad, H - 56);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.92);
+    });
+    return new File([blob], 'loza-share.jpg', { type: 'image/jpeg' });
+  }
+
+  async function shareWithPreview({ title, text, url, imageUrl, eyebrow }) {
     const shareUrl = url || `${window.location.origin}${window.location.pathname}#share`;
+    const shareTitle = title || 'Лоза';
+    const shareText = text || shareTitle;
     const payload = {
-      title: title || 'Лоза',
-      text: text || title || 'Лоза',
+      title: shareTitle,
+      text: `${shareText}${shareText.includes(shareUrl) ? '' : `\n${shareUrl}`}`,
       url: shareUrl,
     };
 
-    if (navigator.share && imageUrl) {
-      try {
-        const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
-        if (response.ok) {
-          const blob = await response.blob();
-          const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-          const file = new File([blob], `loza.${ext}`, { type: blob.type || 'image/jpeg' });
-          if (navigator.canShare?.({ files: [file] })) {
-            await navigator.share({ ...payload, files: [file] });
-            return;
-          }
-        }
-      } catch {
-        /* fall through to text/url share */
-      }
-    }
-
     if (navigator.share) {
+      try {
+        const card = await buildShareCardFile({
+          title: shareTitle,
+          eyebrow: eyebrow || 'Лоза',
+          imageUrl: resolveShareImageUrl(imageUrl),
+        });
+        if (navigator.canShare?.({ files: [card] })) {
+          // Prefer files-only + text: card already carries title/cover for apps that strip url.
+          await navigator.share({
+            files: [card],
+            title: payload.title,
+            text: payload.text,
+          });
+          return;
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+        /* fall through */
+      }
+
+      // Fallback: raw image file, then text/url only.
+      if (imageUrl) {
+        try {
+          const response = await fetch(resolveShareImageUrl(imageUrl), { mode: 'cors', credentials: 'omit' });
+          if (response.ok) {
+            const blob = await response.blob();
+            const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+            const file = new File([blob], `loza.${ext}`, { type: blob.type || 'image/jpeg' });
+            if (navigator.canShare?.({ files: [file] })) {
+              await navigator.share({ ...payload, files: [file] });
+              return;
+            }
+          }
+        } catch {
+          /* continue */
+        }
+      }
+
       try {
         await navigator.share(payload);
         return;
-      } catch {
-        /* user cancelled or unsupported */
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
       }
     }
 
     try {
-      await navigator.clipboard?.writeText(`${payload.text}\n${payload.url}`);
+      await navigator.clipboard?.writeText(`${payload.text}`);
       showAppToast('Ссылка скопирована', { title: 'Поделиться' });
     } catch {
       showAppToast('Не удалось поделиться', { title: 'Поделиться', tone: 'warn' });
@@ -702,11 +857,17 @@
         const item = state.libraryItems.find((x) => x.id === b.dataset.shareItem);
         if (!item) return;
         const index = Math.max(0, state.libraryItems.findIndex((x) => x.id === item.id));
+        const kindLabel = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Материал';
+        const cover = item.kind === 'audio'
+          ? audioCoverForItem(item.id)
+          : (item.coverUrl || item.imageUrl || bgImageForItem(item.id) || bgImage(index));
+        const summary = M.getMaterialSummary?.(item) || '';
         shareWithPreview({
-          title: item.title,
-          text: `${item.title} — Лоза`,
+          title: shareSnippet(M.cleanDisplayText?.(item.title) || item.title, 90),
+          text: shareSnippet(summary || `${item.title} — Лоза`, 220),
+          eyebrow: `Лоза · ${sectionTitle(item.sectionId)} · ${kindLabel}`,
           url: `${window.location.origin}${window.location.pathname}?media=${encodeURIComponent(item.id)}`,
-          imageUrl: bgImage(index),
+          imageUrl: resolveShareImageUrl(cover, index),
         });
       };
     });
