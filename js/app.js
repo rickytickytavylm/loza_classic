@@ -1481,16 +1481,17 @@
         <div class="telegram-room-list-head"><img class="telegram-room-list-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><h2>Чаты клуба</h2></div>
         ${roomsListInner}
       </aside>
-      <section class="telegram-thread">
+      <section class="telegram-thread" style="${chatBgVars(preset)}">
         <header class="telegram-header">
           <button class="telegram-header-back" type="button" id="chat-back" aria-label="К списку чатов">${ic('chevronLeft', 22)}</button>
           <div class="telegram-header-pill"><strong>${esc(selectedRoom?.title || 'Чат клуба')}</strong><span>${esc(selectedRoom?.description || 'Живое общение участников')}</span></div>
           <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>
         </header>
         <div class="telegram-messages">
-          <div class="chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}"></div>
-          ${timeline.join('')}
-          ${emptyThread}
+          <div class="telegram-messages-canvas chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
+            ${timeline.join('')}
+            ${emptyThread}
+          </div>
         </div>
         ${renderChatComposeBar()}
         <form class="telegram-composer" id="chat-form">

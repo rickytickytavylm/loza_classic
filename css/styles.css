@@ -1896,7 +1896,7 @@ body.rules-open {
   height: 100%;
   max-height: 100%;
   overflow: hidden;
-  background: #fff;
+  background-color: var(--chat-bg-b, #eef4ec);
 }
 
 .telegram-header {
@@ -2161,127 +2161,95 @@ body.rules-open {
 
 .telegram-messages {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   min-height: 0;
-  /* No padding here — gutters are on bubbles/dates so .chat-background can go edge-to-edge. */
-  padding: 10px 0 14px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
-  background: transparent;
+  /* Solid fill behind the canvas (overscroll / short threads). */
+  background-color: var(--chat-bg-b, #eef4ec);
 }
 
-.telegram-messages > *:not(.chat-background) {
+/* Pattern on the content-sized canvas so it tiles for the full message list. */
+.telegram-messages-canvas {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 100%;
+  padding: 10px 0 14px;
+  background-color: var(--chat-bg-b, #eef4ec);
+  background-repeat: repeat;
+}
+
+.telegram-messages-canvas > * {
   position: relative;
   z-index: 1;
   flex: 0 0 auto;
   margin-inline: 12px;
 }
 
-/* Fixed fill behind the scrollport — no sticky height tricks, no rubber-band gap. */
-.chat-background {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: auto;
-  min-height: 100%;
-  margin: 0;
-  overflow: hidden;
-  pointer-events: none;
+/* Keep swatches in the bg picker working. */
+.chat-background,
+.chat-bg-swatch {
   background-color: var(--chat-bg-b, #eef4ec);
+  background-repeat: repeat;
 }
 
-.chat-background::before,
-.chat-background::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-
-.chat-background::before {
-  opacity: 0.7;
-}
-
-.chat-background::after {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 24%),
-    linear-gradient(0deg, rgba(20, 14, 26, 0.12), transparent 50%);
-}
-
-/* CSS-only patterns adapted from the Uiverse pattern collection. */
-.chat-background-aurora {
+.chat-bg-aurora,
+.chat-background-aurora,
+.chat-bg-swatch-aurora {
   background-color: #eef4ec;
-}
-
-.chat-background-aurora::before {
   background-image: radial-gradient(rgba(94, 139, 90, 0.24) 1.2px, transparent 1.4px);
   background-size: 24px 24px;
 }
 
-.chat-background-dark {
+.chat-bg-dark,
+.chat-background-dark,
+.chat-bg-swatch-dark {
   background-color: #17141e;
-  background-image: linear-gradient(135deg, #17141e 0%, #201a2b 100%);
-}
-
-.chat-background-dark::before {
-  opacity: 0.34;
   background-image:
-    linear-gradient(45deg, rgba(162, 121, 221, 0.28) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(162, 121, 221, 0.18) 25%, transparent 25%);
-  background-size: 18px 18px;
-  background-position: 0 0, 9px 9px;
+    linear-gradient(45deg, rgba(162, 121, 221, 0.18) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(162, 121, 221, 0.12) 25%, transparent 25%),
+    linear-gradient(135deg, #17141e 0%, #201a2b 100%);
+  background-size: 18px 18px, 18px 18px, auto;
+  background-position: 0 0, 9px 9px, 0 0;
 }
 
-.chat-background-dark::after {
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.42), transparent 64%);
-}
-
-.chat-background-plum {
+.chat-bg-plum,
+.chat-background-plum,
+.chat-bg-swatch-plum {
   background-color: #f5ecf5;
-}
-
-.chat-background-plum::before {
-  opacity: 0.62;
   background-image:
-    linear-gradient(rgba(132, 83, 128, 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(132, 83, 128, 0.14) 1px, transparent 1px);
+    linear-gradient(rgba(132, 83, 128, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(132, 83, 128, 0.12) 1px, transparent 1px);
   background-size: 28px 28px;
 }
 
-.chat-background-sunset {
+.chat-bg-sunset,
+.chat-background-sunset,
+.chat-bg-swatch-sunset {
   background-color: #fff2e5;
-  background-image: linear-gradient(180deg, #fff2e5, #fdd8cc);
-}
-
-.chat-background-sunset::before {
-  opacity: 0.5;
   background-image:
-    repeating-radial-gradient(ellipse at 50% 130%, transparent 0 12px, rgba(234, 123, 102, 0.23) 13px 15px, transparent 16px 28px);
-  background-size: 100% 60px;
+    repeating-radial-gradient(ellipse at 50% 130%, transparent 0 12px, rgba(234, 123, 102, 0.18) 13px 15px, transparent 16px 28px),
+    linear-gradient(180deg, #fff2e5, #fdd8cc);
+  background-size: 100% 60px, auto;
 }
 
-.chat-background-ocean {
+.chat-bg-ocean,
+.chat-background-ocean,
+.chat-bg-swatch-ocean {
   background-color: #eaf7fb;
+  background-image: repeating-linear-gradient(135deg, rgba(43, 137, 174, 0.16) 0 1px, transparent 1px 12px);
 }
 
-.chat-background-ocean::before {
-  opacity: 0.58;
-  background-image: repeating-linear-gradient(135deg, rgba(43, 137, 174, 0.19) 0 1px, transparent 1px 12px);
-}
-
-.chat-background-forest {
+.chat-bg-forest,
+.chat-background-forest,
+.chat-bg-swatch-forest {
   background-color: #eef5e9;
-}
-
-.chat-background-forest::before {
-  opacity: 0.56;
   background-image:
-    radial-gradient(ellipse 8px 4px at 8px 12px, rgba(67, 124, 72, 0.25) 45%, transparent 48%),
-    radial-gradient(ellipse 8px 4px at 20px 24px, rgba(67, 124, 72, 0.2) 45%, transparent 48%);
+    radial-gradient(ellipse 8px 4px at 8px 12px, rgba(67, 124, 72, 0.22) 45%, transparent 48%),
+    radial-gradient(ellipse 8px 4px at 20px 24px, rgba(67, 124, 72, 0.16) 45%, transparent 48%);
   background-size: 32px 32px;
 }
 
