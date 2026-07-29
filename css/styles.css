@@ -4984,9 +4984,8 @@ body.material-immersive-open {
 }
 
 /*
-  Overlay chrome (Instagram/Telegram): hide via transform only.
-  Padding on the scroller is swapped with scrollTop compensation in JS,
-  so the feed never jumps when the bar collapses or returns.
+  Pure overlay chrome: the feed is always underneath search/filters.
+  Showing/hiding only translates the bar — content never reflows or jumps.
 */
 .media-feed-controls {
   position: absolute;
@@ -4994,10 +4993,11 @@ body.material-immersive-open {
   left: 0;
   right: 0;
   z-index: 6;
+  padding-inline: 2px;
   background: var(--bg);
-  background: color-mix(in srgb, var(--bg) 90%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
   border-bottom: 1px solid rgba(var(--plum-rgb), 0.08);
   transform: translate3d(0, 0, 0);
   opacity: 1;
@@ -5021,8 +5021,6 @@ body.material-immersive-open {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  /* Set from JS to reserve space under the overlay controls. */
-  padding-top: var(--media-controls-h, 0px);
   overscroll-behavior-y: contain;
 }
 
@@ -5154,7 +5152,8 @@ body.material-immersive-open {
 .media-feed-list {
   display: grid;
   gap: 28px;
-  padding-top: 18px;
+  /* Content starts under the overlay chrome — no reserved gap to collapse. */
+  padding-top: 12px;
   opacity: 1;
   transition: opacity 0.2s ease;
 }
