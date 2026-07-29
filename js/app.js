@@ -732,6 +732,7 @@
     } else if (noteHtml && header) {
       header.insertAdjacentHTML('beforeend', noteHtml);
     }
+    root._mediaControlsRemeasure?.();
   }
 
   function renderMedia() {
@@ -781,36 +782,69 @@
     const scroller = $('.media-feed-scroll', root);
     if (!page || !controls || !scroller) return;
 
+    // Instagram/Telegram pattern: transform-only chrome + scrollTop compensation
+    // so the feed does not jump when the bar hides/shows. Reveal on scroll-up
+    // only (never on idle) — idle reveal is what felt like a bright flash.
+    let hidden = false;
     let lastTop = scroller.scrollTop;
-    let idleTimer = null;
-    const reveal = () => {
-      page.classList.remove('media-controls-hidden');
-      if (idleTimer) window.clearTimeout(idleTimer);
-      idleTimer = null;
+    let ticking = false;
+    let controlsH = 0;
+
+    const measure = () => {
+      // scrollHeight is transform-independent, so we can measure while hidden.
+      controlsH = Math.ceil(controls.scrollHeight || controls.getBoundingClientRect().height);
+      page.style.setProperty('--media-controls-h', `${controlsH}px`);
+      if (!hidden) scroller.style.paddingTop = `${controlsH}px`;
     };
-    const scheduleReveal = () => {
-      if (idleTimer) window.clearTimeout(idleTimer);
-      idleTimer = window.setTimeout(reveal, 160);
+
+    const setHidden = (next) => {
+      if (next === hidden) return;
+      // Keep chrome visible while typing in search.
+      if (next && document.activeElement?.closest?.('.media-feed-controls')) return;
+      const h = controlsH || Math.ceil(controls.getBoundingClientRect().height);
+      if (!h) return;
+      hidden = next;
+      if (hidden) {
+        page.classList.add('media-controls-hidden');
+        scroller.style.paddingTop = '0px';
+        scroller.scrollTop = Math.max(0, scroller.scrollTop - h);
+        lastTop = scroller.scrollTop;
+      } else {
+        page.classList.remove('media-controls-hidden');
+        scroller.style.paddingTop = `${h}px`;
+        scroller.scrollTop += h;
+        lastTop = scroller.scrollTop;
+      }
     };
+
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          if (hidden) return;
+          measure();
+        })
+      : null;
+    ro?.observe(controls);
 
     scroller.addEventListener('scroll', () => {
-      const top = scroller.scrollTop;
-      const delta = top - lastTop;
-      lastTop = top;
-      if (top <= 8) {
-        reveal();
-        return;
-      }
-      if (delta > 8) {
-        page.classList.add('media-controls-hidden');
-        scheduleReveal();
-        return;
-      }
-      if (delta < -4) reveal();
-      else scheduleReveal();
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const top = scroller.scrollTop;
+        const delta = top - lastTop;
+        lastTop = top;
+        if (top <= 4) {
+          setHidden(false);
+          return;
+        }
+        // Hysteresis: ignore tiny jitter from touch / rubber-band.
+        if (delta > 6) setHidden(true);
+        else if (delta < -6) setHidden(false);
+      });
     }, { passive: true });
 
-    scroller.addEventListener('touchend', scheduleReveal, { passive: true });
+    root._mediaControlsRemeasure = measure;
   }
 
   function captureListScroll() {

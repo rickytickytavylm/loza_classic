@@ -4972,6 +4972,7 @@ body.material-immersive-open {
 
 /* Media library — HYPE-style feed */
 .media-feed-page {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -4982,25 +4983,36 @@ body.material-immersive-open {
   padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 20px);
 }
 
+/*
+  Overlay chrome (Instagram/Telegram): hide via transform only.
+  Padding on the scroller is swapped with scrollTop compensation in JS,
+  so the feed never jumps when the bar collapses or returns.
+*/
 .media-feed-controls {
-  position: sticky;
+  position: absolute;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 6;
-  flex-shrink: 0;
-  max-height: 220px;
-  overflow: hidden;
   background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(var(--plum-rgb), 0.08);
-  transition: max-height 0.28s ease, opacity 0.22s ease, border-color 0.22s ease, transform 0.28s ease;
-  will-change: max-height, opacity;
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  transition:
+    transform 0.22s cubic-bezier(0.33, 1, 0.68, 1),
+    opacity 0.18s ease;
+  will-change: transform, opacity;
+  pointer-events: auto;
 }
 
 .media-feed-page.media-controls-hidden .media-feed-controls {
-  max-height: 0;
+  transform: translate3d(0, calc(-100% - 1px), 0);
   opacity: 0;
-  border-bottom-color: transparent;
-  transform: translateY(-6px);
   pointer-events: none;
+  border-bottom-color: transparent;
 }
 
 .media-feed-scroll {
@@ -5009,6 +5021,9 @@ body.material-immersive-open {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* Set from JS to reserve space under the overlay controls. */
+  padding-top: var(--media-controls-h, 0px);
+  overscroll-behavior-y: contain;
 }
 
 .media-feed-header {
