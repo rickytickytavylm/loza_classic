@@ -1917,6 +1917,37 @@ body.rules-open {
   font-size: 12px;
 }
 
+/* Right rail of a room card: timestamp on top, unread counter under it. */
+.telegram-room-side {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: flex-end;
+  gap: 5px;
+  min-height: 36px;
+}
+
+.chat-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--olive-dark, #5f7048);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.chat-unread-pill {
+  color: #fff;
+  background: rgba(var(--plum-rgb), 0.55);
+  font-weight: 700;
+}
+
 .telegram-thread {
   position: relative;
   display: grid;

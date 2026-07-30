@@ -92,6 +92,13 @@
     chatCompose: null, // { mode: 'reply'|'edit', messageId, preview, authorName, body? }
     chatAttachments: [], // { localId, previewUrl, status: 'uploading'|'ready'|'error', id? }
     pushEndpoint: '',
+    // Per-room read marks: { [roomId]: { id, at } } — the newest message the
+    // user actually saw. Drives unread badges and "resume where you left off".
+    chatReads: (() => {
+      try { return JSON.parse(localStorage.getItem('loza-chat-reads') || '{}'); } catch { return {}; }
+    })(),
+    chatUnreadAnchor: null, // { roomId, beforeId } — where the "new messages" line sits
+    chatScrollPending: false, // next thread render should apply the resume position
     // Persisted so your own messages stay "yours" after a reload, even when the
     // session drops and the server briefly treats you as a fresh guest.
     myChatMessageIds: new Set((() => {
@@ -1775,11 +1782,13 @@
 
   function releaseChatAttachmentPreviews(items) {
     // Let the optimistic bubble keep its blob preview until the real one loads.
+    // Generous window: on a slow uplink the server copy can take a while, and a
+    // revoked blob would blank the sender's own photo mid-flight.
     window.setTimeout(() => {
       (items || []).forEach((item) => {
         if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
       });
-    }, 10000);
+    }, 60000);
   }
 
   /** Local-only bubble shown while the request is in flight. */
@@ -1970,6 +1979,103 @@
     return (message?.attachments || []).length ? 'Фото' : '';
   }
 
+  function persistChatReads() {
+    try { localStorage.setItem('loza-chat-reads', JSON.stringify(state.chatReads)); } catch { /* ignore */ }
+  }
+
+  /** Advance the room's read mark to this message; returns true when it moved. */
+  function markChatMessageRead(roomId, message) {
+    if (!roomId || !message || message.pending) return false;
+    const at = new Date(message.createdAt || 0).getTime();
+    if (!at) return false;
+    const current = state.chatReads[roomId];
+    if (current && current.at >= at) return false;
+    state.chatReads[roomId] = { id: message.id, at };
+    persistChatReads();
+    return true;
+  }
+
+  function roomUnreadCount(room) {
+    if (!room || room.locked) return 0;
+    const mark = state.chatReads[room.id];
+    // Never-opened rooms start clean: the thread opens at the latest message.
+    if (!mark) return 0;
+    return (room.messages || []).filter((message) => (
+      !message.pending
+      && !isMyChatMessage(message)
+      && new Date(message.createdAt || 0).getTime() > mark.at
+    )).length;
+  }
+
+  function unreadBadgeHtml(count) {
+    if (!count) return '';
+    return `<span class="chat-unread-badge">${count > 99 ? '99+' : count}</span>`;
+  }
+
+  /** First unread incoming message — the "Новые сообщения" line goes above it. */
+  function computeUnreadAnchor(room) {
+    if (!room || room.locked) return null;
+    const mark = state.chatReads[room.id];
+    if (!mark) return null;
+    const first = (room.messages || []).find((message) => (
+      !message.pending
+      && !isMyChatMessage(message)
+      && new Date(message.createdAt || 0).getTime() > mark.at
+    ));
+    return first ? { roomId: room.id, beforeId: first.id } : null;
+  }
+
+  let chatReadRaf = 0;
+
+  /** Mark the bottom-most visible message as read; refresh badges when it moves. */
+  function updateChatReadFromScroll(scroller) {
+    if (!scroller || document.hidden) return;
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+    if (!room) return;
+    const scRect = scroller.getBoundingClientRect();
+    if (!scRect.height) return; // thread is hidden (rooms view on mobile)
+    let seenId = null;
+    $$('.chat-bubble[data-message-id]', scroller).forEach((node) => {
+      if (node.dataset.pending) return;
+      if (node.getBoundingClientRect().top < scRect.bottom - 6) seenId = node.dataset.messageId;
+    });
+    if (!seenId) return;
+    const message = (room.messages || []).find((item) => item.id === seenId);
+    if (message && markChatMessageRead(room.id, message)) patchChatRoomPreviews();
+  }
+
+  function queueChatReadCheck() {
+    if (chatReadRaf) return;
+    chatReadRaf = window.requestAnimationFrame(() => {
+      chatReadRaf = 0;
+      updateChatReadFromScroll($('.telegram-messages'));
+    });
+  }
+
+  /** Entering a room: remember where the "new" line goes and ask for a resume scroll. */
+  function prepareChatThreadEntry(roomId) {
+    const room = state.chatRooms.find((item) => item.id === roomId);
+    state.chatUnreadAnchor = computeUnreadAnchor(room);
+    state.chatScrollPending = true;
+  }
+
+  /** Scroll a freshly rendered thread: resume position or bottom for first visits. */
+  function positionChatThread(scroller) {
+    if (!scroller) return;
+    const wantsResume = state.chatScrollPending
+      && state.chatUnreadAnchor?.roomId === state.selectedRoomId;
+    state.chatScrollPending = false;
+    const anchorEl = wantsResume ? scroller.querySelector('[data-key="unread-divider"]') : null;
+    if (anchorEl) {
+      const scRect = scroller.getBoundingClientRect();
+      const elRect = anchorEl.getBoundingClientRect();
+      scroller.scrollTop += elRect.top - scRect.top - 72;
+    } else {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
+    updateChatReadFromScroll(scroller);
+  }
+
   function setChatReply(message) {
     state.chatCompose = {
       mode: 'reply',
@@ -2041,7 +2147,15 @@
 
     const items = [];
     let lastDateKey = '';
+    const anchor = state.chatUnreadAnchor?.roomId === room?.id ? state.chatUnreadAnchor : null;
     messages.forEach((message) => {
+      if (anchor && anchor.beforeId === message.id) {
+        items.push({
+          key: 'unread-divider',
+          sig: 'unread',
+          html: '<div class="telegram-date-pill chat-unread-pill" data-key="unread-divider" data-sig="unread">Новые сообщения</div>',
+        });
+      }
       const stamp = message.createdAt || Date.now();
       const dateKey = new Date(stamp).toDateString();
       if (dateKey !== lastDateKey) {
@@ -2144,10 +2258,13 @@
         : (last ? chatMessagePreview(last) : (room.description || 'Пока нет сообщений'));
       const time = !room.locked && last ? `<time>${formatBubbleTime(last.createdAt)}</time>` : '';
       const lock = room.locked ? '<span class="access-badge locked">Клуб</span>' : '';
+      const side = room.locked
+        ? lock
+        : `<span class="telegram-room-side">${time}${unreadBadgeHtml(roomUnreadCount(room))}</span>`;
       return `<button type="button" class="${room.id === selectedRoom?.id ? 'active' : ''}${room.locked ? ' is-locked' : ''}" data-room="${esc(room.id)}" data-locked="${room.locked ? '1' : '0'}">
         <span class="telegram-room-avatar" style="background-image:url(${bgImage(i)})"></span>
         <span class="telegram-room-copy"><strong>${esc(room.title)}</strong><small>${esc(preview)}</small></span>
-        ${lock}${time}
+        ${side}
       </button>`;
     }).join('');
 
@@ -2510,6 +2627,7 @@
         }
         state.selectedRoomId = b.dataset.room;
         state.chatView = 'thread';
+        prepareChatThreadEntry(b.dataset.room);
         clearChatCompose();
         renderScreen();
         setImmersive();
@@ -2517,6 +2635,7 @@
     });
     $('#chat-back', root)?.addEventListener('click', () => {
       state.chatView = 'rooms';
+      state.chatUnreadAnchor = null;
       clearChatCompose();
       renderScreen();
       setImmersive();
@@ -2525,7 +2644,10 @@
     $('#chat-compose-cancel', root)?.addEventListener('click', () => cancelChatCompose());
 
     const messages = $('.telegram-messages', root);
-    if (messages) messages.scrollTop = messages.scrollHeight;
+    if (messages) {
+      positionChatThread(messages);
+      messages.addEventListener('scroll', queueChatReadCheck, { passive: true });
+    }
     bindChatThreadInteractions(root);
 
     const draft = $('#chat-draft', root);
@@ -3278,10 +3400,20 @@
           };
         }),
       }));
-      // Messages still in flight are not on the server yet — keep them visible.
+      // Messages still in flight are not on the server yet — keep them visible,
+      // but drop any whose server copy already landed (the POST can outrun the
+      // refresh), otherwise the sender sees their message twice.
       pendingByRoom.forEach((pending, roomId) => {
         const room = state.chatRooms.find((item) => item.id === roomId);
-        if (room) room.messages = [...room.messages, ...pending];
+        if (!room) return;
+        const stillInFlight = pending.filter((p) => !room.messages.some((m) => (
+          !m.pending
+          && isMyChatMessage(m)
+          && (m.body || '') === (p.body || '')
+          && (m.attachments || []).length === (p.attachments || []).length
+          && Math.abs(new Date(m.createdAt || 0) - new Date(p.createdAt || 0)) < 120000
+        )));
+        room.messages = [...room.messages, ...stillInFlight];
       });
       if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
       // Only greet messages that arrive after the first load.
@@ -3371,6 +3503,7 @@
         }, { once: true });
       }));
     }
+    if (touched) updateChatReadFromScroll(scroller);
     return true;
   }
 
@@ -3412,6 +3545,16 @@
       const timeEl = button.querySelector('time');
       const time = !room.locked && last ? formatBubbleTime(last.createdAt) : '';
       if (timeEl && timeEl.textContent !== time) timeEl.textContent = time;
+
+      const side = button.querySelector('.telegram-room-side');
+      if (side) {
+        const count = roomUnreadCount(room);
+        const label = count > 99 ? '99+' : String(count);
+        const badge = side.querySelector('.chat-unread-badge');
+        if (!count) badge?.remove();
+        else if (badge) { if (badge.textContent !== label) badge.textContent = label; }
+        else side.insertAdjacentHTML('beforeend', `<span class="chat-unread-badge">${label}</span>`);
+      }
     });
   }
 
@@ -3612,6 +3755,7 @@
         if (room && state.chatRooms.some((item) => item.id === room)) {
           state.selectedRoomId = room;
           state.chatView = 'thread';
+          prepareChatThreadEntry(room);
         }
       } else if (D.TAB_TITLES?.[tab]) {
         state.tab = tab;
@@ -3638,6 +3782,7 @@
     if (room && !room.locked) {
       state.selectedRoomId = room.id;
       state.chatView = 'thread';
+      prepareChatThreadEntry(room.id);
     } else {
       state.chatView = 'rooms';
     }

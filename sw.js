@@ -1,8 +1,8 @@
 // Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '29';
+const ASSET_VERSION = '30';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
-const IMAGE_CACHE = 'loza-classic-images-v10';
+const IMAGE_CACHE = 'loza-classic-images-v11';
 const PRECACHE = [
   './',
   './index.html',
@@ -65,6 +65,22 @@ function cacheFirstImage(request) {
         .catch(() => cached);
       return cached || network;
     }),
+  );
+}
+
+// User uploads (chat photos) go network-first: an error response cached right
+// after upload must never keep one device permanently blind to a photo that
+// everyone else can see. Cache is only the offline fallback here.
+function networkFirstImage(request) {
+  return caches.open(IMAGE_CACHE).then((cache) =>
+    fetch(request)
+      .then((response) => {
+        if (response && (response.ok || response.type === 'opaque')) {
+          cache.put(request, response.clone());
+        }
+        return response;
+      })
+      .catch(() => cache.match(request)),
   );
 }
 
@@ -140,7 +156,11 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.includes('/api/')) return;
 
   if (isImageRequest(request, url)) {
-    event.respondWith(cacheFirstImage(request));
+    event.respondWith(
+      url.pathname.includes('/uploads/')
+        ? networkFirstImage(request)
+        : cacheFirstImage(request),
+    );
     return;
   }
 
