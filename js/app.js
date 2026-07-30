@@ -482,10 +482,8 @@
     document.body.classList.add('rules-open');
     $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
       <section class="paywall-modal glass-panel consent-modal club-rules-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
-        <header class="paywall-modal-head">
-          <span class="paywall-kicker">Чаты клуба</span>
-          <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
-        </header>
+        <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
+        <span class="paywall-kicker">Чаты клуба</span>
         <h2>${esc(D.CLUB_RULES_TITLE || 'Правила клуба')}</h2>
         ${clubRulesHtml()}
         <p class="club-rules-outro">${esc(D.CLUB_RULES_OUTRO || '')}</p>
@@ -1255,13 +1253,9 @@
     document.body.classList.add('paywall-open');
     $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
       <section class="paywall-modal glass-panel" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
-        <header class="paywall-modal-head">
-          <div class="paywall-modal-titles">
-            <span class="paywall-kicker">Закрытый клуб</span>
-            <h2>${esc(title || 'Открыть доступ')}</h2>
-          </div>
-          <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
-        </header>
+        <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
+        <span class="paywall-kicker">Закрытый клуб</span>
+        <h2>${esc(title || 'Открыть доступ')}</h2>
         <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
         <div class="paywall-benefits">
           <span>Медиатека</span><span>Чаты клуба</span><span>AI-наставник</span>
