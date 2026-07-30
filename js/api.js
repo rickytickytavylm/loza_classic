@@ -85,13 +85,14 @@
     addFeedComment: (postId, body) =>
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
     chatRooms: () => request(`/chat/rooms?guestId=${encodeURIComponent(getGuestId())}`),
-    sendChatMessage: (roomId, body, replyToId, attachmentIds) =>
+    sendChatMessage: (roomId, body, replyToId, attachmentIds, senderEndpoint) =>
       request(`/chat/rooms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify({
           body: body || '',
           replyToId: replyToId || undefined,
           attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
+          senderEndpoint: senderEndpoint || undefined,
           guestId: getGuestId(),
         }),
       }),

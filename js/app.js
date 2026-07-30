@@ -91,7 +91,12 @@
     selectedRoomId: '',
     chatCompose: null, // { mode: 'reply'|'edit', messageId, preview, authorName, body? }
     chatAttachments: [], // { localId, previewUrl, status: 'uploading'|'ready'|'error', id? }
-    myChatMessageIds: new Set(),
+    pushEndpoint: '',
+    // Persisted so your own messages stay "yours" after a reload, even when the
+    // session drops and the server briefly treats you as a fresh guest.
+    myChatMessageIds: new Set((() => {
+      try { return JSON.parse(localStorage.getItem('loza-my-chat-ids') || '[]'); } catch { return []; }
+    })()),
     seenIntroIds: new Set(),
     introSeeded: false,
     chatBg: localStorage.getItem('chat-bg') || 'aurora',
@@ -174,6 +179,16 @@
     return reg.pushManager.getSubscription();
   }
 
+  /** Remember this device's push endpoint so it can be skipped on its own posts. */
+  async function syncPushEndpoint() {
+    try {
+      const sub = await getPushSubscription();
+      state.pushEndpoint = sub?.endpoint || '';
+    } catch {
+      /* push may be unavailable; nothing to skip then */
+    }
+  }
+
   async function subscribeWebPush() {
     const keyData = await API.pushVapidKey();
     const publicKey = keyData.publicKey;
@@ -188,6 +203,7 @@
       });
     }
     await API.pushSubscribe(subscription.toJSON());
+    state.pushEndpoint = subscription.endpoint || '';
     return subscription;
   }
 
@@ -1605,6 +1621,32 @@
   function rememberMyChatMessage(messageId) {
     if (!messageId) return;
     state.myChatMessageIds.add(messageId);
+    try {
+      // Keep the tail bounded so localStorage never grows without limit.
+      const ids = [...state.myChatMessageIds].slice(-600);
+      state.myChatMessageIds = new Set(ids);
+      localStorage.setItem('loza-my-chat-ids', JSON.stringify(ids));
+    } catch {
+      /* storage full or unavailable — in-memory set still works */
+    }
+  }
+
+  // If we think we are logged in but the server saved the message under a
+  // different (guest) author, the session token was silently rejected. Tell the
+  // user once and re-check the session so they can sign back in.
+  let guestDegradationWarned = false;
+  function maybeWarnGuestDegradation(message) {
+    const myId = state.user?.id;
+    const authorId = message?.author?.id || message?.authorId;
+    if (!myId || !authorId || authorId === myId) return;
+    if (guestDegradationWarned) return;
+    guestDegradationWarned = true;
+    showAppToast('Сессия истекла — сообщение ушло как гость. Войдите заново, чтобы писать под своим именем.', {
+      title: 'Вход',
+      tone: 'warn',
+      hold: 7000,
+    });
+    loadSession();
   }
 
   function isMyChatMessage(message) {
@@ -1798,7 +1840,10 @@
 
     await Promise.all(pending.map(async (entry) => {
       try {
-        const data = await API.uploadChatImage(entry.file);
+        // The reverse proxy in front of the API rejects multipart bodies around
+        // 1 MB, so phone photos need to be shrunk client-side before upload.
+        const file = await shrinkChatImage(entry.file);
+        const data = await API.uploadChatImage(file);
         const current = state.chatAttachments.find((item) => item.localId === entry.localId);
         if (!current) return;
         current.id = data.attachment?.id;
@@ -1815,6 +1860,68 @@
       }
     }));
     renderChatLive();
+  }
+
+  /**
+   * Downscale phone photos to chat-friendly dimensions. The backend accepts up
+   * to 6 MB, but the proxy in front of it dies at roughly 1 MB, so we target
+   * ~700 KB JPEG output at 2048px on the long side.
+   */
+  async function shrinkChatImage(file) {
+    const maxSide = 2048;
+    const targetBytes = 700 * 1024;
+    if (file.size <= targetBytes && !/image\/(heic|heif)/i.test(file.type)) {
+      return file;
+    }
+
+    try {
+      const source = await loadChatImageSource(file);
+      const { width, height } = source;
+      const scale = Math.min(1, maxSide / Math.max(width, height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(source.bitmap, 0, 0, canvas.width, canvas.height);
+      if (source.bitmap.close) source.bitmap.close();
+
+      let quality = 0.92;
+      let blob = await canvasToBlob(canvas, quality);
+      while (blob.size > targetBytes && quality > 0.5) {
+        quality -= 0.1;
+        blob = await canvasToBlob(canvas, quality);
+      }
+      return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+    } catch {
+      return file;
+    }
+  }
+
+  async function loadChatImageSource(file) {
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const bitmap = await createImageBitmap(file);
+        return { bitmap, width: bitmap.width, height: bitmap.height };
+      } catch {
+        /* fall back to <img> decoding below (e.g. HEIC on some engines) */
+      }
+    }
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = url;
+      });
+      return { bitmap: img, width: img.naturalWidth, height: img.naturalHeight };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function canvasToBlob(canvas, quality) {
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
   }
 
   function renderChatAttachmentTray() {
@@ -2477,11 +2584,13 @@
             body,
             compose?.mode === 'reply' ? compose.messageId : undefined,
             attachmentIds,
+            state.pushEndpoint || undefined,
           );
           removePendingChatMessage(pending);
           if (data.message) {
             rememberMyChatMessage(data.message.id);
             upsertChatMessageLocal(data.message, { trustMine: true });
+            maybeWarnGuestDegradation(data.message);
           }
           releaseChatAttachmentPreviews(sentAttachments);
         }
@@ -3702,8 +3811,17 @@
     }
   }
 
+  function markOnboardingSeen() {
+    try { localStorage.setItem('loza-onboarding-done', '1'); } catch { /* ignore */ }
+  }
+
+  function hasSeenOnboarding() {
+    try { return localStorage.getItem('loza-onboarding-done') === '1'; } catch { return false; }
+  }
+
   function finishOnboarding() {
     state.onboardingDone = true;
+    markOnboardingSeen();
     const root = $('#onboarding');
     if (root) root.hidden = true;
     document.body.classList.remove('onboarding-open');
@@ -3728,7 +3846,9 @@
   }
 
   function shouldShowOnboarding() {
-    return !isAuthorized();
+    // Only first-time visitors see the slides. A returning user who got signed
+    // out (or arrives via a push deep link) goes straight to the sign-in screen.
+    return !isAuthorized() && !hasSeenOnboarding();
   }
 
   async function loadSession() {
@@ -3780,6 +3900,7 @@
     if (isAuthorized() && state.user) {
       state.onboardingDone = true;
       state.authDone = true;
+      markOnboardingSeen();
       hideAuthScreen();
       const onboarding = $('#onboarding');
       if (onboarding) onboarding.hidden = true;
@@ -3790,12 +3911,16 @@
     } else if (shouldShowOnboarding()) {
       renderOnboarding();
       bindOnboarding();
+    } else {
+      // Returning but signed out: no slides, just the sign-in screen.
+      showAuthScreen();
     }
 
     await Promise.all([loadContent(), loadFeed(), loadChatRooms()]);
     startChatStream();
     bindChatLiveRefresh();
     bindPushDeepLinks();
+    syncPushEndpoint();
     syncHeaderIdentity();
     applyDeepLinkFromUrl();
     renderScreen();

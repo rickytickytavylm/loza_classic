@@ -1920,7 +1920,7 @@ body.rules-open {
 .telegram-thread {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   min-height: 0;
   height: 100%;
   max-height: 100%;
@@ -3199,6 +3199,7 @@ html.chat-no-select body * {
   -webkit-backdrop-filter: blur(8px);
 }
 
+/* Keep the bubbles readable on photos: text stays above media */
 .chat-bubble.is-photo-only .bubble-author {
   top: 8px;
   left: 8px;
@@ -5362,6 +5363,37 @@ body.material-immersive-open {
 
   .media-feed-page {
     padding-bottom: 24px;
+  }
+
+  /*
+    Desktop: the feed flows in the page scroll instead of a full-height inner
+    scroller. Without this, a short list left a huge empty block below it, and
+    the mobile-only auto-hide overlay served no purpose on a mouse-driven page.
+  */
+  .page-shell-media {
+    overflow-y: auto;
+  }
+
+  .media-feed-page {
+    flex: 0 1 auto;
+  }
+
+  .media-feed-controls,
+  .media-feed-page.media-controls-hidden .media-feed-controls {
+    position: static;
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom: 0;
+  }
+
+  .media-feed-scroll {
+    flex: 0 1 auto;
+    overflow: visible;
+    padding-top: 0;
   }
 }
 
