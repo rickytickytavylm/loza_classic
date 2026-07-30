@@ -1609,8 +1609,26 @@ body.rules-open {
   gap: 8px;
 }
 
+/* Auth-screen consent uses white text on a dark photo; here the panel is light. */
 .consent-modal .auth-consent {
+  width: 100%;
   margin: 10px 0;
+  color: var(--ink);
+  text-shadow: none;
+}
+
+.consent-modal .auth-consent span {
+  color: var(--ink);
+}
+
+.consent-modal .auth-consent a {
+  color: var(--olive-dark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.consent-modal .auth-consent input {
+  accent-color: var(--olive-dark);
 }
 
 .paywall-kicker {
