@@ -1,8 +1,8 @@
 // Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '32';
+const ASSET_VERSION = '33';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
-const IMAGE_CACHE = 'loza-classic-images-v11';
+const IMAGE_CACHE = 'loza-classic-images-v12';
 const PRECACHE = [
   './',
   './index.html',

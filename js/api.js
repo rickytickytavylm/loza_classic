@@ -85,6 +85,21 @@
     addFeedComment: (postId, body) =>
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
     chatRooms: () => request(`/chat/rooms?guestId=${encodeURIComponent(getGuestId())}`),
+    chatRoomMessages: (roomId, before) => {
+      const params = new URLSearchParams({ guestId: getGuestId() });
+      if (before) params.set('before', before);
+      return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
+    },
+    markChatRead: (roomId, messageId) =>
+      request(`/chat/rooms/${roomId}/read`, {
+        method: 'POST',
+        body: JSON.stringify({ messageId, guestId: getGuestId() }),
+      }),
+    chatTyping: (roomId) =>
+      request(`/chat/rooms/${roomId}/typing`, {
+        method: 'POST',
+        body: JSON.stringify({ guestId: getGuestId() }),
+      }),
     sendChatMessage: (roomId, body, replyToId, attachmentIds, senderEndpoint) =>
       request(`/chat/rooms/${roomId}/messages`, {
         method: 'POST',
@@ -128,6 +143,16 @@
       request(`/chat/messages/${messageId}/reactions`, {
         method: 'POST',
         body: JSON.stringify({ emoji, guestId: getGuestId() }),
+      }),
+    reportChatMessage: (messageId, reason) =>
+      request(`/chat/messages/${messageId}/report`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason || 'spam', guestId: getGuestId() }),
+      }),
+    pinChatMessage: (messageId, pinned = true) =>
+      request(`/chat/messages/${messageId}/pin`, {
+        method: 'POST',
+        body: JSON.stringify({ pinned, guestId: getGuestId() }),
       }),
     chatStreamUrl: () => {
       const params = new URLSearchParams({ guestId: getGuestId() });

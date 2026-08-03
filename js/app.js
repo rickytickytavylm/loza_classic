@@ -99,6 +99,9 @@
     })(),
     chatUnreadAnchor: null, // { roomId, beforeId } — where the "new messages" line sits
     chatScrollPending: false, // next thread render should apply the resume position
+    chatTyping: null, // { roomId, authorName, until }
+    chatHistoryLoading: false,
+    chatStreamStatus: 'connecting', // connecting | live | offline
     // Persisted so your own messages stay "yours" after a reload, even when the
     // session drops and the server briefly treats you as a fresh guest.
     myChatMessageIds: new Set((() => {
@@ -1528,7 +1531,7 @@
   function audioCoverForItem(id) {
     let hash = 0;
     for (let i = 0; i < (id || '').length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-    return localAsset(`assets/webp/audio-cover-0${(hash % 6) + 1}.webp`);
+    return localAsset(`assets/webp/audio-cover-${String((hash % 10) + 1).padStart(2, '0')}.webp`);
   }
 
   function bindAudioPlayer(item) {
@@ -1977,25 +1980,42 @@
     try { localStorage.setItem('loza-chat-reads', JSON.stringify(state.chatReads)); } catch { /* ignore */ }
   }
 
+  let chatReadSyncTimer = 0;
+  let chatReadSyncPending = null;
+
   /** Advance the room's read mark to this message; returns true when it moved. */
   function markChatMessageRead(roomId, message) {
-    if (!roomId || !message || message.pending) return false;
+    if (!roomId || !message || message.pending || message.failed) return false;
     const at = new Date(message.createdAt || 0).getTime();
     if (!at) return false;
     const current = state.chatReads[roomId];
     if (current && current.at >= at) return false;
     state.chatReads[roomId] = { id: message.id, at };
     persistChatReads();
+    // Debounce the server sync so scroll doesn't spam the API.
+    chatReadSyncPending = { roomId, messageId: message.id };
+    if (!chatReadSyncTimer) {
+      chatReadSyncTimer = window.setTimeout(() => {
+        chatReadSyncTimer = 0;
+        const job = chatReadSyncPending;
+        chatReadSyncPending = null;
+        if (!job) return;
+        API.markChatRead(job.roomId, job.messageId).catch(() => {});
+      }, 450);
+    }
+    const room = state.chatRooms.find((item) => item.id === roomId);
+    if (room) room.serverUnreadCount = 0;
     return true;
   }
 
   function roomUnreadCount(room) {
     if (!room || room.locked) return 0;
     const mark = state.chatReads[room.id];
-    // Never-opened rooms start clean: the thread opens at the latest message.
-    if (!mark) return 0;
+    // Prefer the live local mark once the user has opened the room at least once.
+    if (!mark) return room.serverUnreadCount || 0;
     return (room.messages || []).filter((message) => (
       !message.pending
+      && !message.failed
       && !isMyChatMessage(message)
       && new Date(message.createdAt || 0).getTime() > mark.at
     )).length;
@@ -2125,6 +2145,9 @@
         : '',
       message.createdAt || '',
       message.pending ? 'p' : '',
+      message.failed ? 'f' : '',
+      message.seenByOthers ? 's' : '',
+      message.isPinned ? 'pin' : '',
     ].join('\u0001'));
   }
 
@@ -2189,8 +2212,14 @@
       </button>
     `).join('');
     const edited = message.editedAt ? '<span class="bubble-edited">изм.</span>' : '';
-    const check = mine && !message.pending ? ic('checkCheck', 15) : '';
+    // One check = saved on the server; two = at least one other member has read it.
+    const check = mine && !message.pending && !message.failed
+      ? ic(message.seenByOthers ? 'checkCheck' : 'check', 15)
+      : '';
     const sending = message.pending ? '<span class="bubble-sending" aria-label="Отправляется"></span>' : '';
+    const failed = message.failed
+      ? `<button type="button" class="bubble-retry" data-retry="${esc(message.id)}" aria-label="Повторить отправку">!</button>`
+      : '';
     const body = message.body || message.text || '';
     const meetings = detectMeetingLinks(body);
     const meetingCards = meetings.map((meeting, i) => meetingCardHtml(meeting, i)).join('');
@@ -2216,13 +2245,13 @@
     const mediaOnly = (photoOnly || meetingOnly) && !reply && !intro;
     const mediaClass = `${mediaOnly ? ' is-media-only' : ''}${photoOnly && mediaOnly ? ' is-photo-only' : ''}`;
 
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}${mediaClass}${message.pending ? ' is-pending' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}>
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}${mediaClass}${message.pending ? ' is-pending' : ''}${message.failed ? ' is-failed' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}${message.failed ? ' data-failed="1"' : ''}>
       <div class="bubble-body">
         ${author}${reply}${introBadge}
         ${photos}
         ${bodyHtml}
         ${meetingCards}
-        <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${sending}${check}</div>
+        <div class="bubble-meta">${edited}<time>${formatBubbleTime(message.createdAt)}</time>${sending}${failed}${check}</div>
       </div>
       ${reactions ? `<div class="chat-reaction-row">${reactions}</div>` : ''}
     </article>`;
@@ -2239,6 +2268,26 @@
       </div>
       <button type="button" id="chat-compose-cancel" aria-label="Отменить">${ic('x', 18)}</button>
     </div>`;
+  }
+
+  function chatHeaderSubtitle(room) {
+    const typing = state.chatTyping;
+    if (typing && typing.roomId === room?.id && typing.until > Date.now()) {
+      return `${typing.authorName} печатает…`;
+    }
+    if (state.chatStreamStatus === 'offline') return 'Нет связи · обновляем…';
+    if (state.chatStreamStatus === 'connecting') return 'Подключение…';
+    return room?.description || 'Живое общение участников';
+  }
+
+  function chatPinnedBarHtml(room) {
+    const pinned = (room?.pinned || []).filter((item) => item.isPinned !== false);
+    if (!pinned.length) return '';
+    const top = pinned[0];
+    return `<button type="button" class="chat-pinned-bar" data-scroll-to="${esc(top.id)}">
+      <span class="chat-pinned-label">Закреплено</span>
+      <span class="chat-pinned-text">${esc(chatMessagePreview(top) || 'Сообщение')}</span>
+    </button>`;
   }
 
   function renderChat() {
@@ -2278,11 +2327,16 @@
       <section class="telegram-thread" style="${chatBgVars(preset)}">
         <header class="telegram-header">
           <button class="telegram-header-back" type="button" id="chat-back" aria-label="К списку чатов">${ic('chevronLeft', 22)}</button>
-          <div class="telegram-header-pill"><strong>${esc(selectedRoom?.title || 'Чат клуба')}</strong><span>${esc(selectedRoom?.description || 'Живое общение участников')}</span></div>
+          <div class="telegram-header-pill">
+            <strong>${esc(selectedRoom?.title || 'Чат клуба')}</strong>
+            <span>${esc(chatHeaderSubtitle(selectedRoom))}</span>
+          </div>
           <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>
         </header>
+        ${chatPinnedBarHtml(selectedRoom)}
         <div class="telegram-messages">
           <div class="telegram-messages-canvas chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
+            ${selectedRoom?.hasMore ? '<div class="chat-history-hint" data-key="history-hint" data-sig="hint">Прокрутите вверх за историей</div>' : ''}
             ${timeline.join('')}
           </div>
         </div>
@@ -2324,7 +2378,12 @@
       authorName: message.author?.name || message.authorName || 'Участник клуба',
       replyTo: message.replyTo || null,
       reactions,
+      attachments: message.attachments || previous?.attachments || [],
+      seenByOthers: Boolean(message.seenByOthers || previous?.seenByOthers),
+      isPinned: Boolean(message.isPinned),
       mine,
+      pending: false,
+      failed: false,
     };
     if (index >= 0) {
       room.messages[index] = { ...previous, ...normalized };
@@ -2406,12 +2465,16 @@
     if (!chatSelectionLock) lockChatSelection();
     clearNativeSelection();
     const mine = isMyChatMessage(message);
+    const staff = ['OWNER', 'ADMIN', 'CURATOR'].includes(state.user?.role);
     const emojis = (D.CHAT_QUICK_EMOJIS || []).map((emoji) =>
       `<button type="button" class="chat-emoji-pick" data-emoji="${esc(emoji)}">${esc(emoji)}</button>`,
     ).join('');
     const ownActions = mine
       ? `<button type="button" data-chat-action="edit">${ic('pencil', 18)}<span>Изменить</span></button>
          <button type="button" class="is-danger" data-chat-action="delete">${ic('trash', 18)}<span>Удалить</span></button>`
+      : `<button type="button" class="is-danger" data-chat-action="report">${ic('flag', 18)}<span>Пожаловаться</span></button>`;
+    const pinAction = staff
+      ? `<button type="button" data-chat-action="pin">${ic('pin', 18)}<span>${message.isPinned ? 'Открепить' : 'Закрепить'}</span></button>`
       : '';
 
     $('#portal').innerHTML = `<div class="chat-msg-menu-backdrop" id="modal-close">
@@ -2419,6 +2482,8 @@
         <div class="chat-msg-menu-emojis">${emojis}</div>
         <div class="chat-msg-menu-actions">
           <button type="button" data-chat-action="reply">${ic('reply', 18)}<span>Ответить</span></button>
+          <button type="button" data-chat-action="copy">${ic('copy', 18)}<span>Копировать</span></button>
+          ${pinAction}
           ${ownActions}
         </div>
         <button type="button" class="chat-msg-menu-cancel" id="modal-x">Отмена</button>
@@ -2464,6 +2529,50 @@
           setChatEdit(message);
           return;
         }
+        if (action === 'copy') {
+          const text = String(message.body || '').trim();
+          if (!text) {
+            showAppToast('В сообщении нет текста', { title: 'Чат' });
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(text);
+            showAppToast('Скопировано', { title: 'Чат' });
+          } catch {
+            window.alert('Не удалось скопировать');
+          }
+          return;
+        }
+        if (action === 'report') {
+          if (!window.confirm('Отправить жалобу на это сообщение модераторам?')) return;
+          try {
+            await API.reportChatMessage(message.id, 'user_report');
+            showAppToast('Жалоба отправлена', { title: 'Чат' });
+          } catch {
+            window.alert('Не удалось отправить жалобу.');
+          }
+          return;
+        }
+        if (action === 'pin') {
+          try {
+            const data = await API.pinChatMessage(message.id, !message.isPinned);
+            if (data.message) {
+              upsertChatMessageLocal(data.message, { trustMine: true });
+              const room = state.chatRooms.find((item) => item.id === (data.message.roomId || state.selectedRoomId));
+              if (room) {
+                if (data.message.isPinned) {
+                  room.pinned = [normalizeChatMessage(data.message), ...(room.pinned || []).filter((item) => item.id !== data.message.id)].slice(0, 3);
+                } else {
+                  room.pinned = (room.pinned || []).filter((item) => item.id !== data.message.id);
+                }
+              }
+              renderChatLive();
+            }
+          } catch {
+            window.alert('Не удалось изменить закрепление.');
+          }
+          return;
+        }
         if (action === 'delete') {
           if (!window.confirm('Удалить сообщение?')) return;
           try {
@@ -2471,6 +2580,7 @@
             const found = findChatMessage(message.id);
             if (found) {
               found.room.messages = found.room.messages.filter((item) => item.id !== message.id);
+              found.room.pinned = (found.room.pinned || []).filter((item) => item.id !== message.id);
             }
             if (state.chatCompose?.messageId === message.id) clearChatCompose();
             renderChatLive();
@@ -2511,8 +2621,11 @@
         const found = findChatMessage(messageId);
         if (found) openChatMessageMenu(found.message);
       });
-      bubble.addEventListener('selectstart', (event) => event.preventDefault());
-      bubble.addEventListener('dragstart', (event) => event.preventDefault());
+      // Mobile long-press must not select text; desktop users can still select to copy.
+      if (!window.matchMedia('(pointer: fine)').matches) {
+        bubble.addEventListener('selectstart', (event) => event.preventDefault());
+        bubble.addEventListener('dragstart', (event) => event.preventDefault());
+      }
 
       bubble.addEventListener('touchstart', (event) => {
         if (event.touches.length !== 1) return;
@@ -2605,6 +2718,20 @@
         openChatPhoto(b.dataset.photo);
       };
     });
+    $$('[data-retry]', scope).forEach((b) => {
+      b.onclick = (event) => {
+        event.stopPropagation();
+        retryFailedChatMessage(b.dataset.retry);
+      };
+    });
+  }
+
+  let chatTypingPulseAt = 0;
+  function pulseChatTyping() {
+    if (!state.selectedRoomId) return;
+    if (Date.now() - chatTypingPulseAt < 1600) return;
+    chatTypingPulseAt = Date.now();
+    API.chatTyping(state.selectedRoomId).catch(() => {});
   }
 
   function bindChat(root) {
@@ -2640,15 +2767,30 @@
     const messages = $('.telegram-messages', root);
     if (messages) {
       positionChatThread(messages);
-      messages.addEventListener('scroll', queueChatReadCheck, { passive: true });
+      messages.addEventListener('scroll', () => {
+        queueChatReadCheck();
+        if (messages.scrollTop < 80) loadOlderChatMessages();
+      }, { passive: true });
     }
     bindChatThreadInteractions(root);
+    $$('[data-scroll-to]', root).forEach((btn) => {
+      if (btn.closest('.chat-pinned-bar')) {
+        btn.onclick = () => {
+          const target = root.querySelector(`[data-message-id="${btn.dataset.scrollTo}"]`);
+          if (!target) return;
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.add('is-flash');
+          window.setTimeout(() => target.classList.remove('is-flash'), 1200);
+        };
+      }
+    });
 
     const draft = $('#chat-draft', root);
     if (state.chatCompose?.mode === 'edit' && state.chatCompose.body) {
       if (draft && !draft.value) draft.value = state.chatCompose.body;
     }
     bindChatDraftAutosize(draft);
+    draft?.addEventListener('input', pulseChatTyping);
 
     const fileInput = $('#chat-file', root);
     $('#chat-attach', root)?.addEventListener('click', () => fileInput?.click());
@@ -2712,17 +2854,60 @@
         }
         renderChatLive();
       } catch {
-        removePendingChatMessage(pending);
-        if (!editing) state.chatAttachments = sentAttachments;
-        if (compose) state.chatCompose = compose;
-        input.value = body;
-        resizeChatDraft(input);
+        if (editing) {
+          if (compose) state.chatCompose = compose;
+          input.value = body;
+          resizeChatDraft(input);
+          renderChatLive();
+          window.alert('Не удалось изменить сообщение.');
+          return;
+        }
+        // Keep the bubble as a failed outbox item — tap ! to retry.
+        if (pending) {
+          pending.pending = false;
+          pending.failed = true;
+          pending._retry = {
+            body,
+            attachmentIds,
+            replyToId: compose?.mode === 'reply' ? compose.messageId : undefined,
+            attachments: sentAttachments,
+          };
+        }
         renderChatLive();
-        window.alert(editing
-          ? 'Не удалось изменить сообщение.'
-          : 'Не удалось отправить сообщение. Попробуйте ещё раз.');
+        showAppToast('Не отправилось — нажмите ! чтобы повторить', { title: 'Чат', tone: 'warn' });
       }
     });
+  }
+
+  async function retryFailedChatMessage(messageId) {
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+    const message = room?.messages?.find((item) => item.id === messageId);
+    if (!message?._retry) return;
+    const payload = message._retry;
+    message.pending = true;
+    message.failed = false;
+    renderChatLive();
+    try {
+      const data = await API.sendChatMessage(
+        state.selectedRoomId,
+        payload.body,
+        payload.replyToId,
+        payload.attachmentIds,
+        state.pushEndpoint || undefined,
+      );
+      removePendingChatMessage(message);
+      if (data.message) {
+        rememberMyChatMessage(data.message.id);
+        upsertChatMessageLocal(data.message, { trustMine: true });
+      }
+      releaseChatAttachmentPreviews(payload.attachments || []);
+      renderChatLive();
+    } catch {
+      message.pending = false;
+      message.failed = true;
+      renderChatLive();
+      showAppToast('Снова не удалось отправить', { title: 'Чат', tone: 'warn' });
+    }
   }
 
   function resizeChatDraft(el) {
@@ -3366,42 +3551,78 @@
     }
   }
 
+  function normalizeChatMessage(message) {
+    const authorId = message.author?.id || message.authorId;
+    const mine = Boolean(
+      message.mine
+      || state.myChatMessageIds.has(message.id)
+      || (currentChatUserId() && authorId === currentChatUserId()),
+    );
+    if (mine) rememberMyChatMessage(message.id);
+    return {
+      ...message,
+      authorId,
+      authorName: message.author?.name || message.authorName || 'Участник клуба',
+      replyTo: message.replyTo || null,
+      reactions: message.reactions || [],
+      attachments: message.attachments || [],
+      seenByOthers: Boolean(message.seenByOthers),
+      isPinned: Boolean(message.isPinned),
+      mine,
+    };
+  }
+
   async function loadChatRooms() {
     const pendingByRoom = new Map();
+    const olderByRoom = new Map();
     state.chatRooms.forEach((room) => {
-      const pending = (room.messages || []).filter((message) => message.pending);
+      const pending = (room.messages || []).filter((message) => message.pending || message.failed);
       if (pending.length) pendingByRoom.set(room.id, pending);
+      olderByRoom.set(room.id, room.messages || []);
     });
     try {
       const data = await API.chatRooms();
-      state.chatRooms = (data.rooms || []).map((room) => ({
-        ...room,
-        messages: (room.messages || []).map((message) => {
-          const authorId = message.author?.id || message.authorId;
-          const mine = Boolean(
-            message.mine
-            || state.myChatMessageIds.has(message.id)
-            || (currentChatUserId() && authorId === currentChatUserId()),
-          );
-          if (mine) rememberMyChatMessage(message.id);
-          return {
-            ...message,
-            authorId,
-            authorName: message.author?.name || message.authorName || 'Участник клуба',
-            replyTo: message.replyTo || null,
-            reactions: message.reactions || [],
-            mine,
-          };
-        }),
-      }));
-      // Messages still in flight are not on the server yet — keep them visible,
-      // but drop any whose server copy already landed (the POST can outrun the
-      // refresh), otherwise the sender sees their message twice.
+      state.chatRooms = (data.rooms || []).map((room) => {
+        const incoming = (room.messages || []).map(normalizeChatMessage);
+        const prev = olderByRoom.get(room.id) || [];
+        const byId = new Map();
+        // Keep already-loaded older history across refreshes that only return the tail.
+        prev.forEach((message) => {
+          if (!message.pending && !message.failed) byId.set(message.id, message);
+        });
+        incoming.forEach((message) => byId.set(message.id, { ...byId.get(message.id), ...message }));
+        const messages = [...byId.values()].sort(
+          (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+        );
+
+        if (room.lastReadMessageId) {
+          const readMsg = messages.find((item) => item.id === room.lastReadMessageId)
+            || incoming.find((item) => item.id === room.lastReadMessageId);
+          if (readMsg) {
+            const at = new Date(readMsg.createdAt || 0).getTime();
+            const current = state.chatReads[room.id];
+            if (!current || current.at < at) {
+              state.chatReads[room.id] = { id: readMsg.id, at };
+            }
+          }
+        }
+
+        return {
+          ...room,
+          serverUnreadCount: room.unreadCount || 0,
+          hasMore: Boolean(room.hasMore),
+          pinned: (room.pinned || []).map(normalizeChatMessage),
+          messages,
+        };
+      });
+      persistChatReads();
+
       pendingByRoom.forEach((pending, roomId) => {
         const room = state.chatRooms.find((item) => item.id === roomId);
         if (!room) return;
         const stillInFlight = pending.filter((p) => !room.messages.some((m) => (
           !m.pending
+          && !m.failed
           && isMyChatMessage(m)
           && (m.body || '') === (p.body || '')
           && (m.attachments || []).length === (p.attachments || []).length
@@ -3410,7 +3631,6 @@
         room.messages = [...room.messages, ...stillInFlight];
       });
       if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
-      // Only greet messages that arrive after the first load.
       if (!state.introSeeded) {
         state.chatRooms.forEach((room) => (room.messages || []).forEach((message) => {
           if (isIntroMessage(message.body)) state.seenIntroIds.add(message.id);
@@ -3419,6 +3639,36 @@
       }
     } catch {
       // A failed refresh must not blank the thread; keep what we already have.
+    }
+  }
+
+  async function loadOlderChatMessages() {
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+    if (!room || room.locked || !room.hasMore || state.chatHistoryLoading) return;
+    const oldest = (room.messages || []).find((item) => !item.pending && !item.failed);
+    if (!oldest) return;
+
+    state.chatHistoryLoading = true;
+    const scroller = $('.telegram-messages');
+    const prevHeight = scroller?.scrollHeight || 0;
+    try {
+      const data = await API.chatRoomMessages(room.id, oldest.id);
+      const older = (data.messages || []).map(normalizeChatMessage);
+      const existing = new Set((room.messages || []).map((item) => item.id));
+      const fresh = older.filter((item) => !existing.has(item.id));
+      if (fresh.length) {
+        room.messages = [...fresh, ...room.messages];
+        renderChatLive();
+        if (scroller) scroller.scrollTop = scroller.scrollHeight - prevHeight;
+      }
+      room.hasMore = Boolean(data.hasMore);
+      if (!room.hasMore) {
+        $('.chat-history-hint')?.remove();
+      }
+    } catch {
+      showAppToast('Не удалось подгрузить историю', { title: 'Чат', tone: 'warn' });
+    } finally {
+      state.chatHistoryLoading = false;
     }
   }
 
@@ -3593,19 +3843,81 @@
   }
 
   function applyChatEvent(payload) {
+    if (payload.type === 'typing') {
+      if (!payload.userId || payload.userId === currentChatUserId()) return false;
+      state.chatTyping = {
+        roomId: payload.roomId,
+        authorName: firstName(payload.authorName || 'Участник'),
+        until: Date.now() + 3200,
+      };
+      patchChatHeaderSubtitle();
+      window.setTimeout(() => {
+        if (state.chatTyping && state.chatTyping.until <= Date.now()) {
+          state.chatTyping = null;
+          patchChatHeaderSubtitle();
+        }
+      }, 3300);
+      return false;
+    }
+
+    if (payload.type === 'read') {
+      const room = state.chatRooms.find((item) => item.id === payload.roomId);
+      if (!room || !payload.messageId) return false;
+      const stamp = new Date(payload.at || 0).getTime();
+      let changed = false;
+      (room.messages || []).forEach((message) => {
+        if (!isMyChatMessage(message) || message.seenByOthers) return;
+        if (payload.userId && payload.userId === message.authorId) return;
+        if (stamp && new Date(message.createdAt || 0).getTime() <= stamp) {
+          message.seenByOthers = true;
+          changed = true;
+        } else if (message.id === payload.messageId) {
+          message.seenByOthers = true;
+          changed = true;
+        }
+      });
+      return changed;
+    }
+
     const room = state.chatRooms.find((item) => item.id === payload.roomId);
     if (!room) return false;
     if (payload.type === 'deleted') {
       const before = room.messages.length;
       room.messages = room.messages.filter((message) => message.id !== payload.messageId);
       if (state.chatCompose?.messageId === payload.messageId) clearChatCompose();
+      room.pinned = (room.pinned || []).filter((message) => message.id !== payload.messageId);
       return room.messages.length !== before;
     }
     if (payload.message) {
       upsertChatMessageLocal(payload.message, { trustMine: false });
+      if (payload.message.isPinned) {
+        room.pinned = [
+          normalizeChatMessage(payload.message),
+          ...(room.pinned || []).filter((item) => item.id !== payload.message.id),
+        ].slice(0, 3);
+      } else {
+        room.pinned = (room.pinned || []).filter((item) => item.id !== payload.message.id);
+      }
+      // Incoming message for another room bumps the unread badge immediately.
+      if (
+        !isMyChatMessage(payload.message)
+        && !(state.tab === 'chat' && state.chatView === 'thread' && state.selectedRoomId === room.id)
+      ) {
+        room.serverUnreadCount = (room.serverUnreadCount || 0) + 1;
+      }
       return true;
     }
     return false;
+  }
+
+  function firstName(name) {
+    return String(name || 'Участник').trim().split(/\s+/)[0] || 'Участник';
+  }
+
+  function patchChatHeaderSubtitle() {
+    const el = $('.telegram-header-pill span');
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+    if (el) el.textContent = chatHeaderSubtitle(room);
   }
 
   async function pollChatRooms({ force = false } = {}) {
@@ -3671,10 +3983,15 @@
 
     const noteAlive = () => { state.chatStreamSeenAt = Date.now(); };
 
+    state.chatStreamStatus = 'connecting';
+    patchChatHeaderSubtitle();
+
     stream.addEventListener('ready', () => {
       state.chatStreamReady = true;
       state.chatStreamRetry = 0;
+      state.chatStreamStatus = 'live';
       noteAlive();
+      patchChatHeaderSubtitle();
       // A dropped stream may have missed events while offline.
       pollChatRooms({ force: true });
     });
@@ -3684,6 +4001,7 @@
 
     stream.addEventListener('chat.message', (event) => {
       noteAlive();
+      state.chatStreamStatus = 'live';
       try {
         const payload = JSON.parse(event.data);
         if (applyChatEvent(payload)) renderChatLive();
@@ -3696,6 +4014,8 @@
       stream.close();
       if (state.chatStream === stream) state.chatStream = null;
       state.chatStreamReady = false;
+      state.chatStreamStatus = 'offline';
+      patchChatHeaderSubtitle();
       state.chatStreamRetry = Math.min((state.chatStreamRetry || 0) + 1, 6);
       window.setTimeout(startChatStream, 1000 * state.chatStreamRetry);
     };
