@@ -541,10 +541,10 @@
     const desk = $('#desktop-nav');
     const mobile = $('#mobile-nav');
     desk.innerHTML = D.NAV.map((n) =>
-      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${esc(n.label)}</button>`,
+      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${esc(n.label)}${n.id === 'chat' ? navUnreadBadgeHtml() : ''}</button>`,
     ).join('');
     mobile.innerHTML = D.NAV.map((n) =>
-      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${ic(n.id, 20)}<span>${esc(n.label)}</span></button>`,
+      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${ic(n.id, 20)}<span>${esc(n.label)}</span>${n.id === 'chat' ? navUnreadBadgeHtml() : ''}</button>`,
     ).join('');
     $$('[data-tab]').forEach((btn) => {
       btn.onclick = () => setTab(btn.dataset.tab);
@@ -2019,6 +2019,46 @@
       && !isMyChatMessage(message)
       && new Date(message.createdAt || 0).getTime() > mark.at
     )).length;
+  }
+
+  function totalChatUnreadCount() {
+    return state.chatRooms.reduce((sum, room) => sum + roomUnreadCount(room), 0);
+  }
+
+  function navUnreadBadgeHtml() {
+    const count = totalChatUnreadCount();
+    if (!count) return '';
+    return `<span class="nav-unread-badge" aria-label="${count} непрочитанных">${count > 99 ? '99+' : count}</span>`;
+  }
+
+  function syncUnreadBadges() {
+    const count = totalChatUnreadCount();
+    const label = count > 99 ? '99+' : String(count);
+    $$('[data-tab="chat"]').forEach((button) => {
+      const badge = button.querySelector('.nav-unread-badge');
+      if (!count) badge?.remove();
+      else if (badge) {
+        if (badge.textContent !== label) badge.textContent = label;
+        badge.setAttribute('aria-label', `${count} непрочитанных`);
+      } else {
+        button.insertAdjacentHTML('beforeend', navUnreadBadgeHtml());
+      }
+    });
+
+    if ('setAppBadge' in navigator) {
+      const update = count
+        ? navigator.setAppBadge(count)
+        : navigator.clearAppBadge();
+      Promise.resolve(update).catch(() => {});
+    }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then((registration) => registration.active?.postMessage({
+          type: 'loza:set-badge',
+          count,
+        }))
+        .catch(() => {});
+    }
   }
 
   function unreadBadgeHtml(count) {
@@ -3616,6 +3656,7 @@
         };
       });
       persistChatReads();
+      syncUnreadBadges();
 
       pendingByRoom.forEach((pending, roomId) => {
         const room = state.chatRooms.find((item) => item.id === roomId);
@@ -3775,6 +3816,7 @@
 
   /** Refresh room previews without rebuilding the list buttons. */
   function patchChatRoomPreviews() {
+    syncUnreadBadges();
     const list = $('.telegram-room-list');
     if (!list) return;
     $$('[data-room]', list).forEach((button) => {

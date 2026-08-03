@@ -195,6 +195,7 @@ button {
 }
 
 .desktop-nav button {
+  position: relative;
   padding: 10px 14px;
   border-radius: 999px;
   color: #5e536b;
@@ -202,6 +203,24 @@ button {
   font-size: 14px;
   font-weight: 700;
   transition: 0.2s ease;
+}
+
+.nav-unread-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  color: #fff;
+  background: #dc3f55;
+  box-shadow: 0 3px 10px rgba(173, 36, 62, 0.28);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .desktop-nav button.active,
@@ -4422,6 +4441,7 @@ html.chat-no-select body * {
 }
 
 .mobile-nav button {
+  position: relative;
   display: grid;
   place-items: center;
   gap: 2px;
@@ -4431,6 +4451,17 @@ html.chat-no-select body * {
   background: transparent;
   font-size: 9px;
   font-weight: 750;
+}
+
+.mobile-nav .nav-unread-badge {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + 5px);
+  min-width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 9px;
 }
 
 .mobile-nav button.active {

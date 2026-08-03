@@ -1,8 +1,10 @@
 // Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '33';
+const ASSET_VERSION = '34';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
 const IMAGE_CACHE = 'loza-classic-images-v12';
+const BADGE_CACHE = 'loza-classic-badge-v1';
+const BADGE_STATE_URL = new URL('./__loza_badge_count__', self.registration.scope).toString();
 const PRECACHE = [
   './',
   './index.html',
@@ -40,7 +42,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys
-        .filter((k) => k !== CACHE && k !== IMAGE_CACHE)
+        .filter((k) => k !== CACHE && k !== IMAGE_CACHE && k !== BADGE_CACHE)
         .map((k) => caches.delete(k))),
     ).then(() => self.clients.claim()),
   );
@@ -89,6 +91,24 @@ function appWindows(windows) {
   return windows.filter((client) => !/\/(privacy|terms)\.html/i.test(client.url));
 }
 
+async function setStoredBadgeCount(value) {
+  const count = Math.max(0, Number(value) || 0);
+  const cache = await caches.open(BADGE_CACHE);
+  await cache.put(BADGE_STATE_URL, new Response(String(count)));
+  if ('setAppBadge' in self.navigator) {
+    if (count) await self.navigator.setAppBadge(count);
+    else await self.navigator.clearAppBadge();
+  }
+  return count;
+}
+
+async function incrementStoredBadge() {
+  const cache = await caches.open(BADGE_CACHE);
+  const response = await cache.match(BADGE_STATE_URL);
+  const current = Number(await response?.text()) || 0;
+  return setStoredBadgeCount(current + 1);
+}
+
 // Show push notifications in the background. Click focuses the app.
 async function showChatPush(data) {
   // App in the foreground? Hand it over for an in-app banner instead of a
@@ -101,6 +121,8 @@ async function showChatPush(data) {
       return;
     }
   }
+
+  if (data.roomId) await incrementStoredBadge();
 
   const title = data.title || 'Лоза';
   const options = {
@@ -129,6 +151,11 @@ self.addEventListener('push', (event) => {
     data = {};
   }
   event.waitUntil(showChatPush(data));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'loza:set-badge') return;
+  event.waitUntil(setStoredBadgeCount(event.data.count));
 });
 
 self.addEventListener('notificationclick', (event) => {
