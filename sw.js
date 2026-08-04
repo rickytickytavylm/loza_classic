@@ -1,6 +1,6 @@
-// Bump ASSET_VERSION together with the ?v= query in index.html so installed
+﻿// Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '35';
+const ASSET_VERSION = '36';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
 const IMAGE_CACHE = 'loza-classic-images-v12';
 const BADGE_CACHE = 'loza-classic-badge-v1';
@@ -124,9 +124,9 @@ async function showChatPush(data) {
 
   if (data.roomId) await incrementStoredBadge();
 
-  const title = data.title || 'Лоза';
+  const title = data.title || 'Р›РѕР·Р°';
   const options = {
-    body: data.body || 'Новое сообщение в клубе',
+    body: data.body || 'РќРѕРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ РІ РєР»СѓР±Рµ',
     icon: data.icon || './assets/icon-192.png',
     badge: data.badge || './assets/favicon-32.png',
     // A photo message shows the photo itself where the platform supports it.
@@ -163,7 +163,7 @@ self.addEventListener('notificationclick', (event) => {
   const { url: targetUrl = './', roomId = null } = event.notification.data || {};
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      // Reusing an open window keeps the chat warm — no cold reload on tap.
+      // Reusing an open window keeps the chat warm вЂ” no cold reload on tap.
       const candidates = appWindows(clients);
       const open = candidates.find((c) => c.focused) || candidates[0];
       if (open) {

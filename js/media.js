@@ -151,6 +151,9 @@
     if (description && !isPlaceholderMediaCopy(description)) {
       return cleanDisplayText(description);
     }
+    if (item.sectionId === 'movies' || item.kind === 'movie') {
+      return 'Рекомендация киноклуба: фильм месяца и вопрос для рефлексии. Запись психологического разбора — в конце месяца.';
+    }
     if (item.sectionId === 'webinars') {
       return 'Запись разговора с психологом клуба: ясные ориентиры, бережные формулировки и идеи, которые можно забрать в реальную семейную жизнь.';
     }

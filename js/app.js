@@ -130,10 +130,64 @@
   }
 
   function tierLabel(tier) {
-    if (tier === 'library') return 'Медиатека';
+    if (tier === 'library') return 'Медиатека. Теория';
     if (tier === 'club') return 'Клуб';
     if (tier === 'club_plus') return 'Клуб Плюс';
     return 'Базовый';
+  }
+
+  function isStaffUser() {
+    return Boolean(state.access?.isStaff)
+      || ['OWNER', 'ADMIN', 'CURATOR'].includes(state.user?.role);
+  }
+
+  function hasLibraryAccess() {
+    return isStaffUser() || ['library', 'club', 'club_plus'].includes(currentTier());
+  }
+
+  function canPostInRoom(room) {
+    if (!room || room.locked) return false;
+    if (room.canPost !== false) return true;
+    return isStaffUser();
+  }
+
+  function libraryPlanInfo(plan) {
+    return plan?.info || D.LIBRARY_PLAN_INFO || '';
+  }
+
+  function planCardHtml(plan, { featured = false } = {}) {
+    const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
+    const days = plan.planDays === 90 ? '90 дней' : '30 дней';
+    const renew = plan.autoRenew ? ' · автопродление' : '';
+    const info = plan.code === 'library_30' ? libraryPlanInfo(plan) : '';
+    const title = info
+      ? `<span class="plan-card-title-row">
+          <strong>${esc(plan.planName)}</strong>
+          <button type="button" class="plan-info-btn" data-plan-info="${esc(plan.code)}" aria-expanded="false" aria-label="Что входит">${ic('helpCircle', 16)}</button>
+        </span>
+        <p class="plan-info-tip" data-plan-tip="${esc(plan.code)}" hidden>${esc(info)}</p>`
+      : `<strong>${esc(plan.planName)}</strong>`;
+    return `<div class="plan-card${featured ? ' is-featured' : ''}" data-buy-plan="${esc(plan.code)}" role="button" tabindex="0">
+      ${title}
+      <span class="plan-card-price">${price}<small> / ${days}${renew}</small></span>
+      <span class="plan-card-desc">${esc(plan.description || '')}</span>
+    </div>`;
+  }
+
+  function bindPlanInfoToggles(root = document) {
+    $$('[data-plan-info]', root).forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const code = btn.dataset.planInfo;
+        const tip = root.querySelector(`[data-plan-tip="${code}"]`)
+          || document.querySelector(`[data-plan-tip="${code}"]`);
+        if (!tip) return;
+        const open = tip.hasAttribute('hidden');
+        tip.toggleAttribute('hidden', !open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      };
+    });
   }
 
   // Web Push helpers (server-sent notifications via VAPID)
@@ -328,6 +382,7 @@
   const SECTION_TITLE_OVERRIDES = {
     home_reviews: 'Задания',
     club_reviews: 'Разборы',
+    movies: 'Киноклуб',
   };
 
   function sectionTitle(id) {
@@ -346,6 +401,10 @@
   }
 
   function setTab(tab) {
+    if (tab === 'movies') {
+      state.mediaSection = 'movies';
+      tab = 'media';
+    }
     if (tab === 'chat' && needsChatRules()) {
       openChatRules();
       return;
@@ -437,7 +496,7 @@
       <section class="paywall-modal glass-panel consent-modal club-intro-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <span class="paywall-kicker">Знакомство</span>
         <h2>Расскажите немного о себе</h2>
-        <p>В чате для общения напишите пару слов о себе — так участникам легче поддержать друг друга.</p>
+        <p>В чате для общения напишите пару слов о себе.</p>
         <ul class="club-intro-list">${questions}</ul>
         <p class="club-intro-tag">Обязательно поставьте тег <strong>#знакомство</strong></p>
         <p class="club-intro-welcome">Добро пожаловать в чат клуба!</p>
@@ -1011,19 +1070,22 @@
   function mediaCardsHtml(items) {
     return items.map((item, i) => {
       const liked = state.mediaLikes.includes(item.id);
-      const kind = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Текст';
+      const kind = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : item.kind === 'movie' ? 'Киноклуб' : 'Текст';
       const lockBadge = item.locked
         ? '<span class="access-badge locked">Закрытый клуб</span>'
         : '<span class="access-badge free">Открыто</span>';
       const ctaLabel = item.locked
         ? 'Открыть доступ'
-        : (item.kind === 'video' ? 'Смотреть' : item.kind === 'audio' ? 'Слушать' : 'Читать');
+        : (item.kind === 'video' ? 'Смотреть' : item.kind === 'audio' ? 'Слушать' : item.kind === 'movie' ? 'Открыть' : 'Читать');
       const lockOverlay = item.locked
         ? `<span class="media-lock-overlay" aria-hidden="true">${ic('lock', 22)}<em>Материал закрытого клуба</em></span>`
         : '';
+      const cover = item.poster
+        ? `<img alt="" src="${esc(asset(item.poster))}" loading="lazy" />`
+        : `<img alt="" src="${bgImage(i)}" loading="lazy" />`;
       return `<article class="media-feed-card${item.locked ? ' is-locked' : ''}" data-item="${esc(item.id)}">
         <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span>${lockBadge}</div>
-        <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}"><img alt="" src="${bgImage(i)}" loading="lazy" />${lockOverlay}</button>
+        <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}">${cover}${lockOverlay}</button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
       <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item))}</p>
         <div class="media-feed-card-actions">
@@ -1212,11 +1274,15 @@
   function openItem(id) {
     const item = state.libraryItems.find((x) => x.id === id);
     if (!item) return;
+    if (item.sectionId === 'movies' || item.kind === 'movie') {
+      openMovie(item.movieId || item.id);
+      return;
+    }
     if (item.locked) {
       openPaywall({
         reason: 'library',
         title: 'Материал в закрытой медиатеке',
-        text: 'Откройте тариф «Медиатека» или «Клуб», чтобы смотреть и слушать материалы без ограничений.',
+        text: 'Откройте тариф «Медиатека. Теория» или «Клуб», чтобы смотреть и слушать материалы без ограничений.',
         preferPlan: 'library_30',
       });
       return;
@@ -1243,14 +1309,7 @@
     });
     const cards = plans.map((plan) => {
       const featured = plan.code === preferPlan || (preferPlan === 'library_30' && plan.code === 'library_30');
-      const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
-      const days = plan.planDays === 90 ? '90 дней' : '30 дней';
-      const renew = plan.autoRenew ? ' · автопродление' : '';
-      return `<button type="button" class="plan-card${featured ? ' is-featured' : ''}" data-buy-plan="${esc(plan.code)}">
-        <strong>${esc(plan.planName)}</strong>
-        <span class="plan-card-price">${price}<small> / ${days}${renew}</small></span>
-        <span class="plan-card-desc">${esc(plan.description || '')}</span>
-      </button>`;
+      return planCardHtml(plan, { featured });
     }).join('');
 
     document.body.classList.add('paywall-open');
@@ -1261,7 +1320,7 @@
         <h2>${esc(title || 'Открыть доступ')}</h2>
         <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
         <div class="paywall-benefits">
-          <span>Медиатека</span><span>Чаты клуба</span><span>AI-наставник</span>
+          <span>Медиатека. Теория</span><span>Чаты клуба</span><span>AI-наставник</span>
         </div>
         <div class="plan-grid">${cards || '<p class="checkout-note">Тарифы пока недоступны. Обновите страницу.</p>'}</div>
         <p class="checkout-note" id="paywall-status"></p>
@@ -1269,9 +1328,13 @@
       </section>
     </div>`;
     bindModalClose();
+    bindPlanInfoToggles($('#portal'));
     $('#paywall-later')?.addEventListener('click', closePortal);
     $$('[data-buy-plan]', $('#portal')).forEach((btn) => {
-      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#paywall-status'));
+      btn.onclick = (event) => {
+        if (event.target.closest('[data-plan-info]')) return;
+        startCheckout(btn.dataset.buyPlan, $('#paywall-status'));
+      };
     });
   }
 
@@ -2358,6 +2421,16 @@
       : '<p class="chat-muted">Комнаты пока не созданы в базе.</p>';
 
     const placeholder = state.chatCompose?.mode === 'edit' ? 'Изменить сообщение' : 'Сообщение';
+    const allowPost = canPostInRoom(selectedRoom);
+    const composerHtml = allowPost
+      ? `<div id="chat-compose-slot" data-sig="${esc(chatComposeSlotSignature())}">${renderChatComposeBar()}${renderChatAttachmentTray()}</div>
+        <form class="telegram-composer" id="chat-form">
+          <input type="file" id="chat-file" accept="image/*" multiple hidden />
+          <button class="telegram-composer-attach" type="button" id="chat-attach" aria-label="Прикрепить фото">${ic('paperclip', 21)}</button>
+          <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter"></textarea>
+          <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
+        </form>`
+      : `<div class="chat-readonly-note" role="status">Пишут только руководители и администраторы</div>`;
 
     return `<div class="telegram-chat-layout ${state.chatView === 'rooms' ? 'rooms-open' : 'thread-open'}">
       <aside class="telegram-room-list">
@@ -2380,13 +2453,7 @@
             ${timeline.join('')}
           </div>
         </div>
-        <div id="chat-compose-slot" data-sig="${esc(chatComposeSlotSignature())}">${renderChatComposeBar()}${renderChatAttachmentTray()}</div>
-        <form class="telegram-composer" id="chat-form">
-          <input type="file" id="chat-file" accept="image/*" multiple hidden />
-          <button class="telegram-composer-attach" type="button" id="chat-attach" aria-label="Прикрепить фото">${ic('paperclip', 21)}</button>
-          <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter"></textarea>
-          <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
-        </form>
+        ${composerHtml}
       </section>
     </div>`;
   }
@@ -3063,17 +3130,46 @@
   }
 
   function moviePosterHtml(m) {
-    const poster = asset(m.poster);
+    const poster = asset(m.poster || m.posterUrl);
     return poster ? `<img alt="" src="${esc(poster)}" loading="lazy" decoding="async" />` : '<div class="poster-fallback"></div>';
+  }
+
+  function movieAsLibraryItem(m) {
+    const locked = !hasLibraryAccess() || m.locked === true;
+    return {
+      id: m.id,
+      movieId: m.id,
+      sectionId: 'movies',
+      title: m.title,
+      meta: `${m.year || ''} · Киноклуб`.replace(/^ · /, ''),
+      kind: 'movie',
+      description: m.theme || m.description || 'Рекомендация киноклуба',
+      transcript: locked ? null : m.description,
+      poster: m.poster || m.posterUrl || '',
+      locked,
+      requiredTier: 'library',
+    };
+  }
+
+  function mergeMoviesIntoLibrary() {
+    const withoutMovies = state.libraryItems.filter((item) => item.sectionId !== 'movies' && item.kind !== 'movie');
+    const movieItems = (state.movies || []).map(movieAsLibraryItem);
+    state.libraryItems = [...withoutMovies, ...movieItems];
+    if (!state.librarySections.some((s) => s.id === 'movies')) {
+      state.librarySections = [
+        ...state.librarySections,
+        { id: 'movies', title: 'Киноклуб', description: 'Рекомендации фильмов и записи разборов' },
+      ];
+    }
   }
 
   function renderMovies() {
     const cards = state.movies.map((m) => `
-      <button class="movie-card" type="button" data-movie="${esc(m.id)}">
+      <button class="movie-card${m.locked ? ' is-locked' : ''}" type="button" data-movie="${esc(m.id)}">
         ${moviePosterHtml(m)}
-        <div class="movie-info"><span>${esc(m.year)}</span><h3>${esc(m.title)}</h3><p>${esc(m.theme)}</p></div>
+        <div class="movie-info"><span>${esc(m.year || '')}</span><h3>${esc(m.title)}</h3><p>${esc(m.theme || '')}</p></div>
       </button>`).join('');
-    return `<section class="section"><header class="section-header"><span>Киноклуб</span><h2>Фильмы для разговоров с подростками</h2><p>Нажмите на карточку — откроется описание и вопрос для семейного разговора.</p></header><div class="movie-grid">${cards}</div></section>`;
+    return `<section class="section"><header class="section-header"><span>Киноклуб</span><h2>Фильмы для разговоров с подростками</h2><p>Рекомендация фильма и вопросы для рефлексии — в начале месяца. Запись эфира с психологическим разбором — в конце месяца. Входит в «Медиатека. Теория».</p></header><div class="movie-grid">${cards}</div></section>`;
   }
 
   function bindMovies(root) {
@@ -3085,6 +3181,15 @@
   function openMovie(id) {
     const movie = state.movies.find((x) => x.id === id);
     if (!movie) return;
+    if (movie.locked || !hasLibraryAccess()) {
+      openPaywall({
+        reason: 'library',
+        title: 'Киноклуб в медиатеке',
+        text: 'Откройте тариф «Медиатека. Теория» или «Клуб», чтобы смотреть рекомендации фильмов и записи разборов.',
+        preferPlan: 'library_30',
+      });
+      return;
+    }
     state.selectedMovieId = id;
     renderScreen();
   }
@@ -3093,6 +3198,8 @@
     state.selectedMovieId = '';
     document.body.classList.remove('material-immersive-open');
     $('#portal').innerHTML = '';
+    state.tab = 'media';
+    state.mediaSection = 'movies';
     renderScreen();
   }
 
@@ -3106,24 +3213,23 @@
     return `<div class="movie-detail-page">
       <header class="inner-page-header movie-detail-header">
         <button class="inner-page-back" type="button" id="movie-back" aria-label="Назад">${ic('chevronLeft', 22)}</button>
-        ${innerBrand('Киноклуб')}
+        ${innerBrand('Медиатека · Киноклуб')}
         <span class="inner-page-spacer" aria-hidden="true"></span>
       </header>
       <div class="movie-detail-body">
         <div class="movie-detail-poster">${moviePosterHtml(m)}</div>
-        <span class="movie-detail-kicker">${esc(m.year)} · ${esc(m.theme)}</span>
+        <span class="movie-detail-kicker">${esc(m.year || '')} · ${esc(m.theme || 'Киноклуб')}</span>
         <h1>${esc(m.title)}</h1>
         ${facts ? `<div class="movie-facts">${facts}</div>` : ''}
-        <p class="movie-detail-desc">${esc(m.description)}</p>
-        <div class="prompt movie-modal-prompt"><strong>Вопрос для обсуждения</strong><p>${esc(m.prompt)}</p></div>
-        <button class="primary-button movie-modal-cta" type="button" id="movie-chat">Открыть обсуждение в чате ${ic('arrowRight', 18)}</button>
+        <p class="movie-detail-desc">${esc(m.description || '')}</p>
+        <div class="prompt movie-modal-prompt"><strong>Вопрос для рефлексии</strong><p>${esc(m.prompt || '')}</p></div>
+        <p class="movie-detail-note">Запись эфира с психологическим разбором фильма публикуется в медиатеке в конце месяца.</p>
       </div>
     </div>`;
   }
 
   function bindMovieDetail(root, _m) {
     $('#movie-back', root)?.addEventListener('click', closeMovie);
-    $('#movie-chat', root)?.addEventListener('click', () => { closeMovie(); setTab('chat'); });
   }
 
   function cleanAiLinkTitle(s) {
@@ -3199,7 +3305,9 @@
     if (/(кино|фильм|movie)/.test(type)) {
       const mv = findBy(state.movies, 'title');
       if (mv) { openMovie(mv.id); return; }
-      setTab('movies');
+      setTab('media');
+      state.mediaSection = 'movies';
+      renderScreen();
       return;
     }
     if (/(чат|chat)/.test(type)) { setTab('chat'); return; }
@@ -3372,14 +3480,7 @@
       ? `${tierLabel(currentTier())} · до ${until}`
       : `${tierLabel(currentTier())} · ${aiLine}`;
 
-    const planCards = (state.plans || []).map((plan) => {
-      const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
-      return `<button type="button" class="plan-card" data-buy-plan="${esc(plan.code)}">
-        <strong>${esc(plan.planName)}</strong>
-        <span class="plan-card-price">${price}<small> / ${plan.planDays} дн.</small></span>
-        <span class="plan-card-desc">${esc(plan.description || '')}</span>
-      </button>`;
-    }).join('');
+    const planCards = (state.plans || []).map((plan) => planCardHtml(plan)).join('');
 
     return `<div class="profile-ios">
       <section class="profile-ios-hero">
@@ -3400,10 +3501,10 @@
         <div class="ios-group">
           <div class="ios-group-title">Быстрый доступ</div>
           <div class="ios-list">
-            ${iosRow('media', 'Медиатека', 'Подкасты, разборы и эфиры', 'media')}
-            ${iosRow('chat', 'Чаты клуба', 'Общий чат и вопросы экспертам', 'chat')}
+            ${iosRow('media', 'Медиатека', 'Подкасты, эфиры и киноклуб', 'media')}
+            ${iosRow('movies', 'Киноклуб', 'Фильмы и разборы в медиатеке', 'movies')}
+            ${iosRow('chat', 'Чаты клуба', 'Общий чат и лента объявлений', 'chat')}
             ${iosRow('ai', 'ИИ-наставник', 'Короткие ориентиры по ситуации', 'ai')}
-            ${iosRow('movies', 'Киноклуб', 'Фильмы с вопросами для семьи', 'movies')}
           </div>
         </div>
       </div>
@@ -3467,8 +3568,12 @@
   }
 
   function bindProfile(root) {
+    bindPlanInfoToggles(root);
     $$('[data-buy-plan]', root).forEach((btn) => {
-      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#profile-pay-status', root));
+      btn.onclick = (event) => {
+        if (event.target.closest('[data-plan-info]')) return;
+        startCheckout(btn.dataset.buyPlan, $('#profile-pay-status', root));
+      };
     });
     $$('[data-profile-action]', root).forEach((btn) => {
       btn.onclick = () => {
@@ -3561,8 +3666,10 @@
         }));
       }
       if (apiItems.length) state.libraryItems = apiItems;
+      mergeMoviesIntoLibrary();
     } catch {
       // The full generated React catalog remains available offline.
+      mergeMoviesIntoLibrary();
     }
   }
 
@@ -3622,6 +3729,7 @@
     });
     try {
       const data = await API.chatRooms();
+      if (data.access) state.access = data.access;
       state.chatRooms = (data.rooms || []).map((room) => {
         const incoming = (room.messages || []).map(normalizeChatMessage);
         const prev = olderByRoom.get(room.id) || [];

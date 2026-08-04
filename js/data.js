@@ -5,7 +5,6 @@ window.LOZA_DATA = {
     { id: 'feed', label: 'Лента' },
     { id: 'media', label: 'Медиатека' },
     { id: 'chat', label: 'Чаты' },
-    { id: 'movies', label: 'Киноклуб' },
     { id: 'ai', label: 'AI' },
   ],
   TAB_TITLES: {
@@ -42,6 +41,7 @@ window.LOZA_DATA = {
     questions: 'ВОПРОСЫ',
     club_reviews: 'РАЗБОРЫ',
     webinars: 'ЭФИРЫ',
+    movies: 'КИНОКЛУБ',
   },
   FREE_SLUGS: ['podcasts-1', 'podcasts-2', 'questions-4a', 'questions-4b', 'questions-5', 'webinars-11'],
   AI_STARTERS: [
@@ -68,7 +68,9 @@ window.LOZA_DATA = {
     { id: 'questions', title: 'Вопросы и ответы', description: 'Вопросы родителей' },
     { id: 'club_reviews', title: 'Разборы', description: 'Индивидуальные разборы клуба' },
     { id: 'webinars', title: 'Эфиры и вебинары', description: 'Записи эфиров' },
+    { id: 'movies', title: 'Киноклуб', description: 'Рекомендации фильмов и записи разборов' },
   ],
+  LIBRARY_PLAN_INFO: 'Подкасты + эфиры + киноклуб. Контент с участниками закрытого клуба не входит в данную подписку.',
   FEED_POSTS: [
     {
       id: 'feed-1',
@@ -142,6 +144,7 @@ window.LOZA_DATA = {
     media: '<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>',
     chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
     movies: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/>',
+    helpCircle: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
     ai: '<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>',
     arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
     arrowUp: '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
