@@ -4551,25 +4551,6 @@ html.chat-no-select body * {
     padding-top: 8px;
   }
 
-  /* Soft scrim under the floating nav — short, so it doesn't read as a
-     blurry empty bar over the content. */
-  .app::after {
-    content: "";
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 10px);
-    z-index: 29;
-    pointer-events: none;
-    background: linear-gradient(180deg, rgba(251, 247, 253, 0) 0%, var(--bg) 78%);
-  }
-
-  .app.immersive-ai::after,
-  .app.immersive-chat::after {
-    display: none;
-  }
-
   .hero {
     min-height: auto;
     padding: 8px 0 18px;
@@ -4894,8 +4875,7 @@ html.chat-no-select body * {
 
 body.material-immersive-open .topbar,
 body.material-immersive-open .mobile-nav,
-body.material-immersive-open .pwa-install-banner,
-body.material-immersive-open .app::after {
+body.material-immersive-open .pwa-install-banner {
   display: none !important;
 }
 
