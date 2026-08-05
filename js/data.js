@@ -51,12 +51,12 @@ window.LOZA_DATA = {
     'В семье двое детей, и один будто забирает всё внимание. Как не разрушить отношения?',
   ],
   CHAT_BG_PRESETS: [
-    { id: 'aurora', label: 'Точки', colors: ['#f7fbf4', '#e7f0df', '#f7e7f0'], accent: '#95d5b2' },
-    { id: 'dark', label: 'Ночная сетка', colors: ['#17121f', '#251a34', '#0d1b2a'], accent: '#7c3aed' },
-    { id: 'plum', label: 'Клетка', colors: ['#fff5fb', '#ead9f3', '#f3e4ed'], accent: '#b565a7' },
+    { id: 'aurora', label: 'Точки', colors: ['#f6f3fa', '#e8efe4', '#ebe4f3'], accent: '#7b9270' },
+    { id: 'dark', label: 'Ночная сетка', colors: ['#2b2735', '#3f3a4a', '#1e1b24'], accent: '#a78bc7' },
+    { id: 'plum', label: 'Клетка', colors: ['#f6f3fa', '#ebe4f3', '#e4dced'], accent: '#8f7aae' },
     { id: 'sunset', label: 'Волны', colors: ['#fff3df', '#ffd1b3', '#f7a8a8'], accent: '#ff7a59' },
     { id: 'ocean', label: 'Диагонали', colors: ['#edf9ff', '#cdeaf6', '#b8dff0'], accent: '#2f9fd0' },
-    { id: 'forest', label: 'Листья', colors: ['#f3fbf1', '#d8ead3', '#c8dfc1'], accent: '#4f8f5f' },
+    { id: 'forest', label: 'Листья', colors: ['#f3fbf1', '#d8ead3', '#c8dfc1'], accent: '#6f8f72' },
   ],
   PLANS: [
     { planDays: 30, planName: 'Доступ на 30 дней', priceRub: 4990, description: 'Медиатека, чат и практика' },
