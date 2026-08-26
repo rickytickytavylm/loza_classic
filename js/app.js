@@ -1383,7 +1383,7 @@
 
       // Prefer real YooKassa redirect whenever we got an external confirmation URL.
       if (payment.confirmationUrl && isExternalCheckoutUrl(payment.confirmationUrl) && payment.test !== true) {
-        if (statusEl) statusEl.textContent = 'Переходим в ЮKassa…';
+        if (statusEl) statusEl.textContent = 'Переходим к оплате…';
         window.location.href = payment.confirmationUrl;
         return;
       }
@@ -1401,14 +1401,14 @@
       }
 
       if (!payment.confirmationUrl) {
-        throw new Error('Нет ссылки на оплату ЮKassa');
+        throw new Error('Нет ссылки на оплату');
       }
       window.location.href = payment.confirmationUrl;
     } catch (error) {
       if (statusEl) {
         const code = error instanceof Error ? error.message : '';
         if (code === 'YOOKASSA_INVALID_CREDENTIALS') {
-          statusEl.textContent = 'ЮKassa: неверный ShopID или секретный ключ. Проверьте переменные на Railway.';
+          statusEl.textContent = 'Касса не настроена. Проверьте ключ Продамуса на Timeweb.';
         } else {
           statusEl.textContent = code || 'Не удалось создать оплату';
         }
@@ -3496,7 +3496,7 @@
         <div class="ios-group">
           <div class="ios-group-title">Подписка</div>
           <div class="plan-grid profile-plan-grid">${planCards || '<p class="ios-footnote">Тарифы загрузятся после обновления.</p>'}</div>
-          <p class="ios-footnote" id="profile-pay-status">Оплата через ЮKassa. Автопродление по условиям тарифа.</p>
+          <p class="ios-footnote" id="profile-pay-status">Оплата через Продамус. Автопродление по условиям тарифа.</p>
         </div>
         <div class="ios-group">
           <div class="ios-group-title">Быстрый доступ</div>

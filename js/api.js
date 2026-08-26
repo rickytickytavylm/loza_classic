@@ -181,7 +181,7 @@
         body: JSON.stringify({ guestId: getGuestId() }),
       }),
     createPayment: (planCode, returnUrl) =>
-      request('/payments/yookassa/create', {
+      request('/payments/create', {
         method: 'POST',
         body: JSON.stringify({ planCode, returnUrl }),
       }),
