@@ -151,6 +151,43 @@
     return isStaffUser();
   }
 
+  const FALLBACK_PLANS = [
+    {
+      code: 'library_30',
+      planName: 'Медиатека. Теория',
+      priceRub: 2000,
+      planDays: 30,
+      description: 'Закрытая медиатека, интенсив без обратной связи и AI 15 запросов в неделю',
+      info: D.LIBRARY_PLAN_INFO,
+      benefits: ['Подкасты, эфиры и киноклуб', 'Интенсив без обратной связи', 'AI — 15 запросов в неделю'],
+    },
+    {
+      code: 'club_30',
+      planName: 'Клуб',
+      priceRub: 6300,
+      planDays: 30,
+      description: 'Полный доступ к клубу на 30 дней с закрытыми чатами и AI без лимита',
+      benefits: ['Доступ ко всему контенту', 'AI без ограничений', 'Закрытые чаты клуба'],
+    },
+    {
+      code: 'club_90',
+      planName: 'Клуб на 90 дней',
+      priceRub: 14000,
+      planDays: 90,
+      description: 'Полный доступ к клубу на 90 дней',
+      benefits: ['Доступ ко всему контенту', 'AI без ограничений', 'Закрытые чаты клуба'],
+    },
+    {
+      code: 'club_plus_30',
+      planName: 'Клуб Плюс',
+      priceRub: 20000,
+      planDays: 30,
+      description: 'Клуб плюс 2 личные консультации психолога',
+      benefits: ['Всё из тарифа «Клуб»', '2 личные консультации'],
+    },
+  ];
+  state.plans = FALLBACK_PLANS;
+
   function libraryPlanInfo(plan) {
     return plan?.info || D.LIBRARY_PLAN_INFO || '';
   }
@@ -158,36 +195,18 @@
   function planCardHtml(plan, { featured = false } = {}) {
     const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
     const days = plan.planDays === 90 ? '90 дней' : '30 дней';
-    const renew = plan.autoRenew ? ' · автопродление' : '';
     const info = plan.code === 'library_30' ? libraryPlanInfo(plan) : '';
-    const title = info
-      ? `<span class="plan-card-title-row">
-          <strong>${esc(plan.planName)}</strong>
-          <button type="button" class="plan-info-btn" data-plan-info="${esc(plan.code)}" aria-expanded="false" aria-label="Что входит">${ic('helpCircle', 16)}</button>
-        </span>
-        <p class="plan-info-tip" data-plan-tip="${esc(plan.code)}" hidden>${esc(info)}</p>`
-      : `<strong>${esc(plan.planName)}</strong>`;
-    return `<div class="plan-card${featured ? ' is-featured' : ''}" data-buy-plan="${esc(plan.code)}" role="button" tabindex="0">
-      ${title}
-      <span class="plan-card-price">${price}<small> / ${days}${renew}</small></span>
+    const benefits = (plan.benefits || []).slice(0, 3)
+      .map((line) => `<li>${esc(line)}</li>`)
+      .join('');
+    return `<article class="plan-card${featured ? ' is-featured' : ''}">
+      <strong>${esc(plan.planName)}</strong>
+      <span class="plan-card-price">${price}<small> / ${days}</small></span>
       <span class="plan-card-desc">${esc(plan.description || '')}</span>
-    </div>`;
-  }
-
-  function bindPlanInfoToggles(root = document) {
-    $$('[data-plan-info]', root).forEach((btn) => {
-      btn.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const code = btn.dataset.planInfo;
-        const tip = root.querySelector(`[data-plan-tip="${code}"]`)
-          || document.querySelector(`[data-plan-tip="${code}"]`);
-        if (!tip) return;
-        const open = tip.hasAttribute('hidden');
-        tip.toggleAttribute('hidden', !open);
-        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      };
-    });
+      ${info ? `<p class="plan-card-note">${esc(info)}</p>` : ''}
+      ${benefits ? `<ul class="plan-card-benefits">${benefits}</ul>` : ''}
+      <button type="button" class="plan-card-buy" data-buy-plan="${esc(plan.code)}">Оплатить</button>
+    </article>`;
   }
 
   // Web Push helpers (server-sent notifications via VAPID)
@@ -1319,22 +1338,15 @@
         <span class="paywall-kicker">Закрытый клуб</span>
         <h2>${esc(title || 'Открыть доступ')}</h2>
         <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
-        <div class="paywall-benefits">
-          <span>Медиатека. Теория</span><span>Чаты клуба</span><span>AI-наставник</span>
-        </div>
         <div class="plan-grid">${cards || '<p class="checkout-note">Тарифы пока недоступны. Обновите страницу.</p>'}</div>
-        <p class="checkout-note" id="paywall-status"></p>
+        <p class="checkout-note" id="paywall-status">После оплаты доступ откроется автоматически.</p>
         <button type="button" class="paywall-later" id="paywall-later">Позже</button>
       </section>
     </div>`;
     bindModalClose();
-    bindPlanInfoToggles($('#portal'));
     $('#paywall-later')?.addEventListener('click', closePortal);
     $$('[data-buy-plan]', $('#portal')).forEach((btn) => {
-      btn.onclick = (event) => {
-        if (event.target.closest('[data-plan-info]')) return;
-        startCheckout(btn.dataset.buyPlan, $('#paywall-status'));
-      };
+      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#paywall-status'));
     });
   }
 
@@ -2430,7 +2442,7 @@
           <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter"></textarea>
           <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>`
-      : `<div class="chat-readonly-note" role="status">Пишут только руководители и администраторы</div>`;
+      : `<div class="chat-readonly-note" role="status">Здесь пишет команда клуба. Ответить можно в чате для общения.</div>`;
 
     return `<div class="telegram-chat-layout ${state.chatView === 'rooms' ? 'rooms-open' : 'thread-open'}">
       <aside class="telegram-room-list">
@@ -3496,13 +3508,12 @@
         <div class="ios-group">
           <div class="ios-group-title">Подписка</div>
           <div class="plan-grid profile-plan-grid">${planCards || '<p class="ios-footnote">Тарифы загрузятся после обновления.</p>'}</div>
-          <p class="ios-footnote" id="profile-pay-status">Оплата через Продамус. Автопродление по условиям тарифа.</p>
+          <p class="ios-footnote" id="profile-pay-status">Оплата картой. Если тариф с продлением — следующее списание пройдёт само.</p>
         </div>
         <div class="ios-group">
           <div class="ios-group-title">Быстрый доступ</div>
           <div class="ios-list">
             ${iosRow('media', 'Медиатека', 'Подкасты, эфиры и киноклуб', 'media')}
-            ${iosRow('movies', 'Киноклуб', 'Фильмы и разборы в медиатеке', 'movies')}
             ${iosRow('chat', 'Чаты клуба', 'Общий чат и лента объявлений', 'chat')}
             ${iosRow('ai', 'ИИ-наставник', 'Короткие ориентиры по ситуации', 'ai')}
           </div>
@@ -3525,8 +3536,11 @@
             ${iosRow('trash', 'Удалить аккаунт', 'Данные удалятся без возможности восстановления', 'delete-account')}
           </div>
         </div>
-        <p class="ios-footnote">Вы вошли через Яндекс. Удаление аккаунта сбрасывает доступ и снова показывает онбординг.</p>`
-    : `<p class="ios-footnote">Чтобы сохранить профиль и прогресс, войдите через Яндекс после онбординга.</p>`}
+        <p class="ios-footnote">Вы вошли через Яндекс. Удаление аккаунта сбрасывает доступ.</p>`
+    : `<div class="ios-group">
+          <button type="button" class="plan-card-buy" data-profile-action="login">Войти через Яндекс</button>
+          <p class="ios-footnote">Чтобы оплатить тариф и сохранить прогресс, войдите через Яндекс.</p>
+        </div>`}
       </div>
     </div>`;
   }
@@ -3568,16 +3582,16 @@
   }
 
   function bindProfile(root) {
-    bindPlanInfoToggles(root);
     $$('[data-buy-plan]', root).forEach((btn) => {
-      btn.onclick = (event) => {
-        if (event.target.closest('[data-plan-info]')) return;
-        startCheckout(btn.dataset.buyPlan, $('#profile-pay-status', root));
-      };
+      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#profile-pay-status', root));
     });
     $$('[data-profile-action]', root).forEach((btn) => {
       btn.onclick = () => {
         const action = btn.dataset.profileAction;
+        if (action === 'login') {
+          showAuthScreen();
+          return;
+        }
         if (action === 'about') {
           setTab('home');
           return;
@@ -4323,17 +4337,27 @@
     btn.setAttribute('aria-disabled', allowed ? 'false' : 'true');
   }
 
+  function resetAuthButton() {
+    const btn = $('#auth-yandex-btn');
+    if (!btn) return;
+    btn.classList.remove('is-loading');
+    const label = btn.querySelector('span:last-child');
+    if (label) label.textContent = 'Войти через Яндекс';
+    syncAuthConsentButton();
+  }
+
   function bindAuth() {
     const btn = $('#auth-yandex-btn');
     if (!btn) return;
     $('#auth-consent-terms')?.addEventListener('change', syncAuthConsentButton);
     $('#auth-consent-privacy')?.addEventListener('change', syncAuthConsentButton);
     syncAuthConsentButton();
+    window.addEventListener('pageshow', resetAuthButton);
     btn.onclick = () => {
       const terms = $('#auth-consent-terms')?.checked;
       const privacy = $('#auth-consent-privacy')?.checked;
       if (!terms || !privacy) {
-        showAuthScreen('Чтобы войти, примите условия и политику конфиденциальности.');
+        showAuthScreen('Чтобы войти, отметьте оба пункта ниже.');
         syncAuthConsentButton();
         return;
       }
@@ -4351,7 +4375,13 @@
       btn.disabled = true;
       btn.setAttribute('aria-disabled', 'true');
       const label = btn.querySelector('span:last-child');
-      if (label) label.textContent = 'Переходим…';
+      if (label) label.textContent = 'Открываем Яндекс…';
+      window.setTimeout(() => {
+        if (!btn.classList.contains('is-loading')) return;
+        if (!document.body.classList.contains('auth-open')) return;
+        resetAuthButton();
+        showAuthScreen('Яндекс не открылся. Проверьте сеть и нажмите ещё раз.');
+      }, 12000);
       window.location.href = url;
     };
   }
@@ -4490,11 +4520,11 @@
   async function loadPublicConfig() {
     try {
       const cfg = await API.publicConfig();
-      state.plans = Array.isArray(cfg.plans) ? cfg.plans : [];
+      state.plans = Array.isArray(cfg.plans) && cfg.plans.length ? cfg.plans : FALLBACK_PLANS;
       state.freeTier = cfg.freeTier || null;
       state.paymentProvider = cfg.paymentProvider || state.paymentProvider;
     } catch {
-      /* keep defaults */
+      state.plans = FALLBACK_PLANS;
     }
   }
 

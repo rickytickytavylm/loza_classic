@@ -56,7 +56,7 @@
   --radius-lg: 26px;
   --radius-md: 18px;
   --topbar-height: 58px;
-  --bottom-nav-height: 78px;
+  --bottom-nav-height: 64px;
   --topbar-offset: calc(var(--topbar-height) + env(safe-area-inset-top, 0px));
 }
 
@@ -164,7 +164,9 @@ button {
   max-width: none;
   margin: 0;
   padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 8px;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 88%, #fff);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
   border-bottom: 1px solid rgba(var(--plum-rgb), 0.08);
 }
 
@@ -346,7 +348,7 @@ button {
 
 .page-shell-chat {
   overflow: hidden;
-  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 4px);
+  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
 }
 
 .page-shell-chat .telegram-chat-layout {
@@ -483,7 +485,7 @@ button {
 #app-toast-host {
   position: fixed;
   left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height));
   z-index: 240;
   width: min(420px, calc(100vw - 24px));
   transform: translateX(-50%);
@@ -3694,9 +3696,22 @@ html.chat-no-select body * {
 }
 
 @media (max-width: 980px) {
+  .shell:has(.page-shell-chat) {
+    padding-inline: 0;
+  }
+
+  .page-shell-chat {
+    padding-top: 0;
+    padding-inline: 0;
+  }
+
   .telegram-chat-layout {
     grid-template-columns: 1fr;
-    min-height: 100dvh;
+    min-height: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .telegram-chat-layout.thread-open .telegram-room-list {
@@ -4441,32 +4456,34 @@ html.chat-no-select body * {
 
 .mobile-nav {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 30;
   display: none;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
-  padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.86);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 22px 55px rgba(var(--plum-rgb), 0.2);
-  backdrop-filter: blur(24px);
+  gap: 2px;
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-top: 1px solid rgba(var(--plum-rgb), 0.12);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bg) 82%, #fff);
+  box-shadow: none;
+  backdrop-filter: blur(20px) saturate(1.12);
+  -webkit-backdrop-filter: blur(20px) saturate(1.12);
 }
 
 .mobile-nav button {
   position: relative;
   display: grid;
   place-items: center;
-  gap: 2px;
-  min-height: 54px;
-  border-radius: 21px;
+  gap: 3px;
+  min-height: 48px;
+  border-radius: 14px;
   color: #6b6578;
   background: transparent;
-  font-size: 9px;
-  font-weight: 750;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .mobile-nav .nav-unread-badge {
@@ -4482,8 +4499,8 @@ html.chat-no-select body * {
 
 .mobile-nav button.active {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: inset 0 1px 0 white;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: none;
 }
 
 @media (max-width: 980px) {
@@ -5461,60 +5478,55 @@ body.material-immersive-open {
 .plan-card {
   display: grid;
   gap: 10px;
+  align-content: start;
   padding: 18px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(43, 39, 53, 0.08);
   text-align: left;
   color: inherit;
-  cursor: pointer;
 }
 
-.plan-card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.plan-card-title-row strong {
-  flex: 1;
-}
-
-.plan-info-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid rgba(var(--plum-rgb), 0.28);
-  background: rgba(var(--plum-rgb), 0.08);
-  color: rgb(var(--plum-rgb));
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.plan-info-tip {
+.plan-card-note {
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(var(--plum-rgb), 0.08);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.plan-card-benefits {
+  margin: 0;
+  padding-left: 18px;
   color: var(--ink);
   font-size: 13px;
   line-height: 1.45;
 }
 
-.plan-info-tip[hidden] {
-  display: none !important;
+.plan-card-buy {
+  margin-top: 4px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  background: var(--action);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.plan-card-buy:active {
+  transform: scale(0.98);
 }
 
 .chat-readonly-note {
-  margin: 0 12px 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(43, 39, 53, 0.05);
+  margin: 0;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(var(--plum-rgb), 0.08);
+  background: #f7f4fb;
   color: var(--muted);
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
@@ -5656,7 +5668,7 @@ body.material-immersive-open {
   width: 100%;
   max-width: 680px;
   margin: 0 auto;
-  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 20px);
+  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 12px);
 }
 
 /*
@@ -6852,6 +6864,10 @@ body.material-immersive-open {
 .ios-group {
   display: grid;
   gap: 8px;
+}
+
+.ios-group > .plan-card-buy {
+  width: 100%;
 }
 
 .ios-group-title {
