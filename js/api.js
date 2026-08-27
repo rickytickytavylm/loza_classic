@@ -69,7 +69,7 @@
   window.LOZA_API = {
     API_URL,
     API_ORIGIN,
-    yandexLoginUrl: `${API_ORIGIN}/api/auth/yandex`,
+    yandexLoginUrl: `${API_ORIGIN}/api/auth/yandex?returnTo=${encodeURIComponent(`${window.location.origin}/?auth=yandex_ok`)}`,
     getToken,
     setToken,
     getGuestId,

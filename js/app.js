@@ -889,7 +889,7 @@
       const path = `${u.pathname}${u.search}`.replace(/\/$/, '');
       return `${u.host}${path === '/' ? '' : path}`;
     } catch {
-      return String(url || 'loza-club.ru').replace(/^https?:\/\//i, '');
+      return String(url || 'lozapsy.help').replace(/^https?:\/\//i, '');
     }
   }
 
