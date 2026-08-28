@@ -10,6 +10,20 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+  function isCompactDevice() {
+    const shortSide = Math.min(window.screen?.width || 0, window.screen?.height || 0);
+    const touch = navigator.maxTouchPoints > 1
+      || /iPhone|iPod|Android.+Mobile/i.test(navigator.userAgent || '');
+    if (touch && shortSide && shortSide <= 767) return true;
+    const layout = window.innerWidth || document.documentElement.clientWidth || 0;
+    const visual = window.visualViewport?.width || layout;
+    return Math.min(layout, visual) <= 980;
+  }
+
+  function syncCompactLayout() {
+    document.documentElement.classList.toggle('is-compact', isCompactDevice());
+  }
+
   /** Resolve image/media paths from this origin only (GitHub Pages). Never remote CDN. */
   function asset(path) {
     if (!path) return '';
@@ -4324,6 +4338,7 @@
     if (root) root.hidden = true;
     document.body.classList.remove('auth-open');
     if (markDone) state.authDone = true;
+    syncCompactLayout();
   }
 
   function syncAuthConsentButton() {
@@ -4529,6 +4544,11 @@
   }
 
   async function init() {
+    syncCompactLayout();
+    window.addEventListener('pageshow', syncCompactLayout);
+    window.addEventListener('resize', syncCompactLayout);
+    window.addEventListener('orientationchange', syncCompactLayout);
+    window.visualViewport?.addEventListener('resize', syncCompactLayout);
     const authReturn = captureAuthFromUrl();
     bindAuth();
     await Promise.all([loadSession(), loadPublicConfig()]);
@@ -4563,6 +4583,9 @@
     syncHeaderIdentity();
     applyDeepLinkFromUrl();
     renderScreen();
+    if (authReturn) {
+      [80, 300, 800].forEach((ms) => window.setTimeout(syncCompactLayout, ms));
+    }
     setTimeout(() => {
       state.booting = false;
       $('#splash')?.classList.add('splash-screen-hide');

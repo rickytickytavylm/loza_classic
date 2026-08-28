@@ -4558,6 +4558,69 @@ html.chat-no-select body * {
   }
 }
 
+/* After Yandex return iOS often reports a desktop viewport (~980–1200).
+   Screen size + this class keep the phone chrome even when matchMedia lies. */
+html.is-compact .desktop-nav {
+  display: none !important;
+}
+
+html.is-compact .mobile-nav {
+  display: grid !important;
+}
+
+html.is-compact .hero,
+html.is-compact .profile-grid {
+  grid-template-columns: 1fr !important;
+}
+
+html.is-compact .hero {
+  min-height: auto !important;
+  padding: 8px 0 18px;
+  border-radius: 0;
+}
+
+html.is-compact .hero-art {
+  min-height: 220px;
+}
+
+html.is-compact .hero-note {
+  display: none;
+}
+
+html.is-compact .hero h1 {
+  font-size: clamp(26px, 6.6vw, 34px);
+  max-width: none;
+}
+
+html.is-compact .hero-copy > p {
+  font-size: 17px;
+}
+
+html.is-compact .hero-actions {
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 20px;
+}
+
+@media (max-device-width: 900px) {
+  .desktop-nav {
+    display: none !important;
+  }
+
+  .mobile-nav {
+    display: grid !important;
+  }
+
+  .hero,
+  .profile-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hero {
+    min-height: auto !important;
+  }
+}
+
 @media (max-width: 680px) {
   .header-actions .icon-button {
     display: none;
