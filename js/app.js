@@ -4368,7 +4368,7 @@
     $('#auth-consent-privacy')?.addEventListener('change', syncAuthConsentButton);
     syncAuthConsentButton();
     window.addEventListener('pageshow', resetAuthButton);
-    btn.onclick = () => {
+    btn.onclick = async () => {
       const terms = $('#auth-consent-terms')?.checked;
       const privacy = $('#auth-consent-privacy')?.checked;
       if (!terms || !privacy) {
@@ -4381,23 +4381,22 @@
       } catch {
         /* ignore */
       }
-      const url = API && API.yandexLoginUrl;
-      if (!url) {
-        showAuthScreen('Ссылка входа недоступна. Обновите страницу.');
-        return;
-      }
       btn.classList.add('is-loading');
       btn.disabled = true;
       btn.setAttribute('aria-disabled', 'true');
       const label = btn.querySelector('span:last-child');
       if (label) label.textContent = 'Открываем Яндекс…';
-      window.setTimeout(() => {
-        if (!btn.classList.contains('is-loading')) return;
-        if (!document.body.classList.contains('auth-open')) return;
+      try {
+        const data = API && API.yandexAuthorize
+          ? await API.yandexAuthorize(`${window.location.origin}/?auth=yandex_ok`)
+          : null;
+        const target = data?.redirect || (API && API.yandexLoginUrl);
+        if (!target) throw new Error('NO_AUTH_URL');
+        window.location.href = target;
+      } catch {
         resetAuthButton();
-        showAuthScreen('Яндекс не открылся. Проверьте сеть и нажмите ещё раз.');
-      }, 12000);
-      window.location.href = url;
+        showAuthScreen('Не удалось открыть Яндекс. Проверьте сеть и нажмите ещё раз.');
+      }
     };
   }
 
@@ -4543,6 +4542,14 @@
     }
   }
 
+  function hideSplash() {
+    state.booting = false;
+    const splash = $('#splash');
+    if (!splash) return;
+    splash.classList.add('splash-screen-hide');
+    window.setTimeout(() => splash.remove(), 400);
+  }
+
   async function init() {
     syncCompactLayout();
     window.addEventListener('pageshow', syncCompactLayout);
@@ -4551,19 +4558,21 @@
     window.visualViewport?.addEventListener('resize', syncCompactLayout);
     const authReturn = captureAuthFromUrl();
     bindAuth();
-    await Promise.all([loadSession(), loadPublicConfig()]);
+    await Promise.race([
+      Promise.all([loadSession(), loadPublicConfig()]),
+      new Promise((resolve) => window.setTimeout(resolve, 4000)),
+    ]);
     await handlePaymentReturn();
     renderNav();
     setTab('home');
 
-    if (isAuthorized() && state.user) {
+    if (isAuthorized() && (state.user || authReturn?.ok)) {
       state.onboardingDone = true;
       state.authDone = true;
       markOnboardingSeen();
       hideAuthScreen();
       const onboarding = $('#onboarding');
       if (onboarding) onboarding.hidden = true;
-      await syncPendingConsents();
     } else if (authReturn && authReturn.ok === false) {
       state.onboardingDone = true;
       showAuthScreen(authReturn.error);
@@ -4571,26 +4580,31 @@
       renderOnboarding();
       bindOnboarding();
     } else {
-      // Returning but signed out: no slides, just the sign-in screen.
       showAuthScreen();
     }
 
-    await Promise.all([loadContent(), loadFeed(), loadChatRooms()]);
-    startChatStream();
-    bindChatLiveRefresh();
-    bindPushDeepLinks();
-    syncPushEndpoint();
     syncHeaderIdentity();
     applyDeepLinkFromUrl();
-    renderScreen();
+    hideSplash();
     if (authReturn) {
       [80, 300, 800].forEach((ms) => window.setTimeout(syncCompactLayout, ms));
     }
-    setTimeout(() => {
-      state.booting = false;
-      $('#splash')?.classList.add('splash-screen-hide');
-      setTimeout(() => $('#splash')?.remove(), 500);
-    }, 700);
+
+    Promise.all([loadContent(), loadFeed(), loadChatRooms()])
+      .then(() => {
+        startChatStream();
+        bindChatLiveRefresh();
+        bindPushDeepLinks();
+        syncPushEndpoint();
+        if (isAuthorized() && state.user) syncPendingConsents();
+        renderScreen();
+      })
+      .catch(() => {
+        startChatStream();
+        bindChatLiveRefresh();
+        bindPushDeepLinks();
+      });
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
     }

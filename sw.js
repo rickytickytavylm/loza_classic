@@ -1,6 +1,6 @@
 // Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '42';
+const ASSET_VERSION = '43';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
 const IMAGE_CACHE = 'loza-classic-images-v12';
 const BADGE_CACHE = 'loza-classic-badge-v1';
@@ -175,6 +175,14 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+function isDocumentRequest(request) {
+  return request.mode === 'navigate' || request.destination === 'document';
+}
+
+function fallbackDocument() {
+  return caches.match('./index.html').then((cached) => cached || caches.match('./'));
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -193,6 +201,15 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== self.location.origin) return;
 
+  // Auth return URLs must not be stored as extra HTML copies — that is how
+  // an old unstyled page gets served after Yandex and "styles fly off".
+  if (isDocumentRequest(request)) {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' }).catch(() => fallbackDocument()),
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(request)
       .then((response) => {
@@ -202,6 +219,17 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request)),
+      .catch(async () => {
+        const exact = await caches.match(request);
+        if (exact) return exact;
+        const path = `${url.pathname}${url.search}`;
+        const keys = await caches.keys();
+        for (const key of keys) {
+          const cache = await caches.open(key);
+          const match = await cache.match(path) || await cache.match(url.pathname);
+          if (match) return match;
+        }
+        return undefined;
+      }),
   );
 });

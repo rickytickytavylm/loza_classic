@@ -47,29 +47,40 @@
   }
 
   async function request(path, init) {
-    const response = await fetch(`${API_URL}${path}`, {
-      cache: 'no-store',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-        Pragma: 'no-cache',
-        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-        ...(init && init.headers ? init.headers : {}),
-      },
-      ...init,
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || `API ${response.status}`);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    try {
+      const response = await fetch(`${API_URL}${path}`, {
+        cache: 'no-store',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          Pragma: 'no-cache',
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+          ...(init && init.headers ? init.headers : {}),
+        },
+        ...init,
+        signal: (init && init.signal) || ctrl.signal,
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `API ${response.status}`);
+      }
+      return response.json();
+    } finally {
+      clearTimeout(timer);
     }
-    return response.json();
   }
 
   window.LOZA_API = {
     API_URL,
     API_ORIGIN,
     yandexLoginUrl: `${API_ORIGIN}/api/auth/yandex?returnTo=${encodeURIComponent(`${window.location.origin}/?auth=yandex_ok`)}`,
+    yandexAuthorize: (returnTo) => {
+      const back = returnTo || `${window.location.origin}/?auth=yandex_ok`;
+      return request(`/auth/yandex?format=json&returnTo=${encodeURIComponent(back)}`);
+    },
     getToken,
     setToken,
     getGuestId,
