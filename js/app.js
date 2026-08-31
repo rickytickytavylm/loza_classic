@@ -41,7 +41,7 @@
   }
 
   function brandMark(className = '') {
-    return `<img class="brand-mark ${className}" src="${localAsset('assets/favicon.png')}" alt="" />`;
+    return `<img class="brand-mark ${className}" src="${localAsset('assets/webp/new_logo.webp')}" alt="" />`;
   }
 
   function innerBrand(label) {
@@ -661,16 +661,9 @@
     if (state.selectedItemId) {
       const item = state.libraryItems.find((x) => x.id === state.selectedItemId);
       if (item) {
-        if (M.itemHasMediaLayout(item)) {
-          $('#portal').innerHTML = renderMaterialDetail(item);
-          bindMaterialDetail($('#portal'), item);
-          document.body.classList.add('material-immersive-open');
-          return;
-        }
-        $('#portal').innerHTML = '';
-        document.body.classList.remove('material-immersive-open');
-        shell.innerHTML = renderMaterialDetail(item);
-        bindMaterialDetail(shell, item);
+        $('#portal').innerHTML = renderMaterialDetail(item);
+        bindMaterialDetail($('#portal'), item);
+        document.body.classList.add('material-immersive-open');
         return;
       }
       state.selectedItemId = '';
@@ -1541,10 +1534,9 @@
     const displayMeta = esc(M.cleanDisplayText(item.meta));
     const kindLabel = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Материал';
     const bodyParagraphs = materialBodyHtml(materialBody);
+    const titleClass = M.cleanDisplayText(item.title).length > 70 ? ' is-long' : '';
 
     if (hasMediaLayout) {
-      const titleLen = M.cleanDisplayText(item.title).length;
-      const titleClass = titleLen > 70 ? ' is-long' : '';
       return `<div class="material-page material-page-immersive">
         ${innerHeader(kindLabel)}
         <div class="material-immersive-media" id="material-player">${renderMaterialMedia(item, true)}</div>
@@ -1556,22 +1548,13 @@
       </div>`;
     }
 
-    return `<div class="material-page">
+    return `<div class="material-page material-page-immersive material-page-text">
       ${innerHeader('Медиатека')}
-      <section class="material-hero glass-panel">
-        <span>${displayMeta}</span>
-        <h1>${displayTitle}</h1>
-        <p>${esc(M.getMaterialSummary(item))}</p>
-        <small class="material-type-label">${kindLabel}</small>
-      </section>
-      <section class="material-section glass-card">
-        <h2>Описание материала</h2>
-        ${bodyParagraphs}
-      </section>
-      <section class="material-section glass-card">
-        <h2>Медиа</h2>
-        ${renderMaterialMedia(item, false)}
-      </section>
+      <article class="material-immersive-body">
+        <span class="material-kicker">${displayMeta}</span>
+        <h1${titleClass ? ` class="${titleClass.trim()}"` : ''}>${displayTitle}</h1>
+        <div class="material-article">${bodyParagraphs}</div>
+      </article>
     </div>`;
   }
 
@@ -2473,8 +2456,8 @@
           <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>
         </header>
         ${chatPinnedBarHtml(selectedRoom)}
-        <div class="telegram-messages">
-          <div class="telegram-messages-canvas chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
+        <div class="telegram-messages chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
+          <div class="telegram-messages-canvas">
             ${selectedRoom?.hasMore ? '<div class="chat-history-hint" data-key="history-hint" data-sig="hint">Прокрутите вверх за историей</div>' : ''}
             ${timeline.join('')}
           </div>
@@ -3124,14 +3107,14 @@
 
     $('#portal').innerHTML = `<div class="chat-bg-picker-backdrop" id="modal-close"><section class="chat-bg-picker" aria-label="Настройки чата" onclick="event.stopPropagation()">
       <div class="chat-bg-picker-handle"></div>
-      <header class="chat-bg-picker-head"><div><span>Настройки чата</span><h2>Фон и уведомления</h2></div><button type="button" id="modal-x" aria-label="Закрыть настройки">${ic('x', 20)}</button></header>
-      <div class="chat-settings-block">
-        <div class="chat-settings-label">Фон</div>
-        <div class="chat-bg-grid">${swatches}</div>
-      </div>
+      <header class="chat-bg-picker-head"><div><span>Настройки чата</span><h2>Уведомления и фон</h2></div><button type="button" id="modal-x" aria-label="Закрыть настройки">${ic('x', 20)}</button></header>
       <div class="chat-settings-block">
         <div class="chat-settings-label">Уведомления</div>
         ${notifyRow}
+      </div>
+      <div class="chat-settings-block">
+        <div class="chat-settings-label">Фон</div>
+        <div class="chat-bg-grid">${swatches}</div>
       </div>
     </section></div>`;
     bindModalClose();
@@ -3758,7 +3741,10 @@
     try {
       const data = await API.chatRooms();
       if (data.access) state.access = data.access;
-      state.chatRooms = (data.rooms || []).map((room) => {
+      state.chatRooms = (data.rooms || []).filter((room) => {
+        if (room.slug !== 'posts') return true;
+        return Boolean(state.user) || isStaffUser();
+      }).map((room) => {
         const incoming = (room.messages || []).map(normalizeChatMessage);
         const prev = olderByRoom.get(room.id) || [];
         const byId = new Map();
@@ -3807,6 +3793,10 @@
         )));
         room.messages = [...room.messages, ...stillInFlight];
       });
+      if (state.selectedRoomId && !state.chatRooms.some((item) => item.id === state.selectedRoomId)) {
+        state.selectedRoomId = '';
+        state.chatView = 'rooms';
+      }
       if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
       if (!state.introSeeded) {
         state.chatRooms.forEach((room) => (room.messages || []).forEach((message) => {

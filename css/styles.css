@@ -2329,11 +2329,12 @@ body.rules-open {
   overflow-y: auto;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
-  /* Solid fill behind the canvas (overscroll / short threads). */
   background-color: var(--chat-bg-b, #eef4ec);
+  background-repeat: repeat;
 }
 
-/* Pattern on the content-sized canvas so it tiles for the full message list. */
+/* Messages sit on a transparent canvas; the pattern lives on the scroller
+   so short threads still fill the whole visible chat. */
 .telegram-messages-canvas {
   box-sizing: border-box;
   display: flex;
@@ -2341,8 +2342,7 @@ body.rules-open {
   gap: 6px;
   min-height: 100%;
   padding: 10px 0 14px;
-  background-color: var(--chat-bg-b, #eef4ec);
-  background-repeat: repeat;
+  background: transparent;
 }
 
 .telegram-messages-canvas > * {
@@ -6606,6 +6606,13 @@ body.material-immersive-open {
   background: rgba(var(--plum-rgb), 0.14);
 }
 
+.brand-mark {
+  display: block;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .inner-page-brand {
   display: flex;
   align-items: center;
@@ -6621,9 +6628,10 @@ body.material-immersive-open {
 }
 
 .inner-page-logo {
-  width: 27px;
-  height: 27px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
+  background: none;
 }
 
 .inner-page-brand strong {
@@ -6799,6 +6807,21 @@ body.material-immersive-open {
   color: var(--olive-dark);
   font-size: 12px;
   font-weight: 800;
+}
+
+.material-article {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.material-article p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .ai-inner-header {
