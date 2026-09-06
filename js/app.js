@@ -171,9 +171,9 @@
       planName: 'Медиатека. Теория',
       priceRub: 2000,
       planDays: 30,
-      description: 'Закрытая медиатека, интенсив без обратной связи и AI 15 запросов в неделю',
+      description: 'Закрытая медиатека и AI 15 запросов в неделю',
       info: D.LIBRARY_PLAN_INFO,
-      benefits: ['Подкасты, эфиры и киноклуб', 'Интенсив без обратной связи', 'AI — 15 запросов в неделю'],
+      benefits: ['Подкасты, эфиры и киноклуб', 'AI — 15 запросов в неделю'],
     },
     {
       code: 'club_30',
@@ -466,6 +466,16 @@
     renderNav();
     renderScreen();
     setImmersive();
+    if (tab === 'feed') {
+      loadFeed().then(() => {
+        if (state.tab === 'feed') renderScreen();
+      });
+    }
+    if (tab === 'media') {
+      loadContent().then(() => {
+        if (state.tab === 'media') renderScreen();
+      });
+    }
   }
 
   function needsLegalConsents() {
@@ -485,7 +495,7 @@
         <h2>Согласие на обработку данных</h2>
         <p>Чтобы пользоваться клубом, примите условия и политику конфиденциальности.</p>
         <label class="auth-consent"><input type="checkbox" id="gate-terms" /><span>Принимаю условия использования и даю согласие на обработку персональных данных</span></label>
-        <label class="auth-consent"><input type="checkbox" id="gate-privacy" /><span>Ознакомлен(а) с политикой конфиденциальности</span></label>
+        <label class="auth-consent"><input type="checkbox" id="gate-privacy" /><span>Ознакомлен(а) с <a href="https://lozapsy.ru/politika-konfidencialnosti/" target="_blank" rel="noopener">политикой конфиденциальности</a></span></label>
         <p class="checkout-note" id="consent-status"></p>
         <button type="button" class="primary-button" id="consent-save">Продолжить</button>
       </section>
@@ -3566,16 +3576,45 @@
     await resetToOnboarding();
   }
 
+  function openDeleteAccountModal() {
+    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
+      <section class="paywall-modal glass-panel consent-modal delete-account-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+        <h2>Удаление аккаунта</h2>
+        <p>Вы собираетесь удалить свой аккаунт в приложении «Лоза».</p>
+        <p>Это действие означает:</p>
+        <ul class="delete-account-list">
+          <li>Отзыв вашего согласия на обработку персональных данных для целей предоставления доступа к приложению;</li>
+          <li>Удаление вашего аккаунта и всех персональных данных, полученных от Яндекса (имя, фамилия, телефон, email, фотография профиля, пол);</li>
+          <li>Прекращение доступа ко всем материалам, курсам, чатам и бонусам, включая платные продукты;</li>
+          <li>Если у вас есть действующие оплаченные подписки или программы, их исполнение станет невозможным в связи с удалением аккаунта. Доступ к ним будет закрыт без права восстановления. Возврат денежных средств за неоказанные услуги производится в соответствии с условиями договора оферты.</li>
+        </ul>
+        <p><strong>Восстановление аккаунта после удаления невозможно.</strong></p>
+        <p class="checkout-note" id="delete-account-status"></p>
+        <div class="delete-account-actions">
+          <button type="button" class="secondary-button" id="delete-account-cancel">Отмена</button>
+          <button type="button" class="primary-button" id="delete-account-confirm">Удалить аккаунт</button>
+        </div>
+      </section>
+    </div>`;
+    document.body.classList.add('paywall-open');
+    $('#delete-account-cancel')?.addEventListener('click', closePortal);
+    $('#modal-close')?.addEventListener('click', (event) => {
+      if (event.target.id === 'modal-close') closePortal();
+    });
+    $('#delete-account-confirm')?.addEventListener('click', async () => {
+      const status = $('#delete-account-status');
+      try {
+        await API.deleteAccount();
+        closePortal();
+        await resetToOnboarding();
+      } catch (error) {
+        if (status) status.textContent = error instanceof Error ? error.message : 'Не удалось удалить аккаунт';
+      }
+    });
+  }
+
   async function handleDeleteAccount() {
-    const ok = window.confirm('Удалить аккаунт навсегда? Это действие нельзя отменить.');
-    if (!ok) return;
-    try {
-      await API.deleteAccount();
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Не удалось удалить аккаунт');
-      return;
-    }
-    await resetToOnboarding();
+    openDeleteAccountModal();
   }
 
   function bindProfile(root) {
@@ -3687,7 +3726,7 @@
   async function loadFeed() {
     try {
       const data = await API.feed();
-      if (data.posts?.length) {
+      if (Array.isArray(data.posts)) {
         state.feedPosts = data.posts.map((p) => {
           const rawRole = p.author?.role || p.authorRole || '';
           const team = isTeamRole(rawRole);
@@ -3742,6 +3781,7 @@
       const data = await API.chatRooms();
       if (data.access) state.access = data.access;
       state.chatRooms = (data.rooms || []).filter((room) => {
+        if (room.slug === 'intensive') return false;
         if (room.slug !== 'posts') return true;
         return Boolean(state.user) || isStaffUser();
       }).map((room) => {
@@ -4197,6 +4237,11 @@
       pollChatRooms({ force: true });
       if (!state.chatStream) startChatStream();
       else if (Date.now() - state.chatStreamSeenAt > CHAT_STREAM_STALE_MS) restartChatStream();
+      if (state.tab === 'feed') {
+        loadFeed().then(() => {
+          if (state.tab === 'feed') renderScreen();
+        });
+      }
     };
     document.addEventListener('visibilitychange', wake);
     window.addEventListener('focus', wake);
@@ -4298,10 +4343,26 @@
     navigator.serviceWorker.addEventListener('message', (event) => {
       const data = event.data;
       if (data?.type === 'loza:open-chat') {
+        if (String(data.url || '').includes('tab=feed')) {
+          setTab('feed');
+          return;
+        }
         openChatFromPush(data.roomId || '');
         return;
       }
       if (data?.type === 'loza:chat-push') handleForegroundChatPush(data);
+      if (data?.tab === 'feed' || String(data?.url || '').includes('tab=feed')) {
+        loadFeed().then(() => {
+          if (state.tab === 'feed') renderScreen();
+        });
+        if (state.tab !== 'feed') {
+          showAppToast(data.body || 'Новый пост в ленте', {
+            title: data.title || 'Лента',
+            hold: 6000,
+            onOpen: () => setTab('feed'),
+          });
+        }
+      }
     });
   }
 
