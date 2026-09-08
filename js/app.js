@@ -99,6 +99,7 @@
     chatStreamRetry: 0,
     chatStreamSeenAt: 0,
     chatPollTimer: null,
+    feedPollTimer: null,
     chatPollTick: 0,
     chatPollBusy: false,
     chatView: 'rooms',
@@ -160,9 +161,10 @@
   }
 
   function canPostInRoom(room) {
-    if (!room || room.locked) return false;
-    if (room.canPost !== false) return true;
-    return isStaffUser();
+    if (!room) return false;
+    if (isStaffUser()) return true;
+    if (room.locked) return false;
+    return room.canPost !== false;
   }
 
   const FALLBACK_PLANS = [
@@ -2863,7 +2865,7 @@
   function bindChat(root) {
     $$('[data-room]', root).forEach((b) => {
       b.onclick = () => {
-        if (b.dataset.locked === '1') {
+        if (b.dataset.locked === '1' && !isStaffUser()) {
           openPaywall({
             reason: 'chat',
             title: 'Закрытый чат клуба',
@@ -3723,6 +3725,10 @@
     }
   }
 
+  function feedFingerprint(posts) {
+    return (posts || []).map((post) => `${post.id}:${post.body}:${post.imageUrl || ''}:${post.comments || 0}`).join('|');
+  }
+
   async function loadFeed() {
     try {
       const data = await API.feed();
@@ -3746,6 +3752,19 @@
     } catch {
       /* fallback */
     }
+  }
+
+  function ensureFeedPolling() {
+    if (state.feedPollTimer) return;
+    state.feedPollTimer = window.setInterval(() => {
+      if (document.hidden || state.tab !== 'feed') return;
+      const before = feedFingerprint(state.feedPosts);
+      loadFeed().then(() => {
+        if (state.tab === 'feed' && feedFingerprint(state.feedPosts) !== before) {
+          renderScreen();
+        }
+      });
+    }, 8000);
   }
 
   function normalizeChatMessage(message) {
@@ -4644,6 +4663,7 @@
     Promise.all([loadContent(), loadFeed(), loadChatRooms()])
       .then(() => {
         startChatStream();
+        ensureFeedPolling();
         bindChatLiveRefresh();
         bindPushDeepLinks();
         syncPushEndpoint();
@@ -4652,6 +4672,7 @@
       })
       .catch(() => {
         startChatStream();
+        ensureFeedPolling();
         bindChatLiveRefresh();
         bindPushDeepLinks();
       });

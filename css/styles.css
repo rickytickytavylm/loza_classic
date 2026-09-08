@@ -6080,13 +6080,36 @@ body.material-immersive-open {
 
 .feed-page {
   width: 100%;
-  max-width: none;
-  margin: 0;
+  max-width: 560px;
+  margin: 0 auto;
 }
 
 .insta-feed {
   display: grid;
   gap: 0;
+}
+
+@media (min-width: 761px) {
+  .page-shell-feed {
+    padding-inline: 16px;
+    padding-top: 18px;
+  }
+
+  .feed-page {
+    overflow: hidden;
+    border: 1px solid rgba(var(--plum-rgb), 0.1);
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(61, 41, 75, 0.06);
+  }
+
+  .insta-post:last-child {
+    border-bottom: 0;
+  }
+
+  .insta-post-media {
+    max-height: 560px;
+  }
 }
 
 .insta-post {
