@@ -3704,6 +3704,7 @@
               transcript: entry.transcript || entry.body || fallback.transcript,
               mediaUrl: entry.mediaUrl || fallback.mediaUrl,
               audioAssetPath: entry.audioAssetPath || fallback.audioAssetPath,
+              poster: entry.coverUrl || fallback.poster || '',
               locked: Boolean(entry.locked),
               requiredTier: entry.requiredTier || null,
             };
