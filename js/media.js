@@ -149,7 +149,7 @@
   function getMaterialSummary(item) {
     const description = item.description && String(item.description).trim();
     if (description && !isPlaceholderMediaCopy(description)) {
-      return cleanDisplayText(description);
+      return cleanContentText(description);
     }
     if (item.sectionId === 'movies' || item.kind === 'movie') {
       return 'Рекомендация киноклуба: фильм месяца и вопрос для рефлексии. Запись психологического разбора — в конце месяца.';

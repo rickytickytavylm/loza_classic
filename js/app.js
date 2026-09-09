@@ -100,6 +100,7 @@
     chatStreamSeenAt: 0,
     chatPollTimer: null,
     feedPollTimer: null,
+    copyLockBound: false,
     chatPollTick: 0,
     chatPollBusy: false,
     chatView: 'rooms',
@@ -163,8 +164,8 @@
   function canPostInRoom(room) {
     if (!room) return false;
     if (isStaffUser()) return true;
-    if (room.locked) return false;
-    return room.canPost !== false;
+    if (room.canPost === false) return false;
+    return !room.locked;
   }
 
   const FALLBACK_PLANS = [
@@ -429,6 +430,23 @@
     return asset(D.EDITORIAL_BACKGROUNDS[Math.abs(i) % D.EDITORIAL_BACKGROUNDS.length]);
   }
 
+  function applyMemberCopyLock() {
+    document.documentElement.classList.toggle('is-staff', isStaffUser());
+    if (isStaffUser() || state.copyLockBound) return;
+    state.copyLockBound = true;
+    const block = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('input, textarea, [contenteditable="true"]')) return;
+      if (target.closest('.insta-post, .media-feed-card, .material-page, .chat-bubble-main, .telegram-thread')) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener('copy', block);
+    document.addEventListener('cut', block);
+    document.addEventListener('contextmenu', block);
+  }
+
   function setImmersive() {
     const app = $('#app');
     app.classList.toggle('immersive-ai', state.tab === 'ai');
@@ -468,6 +486,7 @@
     renderNav();
     renderScreen();
     setImmersive();
+    applyMemberCopyLock();
     if (tab === 'feed') {
       loadFeed().then(() => {
         if (state.tab === 'feed') renderScreen();
@@ -740,30 +759,49 @@
     });
   }
 
+  function feedLikeButton(postId, liked, likes) {
+    return `<button class="insta-action${liked ? ' insta-liked' : ''}" type="button" data-like="${esc(postId)}">${ic('heart', 24, { fill: liked ? 'currentColor' : 'none' })}<span>${likes}</span></button>`;
+  }
+
   function renderFeed() {
     const posts = state.feedPosts.map((post, index) => {
       const authorName = post.authorName || post.author || 'Лоза';
       const showBrandLogo = authorName === 'Лоза' || isTeamRole(post.authorRole);
-      const liked = state.feedLikes[post.id];
-      const likes = (liked ? pseudoLikes(post.id) + 1 : pseudoLikes(post.id));
+      const liked = Boolean(state.feedLikes[post.id] || post.liked);
+      const likes = Number(post.likes || 0);
       const localOnly = (state.feedComments[post.id] || []).filter((c) => String(c.id).startsWith('l-')).length;
       const comments = (post.comments || 0) + localOnly;
       const rawImage = post.imageUrl || '';
       const image = (/^https?:\/\//i.test(rawImage) || rawImage.startsWith('data:'))
         ? rawImage
         : (asset(rawImage) || bgImage(index));
+      const videoUrl = post.videoUrl && String(post.videoUrl).includes('kinescope.io')
+        ? M.kinescopeEmbed(post.videoUrl)
+        : '';
+      const media = videoUrl
+        ? `<iframe allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen src="${esc(videoUrl)}" title="${esc(post.title || 'Видео')}"></iframe>`
+        : `<img alt="" src="${esc(image)}" loading="lazy" />`;
+      const titleHtml = post.title
+        ? `<h3 class="insta-post-title">${esc(post.title)}</h3>`
+        : '';
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
           <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? `<img class="insta-post-brand-mark" src="${localAsset('assets/brand-avatar.png')}" alt="Лоза" />` : esc(authorName[0])}</div>
           <div class="insta-post-meta"><strong>${esc(authorName)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
         </header>
-        <div class="insta-post-media"><img alt="" src="${esc(image)}" loading="lazy" /></div>
+        <div class="insta-post-media${videoUrl ? ' is-video' : ''}">${media}</div>
         <div class="insta-post-actions">
-          <button class="insta-action${liked ? ' insta-liked' : ''}" type="button" data-like="${esc(post.id)}">${ic('heart', 24, { fill: liked ? 'currentColor' : 'none' })}<span>${likes}</span></button>
+          ${feedLikeButton(post.id, liked, likes)}
           <button class="insta-action" type="button" data-comments="${esc(post.id)}">${ic('messageCircle', 24)}<span>${comments}</span></button>
           <button class="insta-action insta-action-share" type="button" data-share="${esc(post.id)}">${ic('send', 24)}</button>
         </div>
-        <div class="insta-post-caption"><strong>${esc(authorName)}</strong> ${esc(post.body || post.text).replace(/\n/g, '<br>')}</div>
+        <div class="insta-post-caption">
+          ${titleHtml}
+          <strong>${esc(authorName)}</strong> ${esc(post.body || post.text).replace(/\n/g, '<br>')}
+        </div>
+        <div class="insta-post-actions insta-post-actions-end">
+          ${feedLikeButton(post.id, liked, likes)}
+        </div>
       </article>`;
     }).join('');
     return `<div class="feed-page"><div class="feed-list insta-feed">${posts}</div></div>`;
@@ -771,12 +809,34 @@
 
   function bindFeed(root) {
     $$('[data-like]', root).forEach((b) => {
-      b.onclick = () => {
+      b.onclick = async () => {
         const id = b.dataset.like;
-        const liked = !(state.feedLikes[id]);
-        state.feedLikes[id] = liked;
-        b.classList.toggle('insta-liked', liked);
-        b.innerHTML = `${ic('heart', 24, { fill: liked ? 'currentColor' : 'none' })}<span>${pseudoLikes(id) + (liked ? 1 : 0)}</span>`;
+        const post = state.feedPosts.find((item) => item.id === id);
+        if (!post || !API.getToken()) {
+          showAppToast('Войдите, чтобы поставить лайк', { title: 'Лента', tone: 'warn' });
+          return;
+        }
+        const next = !Boolean(state.feedLikes[id] || post.liked);
+        const likes = Math.max(0, Number(post.likes || 0) + (next ? 1 : -1));
+        state.feedLikes[id] = next;
+        post.liked = next;
+        post.likes = likes;
+        root.querySelectorAll(`[data-like="${CSS.escape(id)}"]`).forEach((btn) => {
+          btn.classList.toggle('insta-liked', next);
+          btn.innerHTML = `${ic('heart', 24, { fill: next ? 'currentColor' : 'none' })}<span>${likes}</span>`;
+        });
+        try {
+          const result = await API.likePost(id);
+          post.liked = Boolean(result.liked);
+          post.likes = Number(result.likes ?? likes);
+          state.feedLikes[id] = post.liked;
+          root.querySelectorAll(`[data-like="${CSS.escape(id)}"]`).forEach((btn) => {
+            btn.classList.toggle('insta-liked', post.liked);
+            btn.innerHTML = `${ic('heart', 24, { fill: post.liked ? 'currentColor' : 'none' })}<span>${post.likes}</span>`;
+          });
+        } catch {
+          showAppToast('Не удалось сохранить лайк', { title: 'Лента', tone: 'warn' });
+        }
       };
     });
     $$('[data-comments]', root).forEach((b) => {
@@ -1065,9 +1125,12 @@
           imageUrl: resolveShareImageUrl(imageUrl),
           shareUrl,
         });
-        // Files ONLY — text/url alongside a file becomes a second Telegram message.
+        if (!navigator.canShare || navigator.canShare({ files: [card], url: shareUrl })) {
+          await navigator.share({ files: [card], title: title || 'Лоза', text: shareUrl, url: shareUrl });
+          return;
+        }
         if (!navigator.canShare || navigator.canShare({ files: [card] })) {
-          await navigator.share({ files: [card] });
+          await navigator.share({ files: [card], text: shareUrl });
           return;
         }
       } catch (err) {
@@ -1125,7 +1188,7 @@
         <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span>${lockBadge}</div>
         <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}">${cover}${lockOverlay}</button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
-      <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item))}</p>
+      <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item)).replace(/\n/g, '<br>')}</p>
         <div class="media-feed-card-actions">
           <button type="button" class="${item.locked ? 'media-cta-locked' : 'media-cta-open'}" data-open-item="${esc(item.id)}">${item.locked ? ic('lock', 16) : ic('play', 16)}<span>${ctaLabel}</span></button>
           <button class="${liked ? 'media-action-liked' : ''}" type="button" data-like-item="${esc(item.id)}">${ic('heart', 18, { fill: liked ? 'currentColor' : 'none' })}</button>
@@ -3745,9 +3808,15 @@
             createdAt: p.createdAt,
             body: p.body || '',
             imageUrl: p.imageUrl,
+            videoUrl: p.videoUrl || '',
+            title: p.title || '',
+            liked: Boolean(p.liked),
             likes: p.likes || p._count?.reactions || 0,
             comments: p.comments || p._count?.comments || 0,
           };
+        });
+        state.feedPosts.forEach((post) => {
+          state.feedLikes[post.id] = Boolean(post.liked);
         });
       }
     } catch {
@@ -3801,7 +3870,6 @@
       const data = await API.chatRooms();
       if (data.access) state.access = data.access;
       state.chatRooms = (data.rooms || []).filter((room) => {
-        if (room.slug === 'intensive') return false;
         if (room.slug !== 'posts') return true;
         return Boolean(state.user) || isStaffUser();
       }).map((room) => {
@@ -4593,11 +4661,15 @@
         state.access = null;
         state.aiUsage = null;
       }
+      applyMemberCopyLock();
       return state.user;
-    } catch {
+    } catch (error) {
+      const blocked = String(error?.message || '') === 'USER_BLOCKED';
+      API.setToken('');
       state.user = null;
       state.access = null;
       state.aiUsage = null;
+      if (blocked) showAuthScreen('Этот аккаунт заблокирован. Войти в клуб нельзя.');
       return null;
     }
   }

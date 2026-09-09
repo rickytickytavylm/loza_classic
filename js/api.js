@@ -93,6 +93,8 @@
     content: () => request('/content'),
     feedComments: (postId) => request(`/feed/${postId}/comments`),
     feed: () => request('/feed'),
+    likePost: (postId) =>
+      request(`/feed/${postId}/like`, { method: 'POST', body: '{}' }),
     addFeedComment: (postId, body) =>
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
     chatRooms: () => request(`/chat/rooms?guestId=${encodeURIComponent(getGuestId())}`),
