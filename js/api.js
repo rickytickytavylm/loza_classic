@@ -76,8 +76,8 @@
   window.LOZA_API = {
     API_URL,
     API_ORIGIN,
-    shareMediaUrl: (id) => `${API_ORIGIN}/s/${encodeURIComponent(id)}`,
-    sharePostUrl: (id) => `${API_ORIGIN}/s/post/${encodeURIComponent(id)}`,
+    shareMediaUrl: (id) => `${window.location.origin}/m/${encodeURIComponent(id)}`,
+    sharePostUrl: (id) => `${window.location.origin}/p/${encodeURIComponent(id)}`,
     yandexLoginUrl: `${API_ORIGIN}/api/auth/yandex?returnTo=${encodeURIComponent(`${window.location.origin}/?auth=yandex_ok`)}`,
     yandexAuthorize: (returnTo) => {
       const back = returnTo || `${window.location.origin}/?auth=yandex_ok`;

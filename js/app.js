@@ -1113,30 +1113,10 @@
     return new File([blob], 'loza-share.jpg', { type: 'image/jpeg' });
   }
 
-  async function shareWithPreview({ title, url, imageUrl, eyebrow, cardTitle }) {
+  async function shareWithPreview({ title, url }) {
     const shareUrl = url || `${window.location.origin}${window.location.pathname}`;
-    const labelOnCard = cardTitle !== undefined ? cardTitle : (title || '');
 
     if (navigator.share) {
-      try {
-        const card = await buildShareCardFile({
-          title: labelOnCard,
-          eyebrow: eyebrow || 'Лоза',
-          imageUrl: resolveShareImageUrl(imageUrl),
-          shareUrl,
-        });
-        if (!navigator.canShare || navigator.canShare({ files: [card], url: shareUrl })) {
-          await navigator.share({ files: [card], title: title || 'Лоза', text: shareUrl, url: shareUrl });
-          return;
-        }
-        if (!navigator.canShare || navigator.canShare({ files: [card] })) {
-          await navigator.share({ files: [card], text: shareUrl });
-          return;
-        }
-      } catch (err) {
-        if (err?.name === 'AbortError') return;
-      }
-
       try {
         await navigator.share({ title: title || 'Лоза', url: shareUrl });
         return;
@@ -4362,8 +4342,11 @@
   function captureContentDeepLink() {
     try {
       const params = new URLSearchParams(window.location.search);
-      const media = params.get('media');
-      const post = params.get('post');
+      const path = window.location.pathname || '';
+      const mediaMatch = path.match(/\/m\/([^/]+)\/?$/);
+      const postMatch = path.match(/\/p\/([^/]+)\/?$/);
+      const media = params.get('media') || (mediaMatch ? decodeURIComponent(mediaMatch[1]) : '');
+      const post = params.get('post') || (postMatch ? decodeURIComponent(postMatch[1]) : '');
       if (media) sessionStorage.setItem('loza-open-media', media);
       if (post) sessionStorage.setItem('loza-open-post', post);
     } catch {

@@ -1,0 +1,31 @@
+name: Share pages
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Generate share pages
+        run: node scripts/generate-share-pages.js
+      - name: Commit if changed
+        run: |
+          git config user.name "loza-share"
+          git config user.email "clubloza@yandex.ru"
+          git add m p .nojekyll
+          if git diff --cached --quiet; then
+            echo "No share page changes"
+            exit 0
+          fi
+          git commit -m "Refresh club share previews for Telegram and messengers."
+          git push
