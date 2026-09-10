@@ -4568,6 +4568,12 @@ html.is-compact .mobile-nav {
   display: grid !important;
 }
 
+/* Inside an open chat thread the composer must stay reachable: no tab bar. */
+html.is-compact .app.immersive-chat .mobile-nav,
+.app.immersive-chat .mobile-nav {
+  display: none !important;
+}
+
 html.is-compact .hero,
 html.is-compact .profile-grid {
   grid-template-columns: 1fr !important;
@@ -4609,6 +4615,10 @@ html.is-compact .hero-actions {
 
   .mobile-nav {
     display: grid !important;
+  }
+
+  .app.immersive-chat .mobile-nav {
+    display: none !important;
   }
 
   .hero,
