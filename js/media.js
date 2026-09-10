@@ -323,6 +323,11 @@
     return unique.slice(0, 4);
   }
 
+  function extractKinescopeUrl(text) {
+    const match = String(text || '').match(/https?:\/\/(?:www\.)?kinescope\.io\/[^\s<>"']+/i);
+    return match ? match[0].replace(/[),.;]+$/, '') : '';
+  }
+
   function kinescopeEmbed(rawUrl) {
     try {
       const url = new URL(rawUrl);
@@ -354,6 +359,7 @@
     getMaterialDurationMinutes,
     itemHasMediaLayout,
     resolveAudioUrl,
+    extractKinescopeUrl,
     kinescopeEmbed,
     formatAudioTime,
   };

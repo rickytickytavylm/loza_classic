@@ -1,6 +1,6 @@
 // Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '54';
+const ASSET_VERSION = '55';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
 const IMAGE_CACHE = 'loza-classic-images-v12';
 const BADGE_CACHE = 'loza-classic-badge-v1';
@@ -88,7 +88,7 @@ function networkFirstImage(request) {
 
 // Static legal pages have no app script, so they cannot handle our messages.
 function appWindows(windows) {
-  return windows.filter((client) => !/\/(privacy|terms)\.html/i.test(client.url));
+  return windows.filter((client) => !/\/(privacy|terms|consent)\.html/i.test(client.url));
 }
 
 async function setStoredBadgeCount(value) {

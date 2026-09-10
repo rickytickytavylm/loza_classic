@@ -161,6 +161,22 @@
     return isStaffUser() || ['library', 'club', 'club_plus'].includes(currentTier());
   }
 
+  function hasClubAccess() {
+    return isStaffUser() || ['club', 'club_plus'].includes(currentTier());
+  }
+
+  function isClubOnlyMediaSection(id) {
+    return id === 'home_reviews' || id === 'club_reviews';
+  }
+
+  function visibleMediaSectionIds() {
+    const club = hasClubAccess();
+    return Object.keys(D.MEDIA_SECTION_LABELS).filter((id) => {
+      if (isClubOnlyMediaSection(id)) return club;
+      return true;
+    });
+  }
+
   function canPostInRoom(room) {
     if (!room) return false;
     if (isStaffUser()) return true;
@@ -176,7 +192,7 @@
       planDays: 30,
       description: 'Закрытая медиатека и AI 15 запросов в неделю',
       info: D.LIBRARY_PLAN_INFO,
-      benefits: ['Подкасты, эфиры и киноклуб', 'AI — 15 запросов в неделю'],
+      benefits: ['Подкасты, вопросы, эфиры и киноклуб', 'AI — 15 запросов в неделю'],
     },
     {
       code: 'club_30',
@@ -412,7 +428,7 @@
   }
 
   function isTeamRole(role) {
-    return role === 'ADMIN' || role === 'OWNER';
+    return role === 'ADMIN' || role === 'OWNER' || role === 'CURATOR';
   }
 
   const SECTION_TITLE_OVERRIDES = {
@@ -438,13 +454,14 @@
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest('input, textarea, [contenteditable="true"]')) return;
-      if (target.closest('.insta-post, .media-feed-card, .material-page, .chat-bubble-main, .telegram-thread')) {
+      if (target.closest('.insta-post, .media-feed-card, .material-page, .chat-bubble-main, .telegram-thread, .telegram-messages, .telegram-room-list')) {
         event.preventDefault();
       }
     };
     document.addEventListener('copy', block);
     document.addEventListener('cut', block);
     document.addEventListener('contextmenu', block);
+    document.addEventListener('selectstart', block);
   }
 
   function setImmersive() {
@@ -515,7 +532,7 @@
       <section class="paywall-modal glass-panel consent-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <h2>Согласие на обработку данных</h2>
         <p>Чтобы пользоваться клубом, примите условия и политику конфиденциальности.</p>
-        <label class="auth-consent"><input type="checkbox" id="gate-terms" /><span>Принимаю условия использования и даю согласие на обработку персональных данных</span></label>
+        <label class="auth-consent"><input type="checkbox" id="gate-terms" />            <span>Принимаю <a href="./terms.html" target="_blank" rel="noopener">условия использования</a> и даю <a href="./consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a></span></label>
         <label class="auth-consent"><input type="checkbox" id="gate-privacy" /><span>Ознакомлен(а) с <a href="https://lozapsy.ru/politika-konfidencialnosti/" target="_blank" rel="noopener">политикой конфиденциальности</a></span></label>
         <p class="checkout-note" id="consent-status"></p>
         <button type="button" class="primary-button" id="consent-save">Продолжить</button>
@@ -763,30 +780,51 @@
     return `<button class="insta-action${liked ? ' insta-liked' : ''}" type="button" data-like="${esc(postId)}">${ic('heart', 24, { fill: liked ? 'currentColor' : 'none' })}<span>${likes}</span></button>`;
   }
 
+  function extractKinescopeUrl(text) {
+    if (typeof M.extractKinescopeUrl === 'function') return M.extractKinescopeUrl(text);
+    const match = String(text || '').match(/https?:\/\/(?:www\.)?kinescope\.io\/[^\s<>"']+/i);
+    return match ? match[0].replace(/[),.;]+$/, '') : '';
+  }
+
+  function isDirectImageUrl(url) {
+    const value = String(url || '').trim();
+    if (!value) return false;
+    if (/kinescope\.io/i.test(value)) return false;
+    if (value.startsWith('data:') || value.startsWith('/')) return true;
+    if (/\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(value)) return true;
+    if (/userapi\.com|vkuservideo\.net|sun\d+-|lozapsy\.help|storage\.yandexcloud\.net|api\.loza-club\.ru\/uploads/i.test(value)) return true;
+    return /^https?:\/\//i.test(value) && !/vk\.com\/(photo|wall|video|clip)/i.test(value);
+  }
+
   function renderFeed() {
     const posts = state.feedPosts.map((post, index) => {
-      const authorName = post.authorName || post.author || 'Лоза';
-      const showBrandLogo = authorName === 'Лоза' || isTeamRole(post.authorRole);
+      const authorName = 'Лоза';
       const liked = Boolean(state.feedLikes[post.id] || post.liked);
       const likes = Number(post.likes || 0);
       const localOnly = (state.feedComments[post.id] || []).filter((c) => String(c.id).startsWith('l-')).length;
       const comments = (post.comments || 0) + localOnly;
       const rawImage = post.imageUrl || '';
-      const image = (/^https?:\/\//i.test(rawImage) || rawImage.startsWith('data:'))
-        ? rawImage
-        : (asset(rawImage) || bgImage(index));
-      const videoUrl = post.videoUrl && String(post.videoUrl).includes('kinescope.io')
-        ? M.kinescopeEmbed(post.videoUrl)
+      const kinescopeRaw = post.videoUrl || extractKinescopeUrl(post.body) || extractKinescopeUrl(rawImage);
+      const videoUrl = kinescopeRaw && /kinescope\.io/i.test(kinescopeRaw)
+        ? M.kinescopeEmbed(kinescopeRaw)
         : '';
+      const resolvedImage = (/^https?:\/\//i.test(rawImage) || rawImage.startsWith('data:'))
+        ? (isDirectImageUrl(rawImage) ? rawImage : '')
+        : (asset(rawImage) || '');
+      const image = resolvedImage || bgImage(index);
       const media = videoUrl
         ? `<iframe allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen src="${esc(videoUrl)}" title="${esc(post.title || 'Видео')}"></iframe>`
         : `<img alt="" src="${esc(image)}" loading="lazy" />`;
       const titleHtml = post.title
         ? `<h3 class="insta-post-title">${esc(post.title)}</h3>`
         : '';
+      const captionBody = String(post.body || post.text || '')
+        .replace(/https?:\/\/(?:www\.)?kinescope\.io\/[^\s<>"']+/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
-          <div class="insta-post-avatar${showBrandLogo ? ' is-brand' : ''}">${showBrandLogo ? `<img class="insta-post-brand-mark" src="${localAsset('assets/brand-avatar.png')}" alt="Лоза" />` : esc(authorName[0])}</div>
+          <div class="insta-post-avatar is-brand"><img class="insta-post-brand-mark" src="${localAsset('assets/brand-avatar.png')}" alt="Лоза" /></div>
           <div class="insta-post-meta"><strong>${esc(authorName)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
         </header>
         <div class="insta-post-media${videoUrl ? ' is-video' : ''}">${media}</div>
@@ -797,7 +835,7 @@
         </div>
         <div class="insta-post-caption">
           ${titleHtml}
-          <strong>${esc(authorName)}</strong> ${esc(post.body || post.text).replace(/\n/g, '<br>')}
+          <strong>${esc(authorName)}</strong> ${esc(captionBody).replace(/\n/g, '<br>')}
         </div>
         <div class="insta-post-actions insta-post-actions-end">
           ${feedLikeButton(post.id, liked, likes)}
@@ -1140,7 +1178,11 @@
   }
 
   function filteredMediaItems() {
+    if (isClubOnlyMediaSection(state.mediaSection) && !hasClubAccess()) {
+      state.mediaSection = 'all';
+    }
     return state.libraryItems.filter((item) => {
+      if (isClubOnlyMediaSection(item.sectionId) && !hasClubAccess()) return false;
       const sec = state.mediaSection === 'all' || item.sectionId === state.mediaSection;
       const q = state.mediaQuery.trim().toLowerCase();
       const query = !q || `${item.title} ${item.meta} ${item.description}`.toLowerCase().includes(q);
@@ -1241,9 +1283,11 @@
   }
 
   function renderMedia() {
-    const cats = Object.entries(D.MEDIA_SECTION_LABELS).map(([id, label]) =>
-      `<button type="button" class="${state.mediaSection === id ? 'active' : ''}" data-cat="${id}">${label}</button>`,
-    ).join('');
+    const cats = Object.entries(D.MEDIA_SECTION_LABELS)
+      .filter(([id]) => visibleMediaSectionIds().includes(id))
+      .map(([id, label]) =>
+        `<button type="button" class="${state.mediaSection === id ? 'active' : ''}" data-cat="${id}">${label}</button>`,
+      ).join('');
     const items = filteredMediaItems();
     const note = state.mediaQuery.trim()
       ? `<p class="media-feed-search-note">Найдено ${items.length} материалов по запросу «${esc(state.mediaQuery.trim())}»</p>`
@@ -2641,12 +2685,15 @@
     const emojis = (D.CHAT_QUICK_EMOJIS || []).map((emoji) =>
       `<button type="button" class="chat-emoji-pick" data-emoji="${esc(emoji)}">${esc(emoji)}</button>`,
     ).join('');
-    const ownActions = mine
+    const ownActions = (mine || staff)
       ? `<button type="button" data-chat-action="edit">${ic('pencil', 18)}<span>Изменить</span></button>
          <button type="button" class="is-danger" data-chat-action="delete">${ic('trash', 18)}<span>Удалить</span></button>`
       : `<button type="button" class="is-danger" data-chat-action="report">${ic('flag', 18)}<span>Пожаловаться</span></button>`;
     const pinAction = staff
       ? `<button type="button" data-chat-action="pin">${ic('pin', 18)}<span>${message.isPinned ? 'Открепить' : 'Закрепить'}</span></button>`
+      : '';
+    const copyAction = staff
+      ? `<button type="button" data-chat-action="copy">${ic('copy', 18)}<span>Копировать</span></button>`
       : '';
 
     $('#portal').innerHTML = `<div class="chat-msg-menu-backdrop" id="modal-close">
@@ -2654,7 +2701,7 @@
         <div class="chat-msg-menu-emojis">${emojis}</div>
         <div class="chat-msg-menu-actions">
           <button type="button" data-chat-action="reply">${ic('reply', 18)}<span>Ответить</span></button>
-          <button type="button" data-chat-action="copy">${ic('copy', 18)}<span>Копировать</span></button>
+          ${copyAction}
           ${pinAction}
           ${ownActions}
         </div>
@@ -2990,6 +3037,10 @@
       }
       const attachmentIds = attachments.filter((item) => item.id).map((item) => item.id);
       if (!body && !attachmentIds.length) return;
+      if (body.length > 8000) {
+        showAppToast('Слишком длинный текст. Сократите и отправьте ещё раз.', { title: 'Чат', tone: 'warn' });
+        return;
+      }
 
       input.value = '';
       resizeChatDraft(input);
@@ -3025,7 +3076,7 @@
           releaseChatAttachmentPreviews(sentAttachments);
         }
         renderChatLive();
-      } catch {
+      } catch (error) {
         if (editing) {
           if (compose) state.chatCompose = compose;
           input.value = body;
@@ -3033,6 +3084,15 @@
           renderChatLive();
           window.alert('Не удалось изменить сообщение.');
           return;
+        }
+        const code = String(error?.message || '');
+        if (code === 'VALIDATION_ERROR' || code === 'CHAT_READ_ONLY') {
+          showAppToast(code === 'CHAT_READ_ONLY'
+            ? 'В этом чате пишет только команда клуба'
+            : 'Сообщение не прошло проверку. Сократите текст и попробуйте ещё раз.', {
+            title: 'Чат',
+            tone: 'warn',
+          });
         }
         // Keep the bubble as a failed outbox item — tap ! to retry.
         if (pending) {
@@ -3046,7 +3106,9 @@
           };
         }
         renderChatLive();
-        showAppToast('Не отправилось — нажмите ! чтобы повторить', { title: 'Чат', tone: 'warn' });
+        if (code !== 'VALIDATION_ERROR' && code !== 'CHAT_READ_ONLY') {
+          showAppToast('Не отправилось — нажмите ! чтобы повторить', { title: 'Чат', tone: 'warn' });
+        }
       }
     });
   }
@@ -3780,11 +3842,9 @@
       if (Array.isArray(data.posts)) {
         state.feedPosts = data.posts.map((p) => {
           const rawRole = p.author?.role || p.authorRole || '';
-          const team = isTeamRole(rawRole);
-          const rawName = p.author?.name || p.authorName || '';
           return {
             id: p.id,
-            authorName: team || !rawName ? 'Лоза' : rawName,
+            authorName: 'Лоза',
             authorRole: roleLabel(rawRole),
             createdAt: p.createdAt,
             body: p.body || '',
