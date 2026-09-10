@@ -90,7 +90,7 @@ function shareHtml({ title, description, image, pageUrl, clubUrl }) {
     <meta name="twitter:title" content="${safeTitle}" />
     <meta name="twitter:description" content="${safeLead}" />
     <meta name="twitter:image" content="${safeImage}" />
-    <link rel="canonical" href="${safeClub}" />
+    <link rel="canonical" href="${safePage}" />
   </head>
   <body>
     <script>location.replace(${jsClub});</script>
@@ -107,9 +107,12 @@ function resetDir(dir) {
 function writePage(kind, id, card) {
   const safe = safeId(id);
   if (!safe) return false;
+  const html = shareHtml(card);
   const folder = path.join(ROOT, kind, safe);
+  fs.mkdirSync(path.join(ROOT, kind), { recursive: true });
+  fs.writeFileSync(path.join(ROOT, kind, `${safe}.html`), html, 'utf8');
   fs.mkdirSync(folder, { recursive: true });
-  fs.writeFileSync(path.join(folder, 'index.html'), shareHtml(card), 'utf8');
+  fs.writeFileSync(path.join(folder, 'index.html'), html, 'utf8');
   return true;
 }
 
