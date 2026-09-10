@@ -532,7 +532,7 @@
       <section class="paywall-modal glass-panel consent-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <h2>Согласие на обработку данных</h2>
         <p>Чтобы пользоваться клубом, примите условия и политику конфиденциальности.</p>
-        <label class="auth-consent"><input type="checkbox" id="gate-terms" />            <span>Принимаю <a href="./terms.html" target="_blank" rel="noopener">условия использования</a> и даю <a href="./consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a></span></label>
+        <label class="auth-consent"><input type="checkbox" id="gate-terms" /><span>Принимаю <a href="./terms.html" target="_blank" rel="noopener">условия использования</a> и даю <a href="./consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a></span></label>
         <label class="auth-consent"><input type="checkbox" id="gate-privacy" /><span>Ознакомлен(а) с <a href="https://lozapsy.ru/politika-konfidencialnosti/" target="_blank" rel="noopener">политикой конфиденциальности</a></span></label>
         <p class="checkout-note" id="consent-status"></p>
         <button type="button" class="primary-button" id="consent-save">Продолжить</button>
