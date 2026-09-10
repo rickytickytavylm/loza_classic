@@ -855,7 +855,7 @@
           title: 'Лоза',
           cardTitle: '',
           eyebrow: authorName === 'Лоза' ? 'Лоза · лента' : `${authorName} · Лоза`,
-          url: `${window.location.origin}${window.location.pathname}?post=${encodeURIComponent(post.id)}`,
+          url: API.sharePostUrl(post.id),
           imageUrl: resolveShareImageUrl(post.imageUrl || post.image || post.coverUrl, index),
         }).catch(() => {
           showAppToast('Не удалось поделиться', { title: 'Поделиться', tone: 'warn' });
@@ -1222,12 +1222,13 @@
         const filtered = filteredMediaItems();
         const visualIndex = Math.max(0, filtered.findIndex((x) => x.id === item.id));
         const kindLabel = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Материал';
-        const cover = item.kind === 'audio' ? audioCoverForItem(item.id) : bgImage(visualIndex);
+        const cover = item.poster
+          || (item.kind === 'audio' ? audioCoverForItem(item.id) : bgImageForItem(item.id) || bgImage(visualIndex));
         shareWithPreview({
           title: shareSnippet(M.cleanDisplayText?.(item.title) || item.title, 72),
           cardTitle: shareSnippet(M.cleanDisplayText?.(item.title) || item.title, 72),
           eyebrow: `Лоза · ${kindLabel}`,
-          url: `${window.location.origin}${window.location.pathname}?media=${encodeURIComponent(item.id)}`,
+          url: API.shareMediaUrl(item.id),
           imageUrl: resolveShareImageUrl(cover, visualIndex),
         }).catch(() => {
           showAppToast('Не удалось поделиться', { title: 'Поделиться', tone: 'warn' });
@@ -4358,12 +4359,49 @@
     return null;
   }
 
+  function captureContentDeepLink() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const media = params.get('media');
+      const post = params.get('post');
+      if (media) sessionStorage.setItem('loza-open-media', media);
+      if (post) sessionStorage.setItem('loza-open-post', post);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function consumeContentDeepLink() {
+    let media = '';
+    let post = '';
+    try {
+      media = sessionStorage.getItem('loza-open-media') || '';
+      post = sessionStorage.getItem('loza-open-post') || '';
+      if (media) sessionStorage.removeItem('loza-open-media');
+      if (post) sessionStorage.removeItem('loza-open-post');
+    } catch {
+      /* ignore */
+    }
+    if (media) {
+      state.tab = 'media';
+      if (state.libraryItems.some((item) => item.id === media)) openItem(media);
+      return;
+    }
+    if (post) {
+      state.tab = 'feed';
+    }
+  }
+
   function applyDeepLinkFromUrl() {
     try {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get('tab');
       const room = params.get('room');
-      if (!tab && !room) return;
+      const media = params.get('media');
+      const post = params.get('post');
+      if (!tab && !room && !media && !post) return;
+      if (media) state.tab = 'media';
+      if (post) state.tab = 'feed';
       if (tab === 'chat' || room) {
         state.tab = 'chat';
         state.chatView = room ? 'thread' : 'rooms';
@@ -4699,6 +4737,7 @@
     window.addEventListener('resize', syncCompactLayout);
     window.addEventListener('orientationchange', syncCompactLayout);
     window.visualViewport?.addEventListener('resize', syncCompactLayout);
+    captureContentDeepLink();
     const authReturn = captureAuthFromUrl();
     bindAuth();
     await Promise.race([
@@ -4742,12 +4781,14 @@
         syncPushEndpoint();
         if (isAuthorized() && state.user) syncPendingConsents();
         renderScreen();
+        consumeContentDeepLink();
       })
       .catch(() => {
         startChatStream();
         ensureFeedPolling();
         bindChatLiveRefresh();
         bindPushDeepLinks();
+        consumeContentDeepLink();
       });
 
     if ('serviceWorker' in navigator) {
