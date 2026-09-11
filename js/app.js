@@ -129,7 +129,17 @@
     mediaSection: 'all',
     mediaQuery: '',
     mediaLikes: JSON.parse(localStorage.getItem('media-likes') || '[]'),
-    aiMessages: [],
+    aiMessages: (() => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem('loza-ai-messages') || '[]');
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .filter((item) => item && (item.role === 'user' || item.role === 'assistant') && String(item.content || '').trim())
+          .slice(-40);
+      } catch {
+        return [];
+      }
+    })(),
     aiSending: false,
     feedLikes: {},
     feedComments: {},
@@ -3456,11 +3466,33 @@
     renderScreen();
   }
 
+  function persistAiMessages() {
+    try {
+      const rows = state.aiMessages
+        .filter((item) => item && String(item.content || '').trim())
+        .slice(-40);
+      localStorage.setItem('loza-ai-messages', JSON.stringify(rows));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function aiScrollEl(root) {
+    return (root || document).querySelector('.ai-coach-scroll');
+  }
+
+  function scrollAiToEnd(root) {
+    const scroller = aiScrollEl(root);
+    if (!scroller) return;
+    scroller.scrollTop = scroller.scrollHeight;
+  }
+
   function refreshAiMessages() {
     const windowEl = $('.ai-chat-window');
     if (!windowEl) return;
     windowEl.innerHTML = aiMessagesHtml();
-    windowEl.scrollTop = windowEl.scrollHeight;
+    persistAiMessages();
+    scrollAiToEnd();
   }
 
   function renderAi() {
@@ -3470,28 +3502,39 @@
     const quotaText = !state.user
       ? 'Войдите, чтобы учитывать лимит по тарифу'
       : (limit == null ? 'AI без ограничений на вашем тарифе' : `${used} из ${limit} запросов на этой неделе`);
-    const hero = !chatting ? `<div class="ai-coach-hero"><span class="eyebrow">AI-наставник Лозы</span><h1>Разбор семейной ситуации с опорой на материалы клуба</h1><p>Опишите ситуацию с подростком — я помогу разложить динамику и предложить бережные шаги.</p><p class="ai-quota-line">${esc(quotaText)}</p></div>` : '';
+    const hero = !chatting ? `<div class="ai-coach-hero"><span class="eyebrow">AI-наставник Лозы</span><h1>Разбор семейной ситуации с опорой на материалы клуба</h1><p>Опишите ситуацию с подростком. Я помогу разложить динамику и предложить бережные шаги.</p><p class="ai-quota-line">${esc(quotaText)}</p></div>` : '';
     const starters = !chatting ? `<div class="ai-starters">${D.AI_STARTERS.map((s) => `<button type="button" data-starter="${esc(s)}"><span>Начать разговор</span>${esc(s)}</button>`).join('')}</div>` : '';
-    const msgs = aiMessagesHtml();
-    return `<section class="ai-coach-page">
+    const msgs = chatting ? `<div class="ai-chat-window">${aiMessagesHtml()}</div>` : '';
+    return `<section class="ai-coach-page${chatting ? ' is-chatting' : ''}">
       <header class="inner-page-header ai-inner-header"><button class="inner-page-back" type="button" data-tab-link="home" aria-label="Назад">${ic('chevronLeft', 22)}</button>${innerBrand('AI-наставник')}<span class="inner-page-spacer" aria-hidden="true"></span></header>
-      <div class="ai-coach-shell${chatting ? ' is-chatting' : ''}">${hero}<div class="ai-chat-window">${msgs}</div>${starters}
-      <form class="ai-composer" id="ai-form"><textarea rows="1" placeholder="Сообщение" id="ai-draft"></textarea><button type="submit">${ic('send', 18)}</button></form></div></section>`;
+      <div class="ai-coach-scroll">${hero}${msgs}${starters}</div>
+      <form class="ai-composer" id="ai-form"><textarea rows="1" placeholder="Сообщение" id="ai-draft"></textarea><button type="submit">${ic('send', 18)}</button></form>
+    </section>`;
   }
 
   function bindAi(root) {
     $$('[data-tab-link]', root).forEach((b) => { b.onclick = () => setTab(b.dataset.tabLink); });
     $$('[data-starter]', root).forEach((b) => { b.onclick = () => sendAi(b.dataset.starter); });
-    $('.ai-chat-window', root)?.addEventListener('click', (e) => {
+    $('.ai-coach-scroll', root)?.addEventListener('click', (e) => {
       const chip = e.target.closest('[data-ai-open]');
       if (!chip) return;
       openAiRecommendation(chip.dataset.aiType || '', chip.dataset.aiTitle || '');
     });
+    const draft = $('#ai-draft', root);
+    const growDraft = () => {
+      if (!draft) return;
+      draft.style.height = 'auto';
+      draft.style.height = `${Math.min(draft.scrollHeight, 130)}px`;
+    };
+    draft?.addEventListener('input', growDraft);
+    growDraft();
     $('#ai-form', root)?.addEventListener('submit', (e) => {
       e.preventDefault();
-      sendAi($('#ai-draft', root).value);
-      $('#ai-draft', root).value = '';
+      sendAi(draft?.value);
+      if (draft) draft.value = '';
+      growDraft();
     });
+    requestAnimationFrame(() => scrollAiToEnd(root));
   }
 
   async function sendAi(text) {
@@ -3500,6 +3543,7 @@
     state.aiMessages.push({ role: 'user', content: body });
     state.aiMessages.push({ role: 'assistant', content: '' });
     state.aiSending = true;
+    persistAiMessages();
     renderScreen();
 
     const setAnswer = (txt) => {
@@ -3570,6 +3614,7 @@
     } finally {
       clearTimeout(timer);
       state.aiSending = false;
+      persistAiMessages();
       renderScreen();
     }
   }
