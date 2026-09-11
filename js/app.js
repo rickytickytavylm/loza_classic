@@ -4880,7 +4880,22 @@
       });
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+      const version = window.LOZA_ASSET_VERSION || '57';
+      navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
+        .then((reg) => {
+          reg.update();
+          if (reg.waiting) reg.waiting.postMessage({ type: 'loza:skip-waiting' });
+        })
+        .catch(() => {});
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type !== 'loza:sw-updated') return;
+        const key = `loza-reloaded-${version}`;
+        try {
+          if (sessionStorage.getItem(key)) return;
+          sessionStorage.setItem(key, '1');
+        } catch { /* ignore */ }
+        location.reload();
+      });
     }
   }
 

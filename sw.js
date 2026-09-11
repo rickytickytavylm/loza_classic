@@ -1,6 +1,6 @@
 // Bump ASSET_VERSION together with the ?v= query in index.html so installed
 // PWAs cannot keep serving stale scripts out of the HTTP cache.
-const ASSET_VERSION = '56';
+const ASSET_VERSION = '57';
 const CACHE = `loza-classic-v${ASSET_VERSION}`;
 const IMAGE_CACHE = 'loza-classic-images-v12';
 const BADGE_CACHE = 'loza-classic-badge-v1';
@@ -34,17 +34,26 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|ico)(\?|$)/i;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()),
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(PRECACHE))
+      .catch(() => {})
+      .then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys
+    caches.keys()
+      .then((keys) => Promise.all(keys
         .filter((k) => k !== CACHE && k !== IMAGE_CACHE && k !== BADGE_CACHE)
-        .map((k) => caches.delete(k))),
-    ).then(() => self.clients.claim()),
+        .map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+      .then((windows) => {
+        appWindows(windows).forEach((client) => {
+          client.postMessage({ type: 'loza:sw-updated', version: ASSET_VERSION });
+        });
+      }),
   );
 });
 
@@ -154,6 +163,10 @@ self.addEventListener('push', (event) => {
 });
 
 self.addEventListener('message', (event) => {
+  if (event.data?.type === 'loza:skip-waiting') {
+    self.skipWaiting();
+    return;
+  }
   if (event.data?.type !== 'loza:set-badge') return;
   event.waitUntil(setStoredBadgeCount(event.data.count));
 });
@@ -211,7 +224,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    fetch(request)
+    fetch(request, { cache: 'no-store' })
       .then((response) => {
         if (response.ok) {
           const clone = response.clone();

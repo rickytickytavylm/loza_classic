@@ -27,19 +27,47 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400..900&family=Manrope:wght@400..800&family=Onest:wght@400..800&family=Unbounded:wght@500..800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/styles.css?v=56" />
-    <link rel="stylesheet" href="css/onboarding.css?v=56" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <link rel="stylesheet" href="css/styles.css?v=57" />
+    <link rel="stylesheet" href="css/onboarding.css?v=57" />
     <title>Лоза — психологический клуб</title>
     <script>
       (function () {
+        var BUILD = '57';
+        window.LOZA_ASSET_VERSION = BUILD;
         var shortSide = Math.min(screen.width || 0, screen.height || 0);
         var touch = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android.+Mobile/i.test(navigator.userAgent);
         if ((touch && shortSide && shortSide <= 767) || (window.innerWidth && window.innerWidth <= 980)) {
           document.documentElement.classList.add('is-compact');
         }
+        if (!('serviceWorker' in navigator)) return;
+        var alreadyBusted = false;
+        try { alreadyBusted = localStorage.getItem('loza-bust') === BUILD; } catch (e) {}
+        if (!alreadyBusted) {
+          try { localStorage.setItem('loza-bust', BUILD); } catch (e) {}
+          Promise.all([
+            window.caches ? caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            }) : Promise.resolve(),
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+          ]).then(function () {
+            location.reload();
+          }).catch(function () {});
+          return;
+        }
+        var reloadedKey = 'loza-reloaded-' + BUILD;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          try { if (sessionStorage.getItem(reloadedKey)) return; sessionStorage.setItem(reloadedKey, '1'); } catch (e) {}
+          location.reload();
+        });
+        navigator.serviceWorker.register('./sw.js?v=' + BUILD, { scope: './', updateViaCache: 'none' })
+          .then(function (reg) { return reg.update(); })
+          .catch(function () {});
       })();
     </script>
-    <script src="config.js?v=56"></script>
+    <script src="config.js?v=57"></script>
   </head>
   <body>
     <div id="app" class="app">
@@ -113,11 +141,11 @@
 
     <div id="portal" aria-hidden="true"></div>
 
-    <script src="js/data.js?v=56" defer></script>
-    <script src="js/libraryContent.js?v=56" defer></script>
-    <script src="js/audioStorage.js?v=56" defer></script>
-    <script src="js/media.js?v=56" defer></script>
-    <script src="js/api.js?v=56" defer></script>
-    <script src="js/app.js?v=56" defer></script>
+    <script src="js/data.js?v=57" defer></script>
+    <script src="js/libraryContent.js?v=57" defer></script>
+    <script src="js/audioStorage.js?v=57" defer></script>
+    <script src="js/media.js?v=57" defer></script>
+    <script src="js/api.js?v=57" defer></script>
+    <script src="js/app.js?v=57" defer></script>
   </body>
 </html>
