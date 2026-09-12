@@ -2364,9 +2364,10 @@ body.rules-open {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   gap: 6px;
   min-height: 100%;
-  padding: 10px 0 14px;
+  padding: 12px 0 22px;
   background: transparent;
 }
 
@@ -2375,6 +2376,10 @@ body.rules-open {
   z-index: 1;
   flex: 0 0 auto;
   margin-inline: 12px;
+}
+
+.telegram-messages-canvas > .telegram-date-pill {
+  margin-inline: auto;
 }
 
 /* Keep swatches in the bg picker working. */
@@ -2443,7 +2448,10 @@ body.rules-open {
 
 .telegram-date-pill {
   align-self: center;
-  margin: 8px 0;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 6px auto;
   padding: 5px 12px;
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.95);
@@ -5622,8 +5630,9 @@ body.material-immersive-open {
 }
 
 .chat-readonly-note {
+  flex-shrink: 0;
   margin: 0;
-  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(var(--plum-rgb), 0.08);
   background: #f7f4fb;
   color: var(--muted);
@@ -6280,7 +6289,7 @@ body.material-immersive-open {
 }
 
 .insta-post-caption {
-  padding: 10px 16px 8px;
+  padding: 10px 16px 18px;
   font-size: 14px;
   line-height: 1.65;
   white-space: pre-wrap;
@@ -6976,11 +6985,18 @@ html:not(.is-staff) .telegram-thread {
 
 .profile-ios {
   display: grid;
-  gap: 22px;
+  gap: 20px;
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding: 4px 0 24px;
+  padding: 4px 2px 28px;
+}
+
+.profile-ios-aside,
+.profile-ios-main {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
 }
 
 @media (min-width: 981px) {
@@ -7069,7 +7085,7 @@ html:not(.is-staff) .telegram-thread {
 }
 
 .ios-group-title {
-  padding: 0 16px;
+  padding: 0 4px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -7151,8 +7167,12 @@ html:not(.is-staff) .telegram-thread {
 }
 
 .ios-row-text span {
+  overflow: hidden;
   font-size: 13px;
   color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .ios-row-chevron {
@@ -7174,10 +7194,86 @@ html:not(.is-staff) .telegram-thread {
 
 .ios-footnote {
   margin: 0;
-  padding: 0 16px;
+  padding: 0 4px;
   color: var(--muted);
   font-size: 13px;
-  text-align: center;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.about-loza-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 0 28px;
+}
+
+.about-loza-page .inner-page-header {
+  position: relative;
+  padding-top: 8px;
+  background: transparent;
+  border-bottom: 0;
+}
+
+.about-loza-card {
+  display: grid;
+  gap: 12px;
+  padding: 22px 20px 24px;
+  border: 1px solid rgba(var(--plum-rgb), 0.08);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 18px 40px rgba(43, 39, 53, 0.06);
+}
+
+.about-loza-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.about-loza-kicker {
+  margin: 4px 0 0;
+  color: var(--olive-dark);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.about-loza-card h1 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.about-loza-lead {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.about-loza-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.about-loza-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.about-loza-list li + li {
+  margin-top: 8px;
 }
 
 .delete-account-list {

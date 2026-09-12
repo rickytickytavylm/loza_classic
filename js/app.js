@@ -127,6 +127,7 @@
     introSeeded: false,
     chatBg: localStorage.getItem('chat-bg') || 'aurora',
     mediaSection: 'all',
+    profileView: '',
     mediaQuery: '',
     mediaLikes: JSON.parse(localStorage.getItem('media-likes') || '[]'),
     aiMessages: (() => {
@@ -480,6 +481,22 @@
     app.classList.toggle('immersive-chat', state.tab === 'chat' && state.chatView === 'thread');
   }
 
+  function pageShellModifier(tab = state.tab) {
+    if (tab === 'media') return ' page-shell-media';
+    if (tab === 'feed') return ' page-shell-feed';
+    if (tab === 'movies') return ' page-shell-movies';
+    if (tab === 'ai') return ' page-shell-ai';
+    if (tab === 'chat') return ' page-shell-chat';
+    return '';
+  }
+
+  function syncPageShell(tab = state.tab) {
+    const shell = $('#page-shell');
+    if (!shell) return;
+    shell.className = `page-shell${pageShellModifier(tab)}`;
+    shell.setAttribute('aria-label', D.TAB_TITLES[tab] || tab);
+  }
+
   function setTab(tab) {
     if (tab === 'movies') {
       state.mediaSection = 'movies';
@@ -492,6 +509,7 @@
     state.tab = tab;
     state.selectedItemId = '';
     state.selectedMovieId = '';
+    state.profileView = '';
     document.body.classList.remove('material-immersive-open');
     closePortal();
     if (tab !== 'chat') {
@@ -501,15 +519,8 @@
       clearChatAttachments();
     }
     const shell = $('#page-shell');
-    shell.scrollTop = 0;
-    shell.className = 'page-shell' + (
-      tab === 'media' ? ' page-shell-media'
-        : tab === 'feed' ? ' page-shell-feed'
-          : tab === 'movies' ? ' page-shell-movies'
-            : tab === 'ai' ? ' page-shell-ai'
-              : tab === 'chat' ? ' page-shell-chat' : ''
-    );
-    shell.setAttribute('aria-label', D.TAB_TITLES[tab] || tab);
+    if (shell) shell.scrollTop = 0;
+    syncPageShell(tab);
     renderNav();
     renderScreen();
     setImmersive();
@@ -704,9 +715,14 @@
 
   function renderScreen() {
     const shell = $('#page-shell');
+    syncPageShell();
     if (state.selectedMovieId) {
       const movie = state.movies.find((x) => x.id === state.selectedMovieId);
       if (movie) {
+        if (state.tab === 'media' && !shell.querySelector('.media-feed-page')) {
+          shell.innerHTML = renderMedia();
+          bindMedia(shell);
+        }
         $('#portal').innerHTML = renderMovieDetail(movie);
         bindMovieDetail($('#portal'), movie);
         document.body.classList.add('material-immersive-open');
@@ -719,6 +735,10 @@
     if (state.selectedItemId) {
       const item = state.libraryItems.find((x) => x.id === state.selectedItemId);
       if (item) {
+        if (state.tab === 'media' && !shell.querySelector('.media-feed-page')) {
+          shell.innerHTML = renderMedia();
+          bindMedia(shell);
+        }
         $('#portal').innerHTML = renderMaterialDetail(item);
         bindMaterialDetail($('#portal'), item);
         document.body.classList.add('material-immersive-open');
@@ -728,6 +748,7 @@
       document.body.classList.remove('material-immersive-open');
       $('#portal').innerHTML = '';
     }
+    document.body.classList.remove('material-immersive-open');
     switch (state.tab) {
       case 'home': shell.innerHTML = renderHome(); bindHome(shell); break;
       case 'feed': shell.innerHTML = renderFeed(); bindFeed(shell); break;
@@ -735,7 +756,15 @@
       case 'chat': shell.innerHTML = renderChat(); bindChat(shell); break;
       case 'movies': shell.innerHTML = renderMovies(); bindMovies(shell); break;
       case 'ai': shell.innerHTML = renderAi(); bindAi(shell); break;
-      case 'profile': shell.innerHTML = renderProfile(); bindProfile(shell); break;
+      case 'profile':
+        if (state.profileView === 'about') {
+          shell.innerHTML = renderAboutLoza();
+          bindAboutLoza(shell);
+        } else {
+          shell.innerHTML = renderProfile();
+          bindProfile(shell);
+        }
+        break;
       default: shell.innerHTML = '';
     }
   }
@@ -800,10 +829,30 @@
     const value = String(url || '').trim();
     if (!value) return false;
     if (/kinescope\.io/i.test(value)) return false;
-    if (value.startsWith('data:') || value.startsWith('/')) return true;
+    if (/vk\.com\/(photo|wall|video|clip)/i.test(value)) return false;
+    if (value.startsWith('data:')) return true;
     if (/\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(value)) return true;
-    if (/userapi\.com|vkuservideo\.net|sun\d+-|lozapsy\.help|storage\.yandexcloud\.net|api\.loza-club\.ru\/uploads/i.test(value)) return true;
-    return /^https?:\/\//i.test(value) && !/vk\.com\/(photo|wall|video|clip)/i.test(value);
+    if (/userapi\.com|vkuservideo\.net|sun\d+-/i.test(value)) return true;
+    if (/lozapsy\.help|storage\.yandexcloud\.net|api\.loza-club\.ru\/uploads/i.test(value)) return true;
+    return false;
+  }
+
+  function apiOrigin() {
+    try {
+      return new URL(window.__LOZA_API_URL__ || 'https://api.loza-club.ru/api', window.location.href).origin;
+    } catch {
+      return 'https://api.loza-club.ru';
+    }
+  }
+
+  function resolveFeedImageUrl(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    if (value.startsWith('data:')) return value;
+    if (value.startsWith('/uploads/') || /^uploads\//.test(value)) {
+      return `${apiOrigin()}/${value.replace(/^\/+/, '')}`;
+    }
+    return isDirectImageUrl(value) ? value : '';
   }
 
   function renderFeed() {
@@ -818,13 +867,12 @@
       const videoUrl = kinescopeRaw && /kinescope\.io/i.test(kinescopeRaw)
         ? M.kinescopeEmbed(kinescopeRaw)
         : '';
-      const resolvedImage = (/^https?:\/\//i.test(rawImage) || rawImage.startsWith('data:'))
-        ? (isDirectImageUrl(rawImage) ? rawImage : '')
-        : (asset(rawImage) || '');
-      const image = resolvedImage || bgImage(index);
+      const resolvedImage = resolveFeedImageUrl(rawImage) || (!/^https?:\/\//i.test(rawImage) ? asset(rawImage) : '');
+      const fallbackImage = bgImage(index);
+      const image = resolvedImage || fallbackImage;
       const media = videoUrl
         ? `<iframe allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen src="${esc(videoUrl)}" title="${esc(post.title || 'Видео')}"></iframe>`
-        : `<img alt="" src="${esc(image)}" loading="lazy" />`;
+        : `<img alt="" src="${esc(image)}" data-fallback="${esc(fallbackImage)}" loading="lazy" />`;
       const titleHtml = post.title
         ? `<h3 class="insta-post-title">${esc(post.title)}</h3>`
         : '';
@@ -834,7 +882,7 @@
         .trim();
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
-          <div class="insta-post-avatar is-brand"><img class="insta-post-brand-mark" src="${localAsset('assets/brand-avatar.png')}" alt="Лоза" /></div>
+          <div class="insta-post-avatar is-brand">${brandMark('insta-post-brand-mark')}</div>
           <div class="insta-post-meta"><strong>${esc(authorName)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
         </header>
         <div class="insta-post-media${videoUrl ? ' is-video' : ''}">${media}</div>
@@ -847,15 +895,18 @@
           ${titleHtml}
           <strong>${esc(authorName)}</strong> ${esc(captionBody).replace(/\n/g, '<br>')}
         </div>
-        <div class="insta-post-actions insta-post-actions-end">
-          ${feedLikeButton(post.id, liked, likes)}
-        </div>
       </article>`;
     }).join('');
     return `<div class="feed-page"><div class="feed-list insta-feed">${posts}</div></div>`;
   }
 
   function bindFeed(root) {
+    $$('.insta-post-media img', root).forEach((img) => {
+      img.addEventListener('error', () => {
+        const fallback = img.getAttribute('data-fallback') || '';
+        if (fallback && img.src !== fallback) img.src = fallback;
+      });
+    });
     $$('[data-like]', root).forEach((b) => {
       b.onclick = async () => {
         const id = b.dataset.like;
@@ -1570,8 +1621,10 @@
 
   function closeMaterial() {
     state.selectedItemId = '';
+    state.selectedMovieId = '';
     document.body.classList.remove('material-immersive-open');
     $('#portal').innerHTML = '';
+    syncPageShell();
     renderScreen();
     restoreListScroll();
   }
@@ -2139,7 +2192,7 @@
     if (!images.length) return '';
     const tiles = images.map((item) => `
       <button type="button" class="bubble-photo" data-photo="${esc(item.url)}">
-        <img src="${esc(item.url)}" alt="${esc(item.fileName || 'Фото')}" loading="lazy" decoding="async" />
+        <img src="${esc(item.url)}" alt="${esc(item.fileName || 'Фото')}" loading="lazy" decoding="async" onerror="this.closest('.bubble-photo')?.remove()" />
       </button>`).join('');
     return `<div class="bubble-photos${images.length > 1 ? ' is-grid' : ''}">${tiles}</div>`;
   }
@@ -2549,7 +2602,7 @@
           <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter"></textarea>
           <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>`
-      : `<div class="chat-readonly-note" role="status">Здесь пишет команда клуба. Ответить можно в чате для общения.</div>`;
+      : `<div class="chat-readonly-note" role="status">Здесь публикует команда клуба. Участники отвечают в чате для общения.</div>`;
 
     return `<div class="telegram-chat-layout ${state.chatView === 'rooms' ? 'rooms-open' : 'thread-open'}">
       <aside class="telegram-room-list">
@@ -3337,6 +3390,7 @@
     $('#portal').innerHTML = '';
     state.tab = 'media';
     state.mediaSection = 'movies';
+    syncPageShell('media');
     renderScreen();
   }
 
@@ -3686,23 +3740,53 @@
           <div class="ios-list">
             ${iosRow('shieldCheck', 'О «Лозе»', 'Бережная поддержка родителей подростков', 'about')}
             ${iosRow('feed', 'Лента клуба', 'Заметки и короткие разборы', 'feed')}
-            ${iosRow('messageCircle', 'Поддержка', 'Написать в чат клуба', 'support')}
+            ${iosRow('messageCircle', 'Поддержка', 'Написать Оксане в Telegram', 'support')}
           </div>
         </div>
         ${authed ? `<div class="ios-group">
           <div class="ios-group-title">Аккаунт</div>
           <div class="ios-list">
             ${iosRow('logOut', 'Выйти', 'Завершить сессию на этом устройстве', 'logout')}
-            ${iosRow('trash', 'Удалить аккаунт', 'Данные удалятся без возможности восстановления', 'delete-account')}
+            ${iosRow('trash', 'Удалить аккаунт', 'Без возможности восстановления', 'delete-account')}
           </div>
-        </div>
-        <p class="ios-footnote">Вы вошли через Яндекс. Удаление аккаунта сбрасывает доступ.</p>`
+          <p class="ios-footnote">Вы вошли через Яндекс. Удаление аккаунта сбрасывает доступ.</p>
+        </div>`
     : `<div class="ios-group">
           <button type="button" class="plan-card-buy" data-profile-action="login">Войти через Яндекс</button>
           <p class="ios-footnote">Чтобы оплатить тариф и сохранить прогресс, войдите через Яндекс.</p>
         </div>`}
       </div>
     </div>`;
+  }
+
+  function renderAboutLoza() {
+    return `<section class="about-loza-page">
+      <header class="inner-page-header">
+        <button class="inner-page-back" type="button" data-about-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
+        ${innerBrand('О клубе')}
+        <span class="inner-page-spacer" aria-hidden="true"></span>
+      </header>
+      <article class="about-loza-card">
+        <img class="about-loza-logo" src="${localAsset('assets/webp/new_logo.webp')}" alt="" />
+        <p class="about-loza-kicker">Психологический клуб</p>
+        <h1>Лоза</h1>
+        <p class="about-loza-lead">Бережная опора для родителей, когда подростковый возраст становится штормом.</p>
+        <p>Мы помогаем не срываться в контроль, слышать ребёнка и держать свои границы. Внутри клуба: лекции и разборы психологов, практики, киноклуб, живой чат с родителями и ИИ-наставник.</p>
+        <ul class="about-loza-list">
+          <li>Медиатека с подкастами, эфирами и разборами</li>
+          <li>Чаты клуба и лента коротких заметок</li>
+          <li>Киноклуб и общие разговоры после просмотра</li>
+          <li>Поддержка команды, когда ситуация запутывается</li>
+        </ul>
+      </article>
+    </section>`;
+  }
+
+  function bindAboutLoza(root) {
+    $('[data-about-back]', root)?.addEventListener('click', () => {
+      state.profileView = '';
+      renderScreen();
+    });
   }
 
   async function resetToOnboarding() {
@@ -3782,11 +3866,12 @@
           return;
         }
         if (action === 'about') {
-          setTab('home');
+          state.profileView = 'about';
+          renderScreen();
           return;
         }
         if (action === 'support') {
-          setTab('chat');
+          window.open('https://t.me/ksanka_rr', '_blank', 'noopener,noreferrer');
           return;
         }
         if (action === 'logout') {
@@ -4472,11 +4557,17 @@
     }
     if (media) {
       state.tab = 'media';
+      state.profileView = '';
+      syncPageShell('media');
+      renderNav();
+      setImmersive();
       if (state.libraryItems.some((item) => item.id === media)) openItem(media);
+      else renderScreen();
       return;
     }
     if (post) {
       state.tab = 'feed';
+      syncPageShell('feed');
     }
   }
 
@@ -4503,6 +4594,7 @@
       }
       const clean = window.location.pathname + window.location.hash;
       window.history.replaceState({}, '', clean || './');
+      syncPageShell();
       setImmersive();
       renderNav();
       renderScreen();
@@ -4880,7 +4972,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '57';
+      const version = window.LOZA_ASSET_VERSION || '58';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
