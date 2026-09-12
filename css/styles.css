@@ -2022,13 +2022,14 @@ body.rules-open {
 
 .telegram-thread {
   position: relative;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
   background-color: var(--chat-bg-b, #eef4ec);
+  background-repeat: repeat;
 }
 
 .chat-pinned-bar {
@@ -2170,8 +2171,9 @@ body.rules-open {
 }
 
 .app.immersive-chat .telegram-messages {
+  flex: 1 1 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   overscroll-behavior-y: none;
 }
 
@@ -2349,25 +2351,34 @@ body.rules-open {
 
 .telegram-messages {
   position: relative;
+  flex: 1 1 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
-  background-color: var(--chat-bg-b, #eef4ec);
-  background-repeat: repeat;
+  background: transparent;
 }
 
-/* Messages sit on a transparent canvas; the pattern lives on the scroller
-   so short threads still fill the whole visible chat. */
+.telegram-header,
+.chat-pinned-bar,
+#chat-compose-slot,
+.telegram-composer,
+.chat-readonly-note {
+  flex-shrink: 0;
+}
+
+#chat-compose-slot:empty {
+  display: none;
+}
+
 .telegram-messages-canvas {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 6px;
-  min-height: 100%;
-  padding: 12px 0 22px;
+  min-height: 0;
+  padding: 12px 0 32px;
   background: transparent;
 }
 
@@ -2454,11 +2465,10 @@ body.rules-open {
   margin: 6px auto;
   padding: 5px 12px;
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(43, 39, 53, 0.28);
+  color: #fff;
+  background: rgba(43, 39, 53, 0.45);
   font-size: 12px;
   font-weight: 700;
-  backdrop-filter: blur(8px);
 }
 
 html.chat-no-select,
@@ -5632,7 +5642,7 @@ body.material-immersive-open {
 .chat-readonly-note {
   flex-shrink: 0;
   margin: 0;
-  padding: 14px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding: 16px 16px calc(22px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(var(--plum-rgb), 0.08);
   background: #f7f4fb;
   color: var(--muted);

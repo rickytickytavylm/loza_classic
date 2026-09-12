@@ -2609,7 +2609,7 @@
         <div class="telegram-room-list-head"><img class="telegram-room-list-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><h2>Чаты клуба</h2></div>
         ${roomsListInner}
       </aside>
-      <section class="telegram-thread" style="${chatBgVars(preset)}">
+      <section class="telegram-thread chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
         <header class="telegram-header">
           <button class="telegram-header-back" type="button" id="chat-back" aria-label="К списку чатов">${ic('chevronLeft', 22)}</button>
           <div class="telegram-header-pill">
@@ -2619,7 +2619,7 @@
           <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>
         </header>
         ${chatPinnedBarHtml(selectedRoom)}
-        <div class="telegram-messages chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
+        <div class="telegram-messages">
           <div class="telegram-messages-canvas">
             ${selectedRoom?.hasMore ? '<div class="chat-history-hint" data-key="history-hint" data-sig="hint">Прокрутите вверх за историей</div>' : ''}
             ${timeline.join('')}
@@ -3740,7 +3740,7 @@
           <div class="ios-list">
             ${iosRow('shieldCheck', 'О «Лозе»', 'Бережная поддержка родителей подростков', 'about')}
             ${iosRow('feed', 'Лента клуба', 'Заметки и короткие разборы', 'feed')}
-            ${iosRow('messageCircle', 'Поддержка', 'Написать Оксане в Telegram', 'support')}
+            ${iosRow('messageCircle', 'Поддержка', 'Написать в Telegram', 'support')}
           </div>
         </div>
         ${authed ? `<div class="ios-group">
@@ -4972,7 +4972,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '58';
+      const version = window.LOZA_ASSET_VERSION || '59';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
