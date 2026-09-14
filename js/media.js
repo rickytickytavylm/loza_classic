@@ -96,11 +96,23 @@
     return titleIncludes ? titleIncludes.objectKey : '';
   }
 
+  function isDirectAudioUrl(url) {
+    if (!url) return false;
+    return /storage\.yandexcloud\.net/i.test(url)
+      || /\/uploads\//i.test(url)
+      || /\.(mp3|m4a|aac|ogg|wav)(\?|#|$)/i.test(url);
+  }
+
   function resolveAudioUrl(item) {
+    const direct = resolveMediaUrl(item.mediaUrl);
+    if (isDirectAudioUrl(direct)) return direct;
+    if (item.audioAssetPath) {
+      if (/^https?:\/\//i.test(item.audioAssetPath)) return item.audioAssetPath;
+      return storageUrl(item.audioAssetPath);
+    }
     const storedObjectKey = findStoredAudioObjectKey(item);
     if (storedObjectKey) return storageUrl(storedObjectKey);
-    if (item.audioAssetPath) return storageUrl(item.audioAssetPath);
-    return resolveMediaUrl(item.mediaUrl);
+    return direct;
   }
 
   function itemHasMediaLayout(item) {
