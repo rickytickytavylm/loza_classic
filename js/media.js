@@ -96,23 +96,31 @@
     return titleIncludes ? titleIncludes.objectKey : '';
   }
 
-  function isDirectAudioUrl(url) {
+  function isStaleCatalogMedia(url) {
     if (!url) return false;
+    return /\/media\/(?:podcasts|questions)\//i.test(url);
+  }
+
+  function isUsableAudioUrl(url) {
+    if (!url || isStaleCatalogMedia(url)) return false;
     return /storage\.yandexcloud\.net/i.test(url)
       || /\/uploads\//i.test(url)
-      || /\.(mp3|m4a|aac|ogg|wav)(\?|#|$)/i.test(url);
+      || (/^https?:\/\//i.test(url) && /\.(mp3|m4a|aac|ogg|wav)(\?|#|$)/i.test(url));
+  }
+
+  function isUsableAudioKey(path) {
+    if (!path || /^https?:\/\//i.test(path)) return false;
+    return /^(01_podcasts_mp3|02_audio_answers_mp3|03_uploads\/audio)\//.test(path);
   }
 
   function resolveAudioUrl(item) {
     const direct = resolveMediaUrl(item.mediaUrl);
-    if (isDirectAudioUrl(direct)) return direct;
-    if (item.audioAssetPath) {
-      if (/^https?:\/\//i.test(item.audioAssetPath)) return item.audioAssetPath;
-      return storageUrl(item.audioAssetPath);
-    }
+    if (isUsableAudioUrl(direct)) return direct;
     const storedObjectKey = findStoredAudioObjectKey(item);
     if (storedObjectKey) return storageUrl(storedObjectKey);
-    return direct;
+    if (isUsableAudioUrl(item.audioAssetPath)) return item.audioAssetPath;
+    if (isUsableAudioKey(item.audioAssetPath)) return storageUrl(item.audioAssetPath);
+    return '';
   }
 
   function itemHasMediaLayout(item) {
