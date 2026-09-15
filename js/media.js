@@ -61,9 +61,28 @@
     return trimmed;
   }
 
+  function catalogFallbackTitle(item) {
+    const rows = (window.LOZA_LIBRARY_CONTENT && window.LOZA_LIBRARY_CONTENT.items) || [];
+    const fallback = rows.find((row) => row.id === item.id);
+    return fallback && fallback.title ? fallback.title : '';
+  }
+
+  function matchStoredAudioRow(sameSectionRows, title, meta) {
+    if (!title) return null;
+    const exactTitleAndMeta = sameSectionRows.find((row) =>
+      normalizeLookupText(row.title) === title && normalizeLookupText(row.meta) === meta,
+    );
+    if (exactTitleAndMeta) return exactTitleAndMeta;
+    const exactTitle = sameSectionRows.find((row) => normalizeLookupText(row.title) === title);
+    if (exactTitle) return exactTitle;
+    return sameSectionRows.find((row) => {
+      const rowTitle = normalizeLookupText(row.title);
+      return rowTitle.includes(title) || title.includes(rowTitle);
+    }) || null;
+  }
+
   function findStoredAudioObjectKey(item) {
     if (item.kind !== 'audio') return '';
-    const title = normalizeLookupText(item.title);
     const meta = normalizeLookupText(item.meta);
     const questionNumber = item.questionNumber ? String(item.questionNumber).trim() : '';
 
@@ -81,19 +100,16 @@
       return true;
     });
 
-    const exactTitleAndMeta = sameSectionRows.find((row) =>
-      normalizeLookupText(row.title) === title && normalizeLookupText(row.meta) === meta,
-    );
-    if (exactTitleAndMeta) return exactTitleAndMeta.objectKey;
+    const titles = [item.title, catalogFallbackTitle(item)]
+      .map((value) => normalizeLookupText(value))
+      .filter(Boolean)
+      .filter((value, index, list) => list.indexOf(value) === index);
 
-    const exactTitle = sameSectionRows.find((row) => normalizeLookupText(row.title) === title);
-    if (exactTitle) return exactTitle.objectKey;
-
-    const titleIncludes = sameSectionRows.find((row) => {
-      const rowTitle = normalizeLookupText(row.title);
-      return rowTitle.includes(title) || title.includes(rowTitle);
-    });
-    return titleIncludes ? titleIncludes.objectKey : '';
+    for (const title of titles) {
+      const row = matchStoredAudioRow(sameSectionRows, title, meta);
+      if (row) return row.objectKey;
+    }
+    return '';
   }
 
   function isStaleCatalogMedia(url) {

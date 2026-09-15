@@ -882,7 +882,7 @@
         .trim();
       return `<article class="insta-post" data-post="${esc(post.id)}">
         <header class="insta-post-head">
-          <div class="insta-post-avatar is-brand">${brandMark('insta-post-brand-mark')}</div>
+          <img class="insta-post-mark" src="${localAsset('assets/webp/new_logo.webp')}" alt="" />
           <div class="insta-post-meta"><strong>${esc(authorName)}</strong><span>${esc(post.authorRole || 'клуб Лозы')} · ${formatFeedTime(post.createdAt || post.time)}</span></div>
         </header>
         <div class="insta-post-media${videoUrl ? ' is-video' : ''}">${media}</div>
@@ -963,6 +963,16 @@
     });
   }
 
+  function mapFeedComment(c) {
+    const authorId = c.author?.id || c.authorId || '';
+    const mine = Boolean(state.user?.id && authorId && authorId === state.user.id);
+    const role = c.author?.role;
+    const name = mine
+      ? 'Вы'
+      : (isTeamRole(role) ? 'Лоза' : (c.author?.name || c.author || 'Участник клуба'));
+    return { id: c.id, author: name, authorId, body: c.body };
+  }
+
   function commentItemHtml(c) {
     const name = c.author || 'Участник клуба';
     return `<li class="comments-item"><div class="comments-item-avatar">${esc((name[0] || '?').toUpperCase())}</div><div class="comments-item-copy"><strong>${esc(name)}</strong><p>${esc(c.body)}</p></div></li>`;
@@ -986,29 +996,36 @@
   async function loadComments(postId) {
     try {
       const data = await API.feedComments(postId);
-      const server = (data.comments || []).map((c) => {
-        const role = c.author?.role;
-        const name = isTeamRole(role) ? 'Лоза' : (c.author?.name || 'Участник клуба');
-        return { id: c.id, author: name, body: c.body };
+      const server = (data.comments || []).map(mapFeedComment);
+      const bodies = new Set(server.map((c) => String(c.body || '').trim()));
+      const local = (state.feedComments[postId] || []).filter((c) => {
+        if (!String(c.id).startsWith('l-')) return false;
+        return !bodies.has(String(c.body || '').trim());
       });
-      const local = (state.feedComments[postId] || []).filter((c) => String(c.id).startsWith('l-'));
       state.feedComments[postId] = [...server, ...local];
     } catch {
       /* keep whatever local comments exist */
     }
   }
 
+  function updateFeedCommentBadge(postId) {
+    const post = state.feedPosts.find((item) => item.id === postId);
+    if (!post) return;
+    const badge = document.querySelector(`[data-comments="${CSS.escape(postId)}"] span`);
+    if (badge) badge.textContent = String(post.comments || 0);
+  }
+
   function openComments(postId) {
     const post = state.feedPosts.find((p) => p.id === postId);
     if (!post) return;
-    const hasServerComments = (post.comments || 0) > 0;
-    const needsLoad = hasServerComments && !(state.feedComments[postId] || []).some((c) => !String(c.id).startsWith('l-'));
+    const existing = state.feedComments[postId] || [];
+    const loading = existing.length === 0 && (post.comments || 0) > 0;
 
     $('#portal').innerHTML = `<div class="comments-backdrop" id="modal-close">
       <div class="comments-sheet" onclick="event.stopPropagation()">
         <div class="comments-sheet-handle"></div>
         <div class="comments-sheet-header"><span class="comments-sheet-title">Комментарии</span><button class="comments-sheet-close" type="button" id="modal-x">${ic('x', 20)}</button></div>
-        <div class="comments-sheet-body" id="comments-body">${renderCommentsBody(postId, needsLoad)}</div>
+        <div class="comments-sheet-body" id="comments-body">${renderCommentsBody(postId, loading)}</div>
         <form class="comments-sheet-input" id="comment-form"><input placeholder="Написать комментарий…" id="comment-draft" /><button type="submit" aria-label="Отправить комментарий">${ic('arrowUp', 18)}</button></form>
       </div></div>`;
     bindModalClose();
@@ -1025,23 +1042,39 @@
       if (body) body.innerHTML = renderCommentsBody(postId, false);
     }
 
-    if (needsLoad) {
-      window.requestAnimationFrame(() => {
-        loadComments(postId).then(refreshBody);
-      });
-    }
+    loadComments(postId).then(refreshBody);
 
-    $('#comment-form').onsubmit = (e) => {
+    $('#comment-form').onsubmit = async (e) => {
       e.preventDefault();
       const input = $('#comment-draft');
       const body = input.value.trim();
       if (!body) return;
       if (!state.feedComments[postId]) state.feedComments[postId] = [];
-      state.feedComments[postId].push({ id: `l-${Date.now()}`, author: 'Вы', body });
+      const tempId = `l-${Date.now()}`;
+      state.feedComments[postId].push({ id: tempId, author: 'Вы', body });
       input.value = '';
-      API.addFeedComment(postId, body).catch(() => {});
       refreshBody();
-      renderScreen();
+      try {
+        const data = await API.addFeedComment(postId, body);
+        const real = data.comment ? mapFeedComment(data.comment) : null;
+        state.feedComments[postId] = (state.feedComments[postId] || []).filter((c) => c.id !== tempId);
+        if (real && !(state.feedComments[postId] || []).some((c) => c.id === real.id)) {
+          state.feedComments[postId].push(real);
+        }
+        const current = state.feedPosts.find((item) => item.id === postId);
+        if (current) {
+          current.comments = Math.max(
+            Number(current.comments || 0) + 1,
+            (state.feedComments[postId] || []).filter((c) => !String(c.id).startsWith('l-')).length,
+          );
+        }
+        updateFeedCommentBadge(postId);
+        refreshBody();
+      } catch {
+        state.feedComments[postId] = (state.feedComments[postId] || []).filter((c) => c.id !== tempId);
+        refreshBody();
+        showAppToast('Комментарий не отправился', { title: 'Лента', tone: 'warn' });
+      }
     };
   }
 
@@ -4972,7 +5005,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '61';
+      const version = window.LOZA_ASSET_VERSION || '62';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
