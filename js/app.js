@@ -1292,12 +1292,15 @@
       const lockOverlay = item.locked
         ? `<span class="media-lock-overlay" aria-hidden="true">${ic('lock', 22)}<em>Материал закрытого клуба</em></span>`
         : '';
+      const isPoster = item.kind === 'movie';
       const cover = item.poster
-        ? `<img alt="" src="${esc(asset(item.poster))}" loading="lazy" />`
+        ? (isPoster
+          ? `<span class="media-feed-poster"><img alt="" src="${esc(asset(item.poster))}" loading="lazy" /></span>`
+          : `<img alt="" src="${esc(asset(item.poster))}" loading="lazy" />`)
         : `<img alt="" src="${bgImage(i)}" loading="lazy" />`;
       return `<article class="media-feed-card${item.locked ? ' is-locked' : ''}" data-item="${esc(item.id)}">
         <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span>${lockBadge}</div>
-        <button class="media-feed-card-visual" type="button" data-open-item="${esc(item.id)}">${cover}${lockOverlay}</button>
+        <button class="media-feed-card-visual${isPoster ? ' is-poster' : ''}" type="button" data-open-item="${esc(item.id)}">${cover}${lockOverlay}</button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
       <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item)).replace(/\n/g, '<br>')}</p>
         <div class="media-feed-card-actions">
@@ -5058,7 +5061,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '64';
+      const version = window.LOZA_ASSET_VERSION || '65';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
