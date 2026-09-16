@@ -100,6 +100,7 @@
     chatStreamSeenAt: 0,
     chatPollTimer: null,
     feedPollTimer: null,
+    mediaPollTimer: null,
     copyLockBound: false,
     chatPollTick: 0,
     chatPollBusy: false,
@@ -181,11 +182,11 @@
   }
 
   function visibleMediaSectionIds() {
-    const club = hasClubAccess();
-    return Object.keys(D.MEDIA_SECTION_LABELS).filter((id) => {
-      if (isClubOnlyMediaSection(id)) return club;
-      return true;
-    });
+    return Object.keys(D.MEDIA_SECTION_LABELS);
+  }
+
+  function isMediaSectionLocked(id) {
+    return isClubOnlyMediaSection(id) && !hasClubAccess();
   }
 
   function canPostInRoom(room) {
@@ -531,9 +532,7 @@
       });
     }
     if (tab === 'media') {
-      loadContent().then(() => {
-        if (state.tab === 'media') renderScreen();
-      });
+      refreshMediaFromServer();
     }
   }
 
@@ -1272,11 +1271,7 @@
   }
 
   function filteredMediaItems() {
-    if (isClubOnlyMediaSection(state.mediaSection) && !hasClubAccess()) {
-      state.mediaSection = 'all';
-    }
     return state.libraryItems.filter((item) => {
-      if (isClubOnlyMediaSection(item.sectionId) && !hasClubAccess()) return false;
       const sec = state.mediaSection === 'all' || item.sectionId === state.mediaSection;
       const q = state.mediaQuery.trim().toLowerCase();
       const query = !q || `${item.title} ${item.meta} ${item.description}`.toLowerCase().includes(q);
@@ -1379,9 +1374,10 @@
   function renderMedia() {
     const cats = Object.entries(D.MEDIA_SECTION_LABELS)
       .filter(([id]) => visibleMediaSectionIds().includes(id))
-      .map(([id, label]) =>
-        `<button type="button" class="${state.mediaSection === id ? 'active' : ''}" data-cat="${id}">${label}</button>`,
-      ).join('');
+      .map(([id, label]) => {
+        const locked = isMediaSectionLocked(id);
+        return `<button type="button" class="${state.mediaSection === id ? 'active' : ''}${locked ? ' is-locked' : ''}" data-cat="${id}">${esc(label)}${locked ? ic('lock', 11) : ''}</button>`;
+      }).join('');
     const items = filteredMediaItems();
     const note = state.mediaQuery.trim()
       ? `<p class="media-feed-search-note">Найдено ${items.length} материалов по запросу «${esc(state.mediaQuery.trim())}»</p>`
@@ -1494,16 +1490,19 @@
   function openItem(id) {
     const item = state.libraryItems.find((x) => x.id === id);
     if (!item) return;
-    if (item.sectionId === 'movies' || item.kind === 'movie') {
+    if (item.kind === 'movie' || item.movieId) {
       openMovie(item.movieId || item.id);
       return;
     }
     if (item.locked) {
+      const clubOnly = isClubOnlyMediaSection(item.sectionId);
       openPaywall({
-        reason: 'library',
-        title: 'Материал в закрытой медиатеке',
-        text: 'Откройте тариф «Медиатека. Теория» или «Клуб», чтобы смотреть и слушать материалы без ограничений.',
-        preferPlan: 'library_30',
+        reason: clubOnly ? 'club' : 'library',
+        title: clubOnly ? 'Задания и разборы в закрытом клубе' : 'Материал в закрытой медиатеке',
+        text: clubOnly
+          ? 'Вкладки на месте. Открываются с тарифа «Клуб».'
+          : 'Откройте тариф «Медиатека. Теория» или «Клуб», чтобы смотреть и слушать материалы без ограничений.',
+        preferPlan: clubOnly ? 'club_30' : 'library_30',
       });
       return;
     }
@@ -3374,16 +3373,31 @@
     };
   }
 
+  function applyClientLocks() {
+    state.libraryItems = (state.libraryItems || []).map((item) => {
+      if (isStaffUser()) return { ...item, locked: false };
+      if (isClubOnlyMediaSection(item.sectionId) && !hasClubAccess()) {
+        return { ...item, locked: true, requiredTier: 'club' };
+      }
+      return item;
+    });
+  }
+
   function mergeMoviesIntoLibrary() {
-    const withoutMovies = state.libraryItems.filter((item) => item.sectionId !== 'movies' && item.kind !== 'movie');
-    const movieItems = (state.movies || []).map(movieAsLibraryItem);
-    state.libraryItems = [...withoutMovies, ...movieItems];
+    const fromApi = state.libraryItems.filter((item) => item.sectionId === 'movies' && item.kind !== 'movie');
+    const rest = state.libraryItems.filter((item) => item.sectionId !== 'movies' && item.kind !== 'movie');
+    const taken = new Set(fromApi.map((item) => item.id));
+    const fromCatalog = (state.movies || [])
+      .filter((movie) => !taken.has(movie.id))
+      .map(movieAsLibraryItem);
+    state.libraryItems = [...fromApi, ...fromCatalog, ...rest];
     if (!state.librarySections.some((s) => s.id === 'movies')) {
       state.librarySections = [
         ...state.librarySections,
         { id: 'movies', title: 'Киноклуб', description: 'Рекомендации фильмов и записи разборов' },
       ];
     }
+    applyClientLocks();
   }
 
   function renderMovies() {
@@ -3995,6 +4009,26 @@
     }
   }
 
+  function contentFingerprint(items) {
+    return (items || []).map((item) => `${item.id}:${item.title}:${item.mediaUrl || ''}:${item.sectionId}:${item.locked ? 1 : 0}`).join('|');
+  }
+
+  function ensureMediaPolling() {
+    if (state.mediaPollTimer) return;
+    state.mediaPollTimer = window.setInterval(() => {
+      if (document.hidden || state.tab !== 'media') return;
+      refreshMediaFromServer();
+    }, 8000);
+  }
+
+  function refreshMediaFromServer() {
+    const before = contentFingerprint(state.libraryItems);
+    return loadContent().then(() => {
+      if (state.tab !== 'media') return;
+      if (contentFingerprint(state.libraryItems) !== before) renderScreen();
+    });
+  }
+
   function feedFingerprint(posts) {
     return (posts || []).map((post) => `${post.id}:${post.body}:${post.imageUrl || ''}:${post.comments || 0}`).join('|');
   }
@@ -4039,6 +4073,21 @@
         }
       });
     }, 8000);
+  }
+
+  function bindVisibilityRefresh() {
+    if (state.visibilityBound) return;
+    state.visibilityBound = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      if (state.tab === 'media') refreshMediaFromServer();
+      if (state.tab === 'feed') {
+        const before = feedFingerprint(state.feedPosts);
+        loadFeed().then(() => {
+          if (state.tab === 'feed' && feedFingerprint(state.feedPosts) !== before) renderScreen();
+        });
+      }
+    });
   }
 
   function normalizeChatMessage(message) {
@@ -4989,7 +5038,9 @@
       .then(() => {
         startChatStream();
         ensureFeedPolling();
+        ensureMediaPolling();
         bindChatLiveRefresh();
+        bindVisibilityRefresh();
         bindPushDeepLinks();
         syncPushEndpoint();
         if (isAuthorized() && state.user) syncPendingConsents();
@@ -4999,13 +5050,15 @@
       .catch(() => {
         startChatStream();
         ensureFeedPolling();
+        ensureMediaPolling();
         bindChatLiveRefresh();
+        bindVisibilityRefresh();
         bindPushDeepLinks();
         consumeContentDeepLink();
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '62';
+      const version = window.LOZA_ASSET_VERSION || '63';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

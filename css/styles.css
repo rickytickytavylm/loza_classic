@@ -5904,6 +5904,18 @@ body.material-immersive-open {
   border-bottom-color: var(--ink);
 }
 
+.media-feed-categories button.is-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.media-feed-categories button.is-locked svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0.55;
+}
+
 .media-feed-sort {
   display: flex;
   gap: 18px;
