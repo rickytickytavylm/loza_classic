@@ -3390,7 +3390,7 @@
     const fromCatalog = (state.movies || [])
       .filter((movie) => !taken.has(movie.id))
       .map(movieAsLibraryItem);
-    state.libraryItems = [...fromApi, ...fromCatalog, ...rest];
+    state.libraryItems = [...rest, ...fromApi, ...fromCatalog];
     if (!state.librarySections.some((s) => s.id === 'movies')) {
       state.librarySections = [
         ...state.librarySections,
@@ -5058,7 +5058,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '63';
+      const version = window.LOZA_ASSET_VERSION || '64';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
