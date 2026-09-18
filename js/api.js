@@ -48,7 +48,10 @@
 
   async function request(path, init) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const timeoutMs = Number(init && init.timeout) || 12000;
+    const fetchInit = { ...(init || {}) };
+    delete fetchInit.timeout;
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const response = await fetch(`${API_URL}${path}`, {
         cache: 'no-store',
@@ -58,10 +61,10 @@
           'Cache-Control': 'no-store',
           Pragma: 'no-cache',
           ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-          ...(init && init.headers ? init.headers : {}),
+          ...(fetchInit.headers || {}),
         },
-        ...init,
-        signal: (init && init.signal) || ctrl.signal,
+        ...fetchInit,
+        signal: fetchInit.signal || ctrl.signal,
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -92,7 +95,7 @@
     logout: () => request('/auth/logout', { method: 'POST', body: '{}' }),
     deleteAccount: () => request('/me', { method: 'DELETE' }),
     publicConfig: () => request('/config/public'),
-    content: () => request('/content'),
+    content: () => request('/content', { timeout: 30000 }),
     feedComments: (postId) => request(`/feed/${postId}/comments`),
     feed: () => request('/feed'),
     likePost: (postId) =>

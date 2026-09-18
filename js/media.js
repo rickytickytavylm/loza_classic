@@ -365,15 +365,20 @@
   }
 
   function kinescopeEmbed(rawUrl) {
+    const extracted = extractKinescopeUrl(rawUrl) || String(rawUrl || '').trim();
     try {
-      const url = new URL(rawUrl);
-      const [videoId, playlistId] = url.pathname.split('/').filter(Boolean);
-      if (!videoId) return rawUrl;
+      const url = new URL(extracted);
+      if (!/kinescope\.io$/i.test(url.hostname.replace(/^www\./, ''))) return extracted;
+      const parts = url.pathname.split('/').filter(Boolean);
+      const start = parts[0] === 'embed' ? 1 : 0;
+      const videoId = parts[start];
+      if (!videoId) return extracted;
       const embedUrl = new URL(`/embed/${videoId}`, 'https://kinescope.io');
-      if (playlistId) embedUrl.searchParams.set('playlist', playlistId);
+      const playlist = url.searchParams.get('playlist') || parts[start + 1];
+      if (playlist) embedUrl.searchParams.set('playlist', playlist);
       return embedUrl.toString();
     } catch {
-      return rawUrl;
+      return extracted;
     }
   }
 
