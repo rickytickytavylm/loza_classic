@@ -901,8 +901,14 @@
           <button class="insta-action insta-action-share" type="button" data-share="${esc(post.id)}">${ic('send', 24)}</button>
         </div>
         <div class="insta-post-caption">
-          ${titleHtml}
-          <strong>${esc(authorName)}</strong> ${formatFeedCaption(captionBody)}
+          <div class="insta-post-byline">
+            <img class="insta-post-caption-logo" src="${localAsset('assets/webp/new_logo.webp')}" alt="Лоза" />
+            <div class="insta-post-caption-copy">
+              <p class="insta-post-caption-name"><strong>${esc(authorName)}</strong></p>
+              ${titleHtml}
+              ${captionBody ? `<div class="insta-post-caption-body">${formatFeedCaption(captionBody)}</div>` : ''}
+            </div>
+          </div>
         </div>
       </article>`;
     }).join('');
@@ -5214,7 +5220,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '67';
+      const version = window.LOZA_ASSET_VERSION || '68';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
