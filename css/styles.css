@@ -6125,6 +6125,40 @@ body.material-immersive-open {
   white-space: pre-wrap;
 }
 
+.media-desc-fold {
+  display: grid;
+  gap: 8px;
+}
+
+.media-desc-toggle {
+  padding: 0;
+  border: 0;
+  color: var(--olive-dark);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.material-paid-text {
+  margin-top: 18px;
+}
+
+.material-paid-text h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.feed-link {
+  color: var(--olive-dark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  pointer-events: auto;
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
 .media-feed-card-actions {
   display: flex;
   align-items: center;

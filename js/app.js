@@ -130,7 +130,14 @@
     mediaSection: 'all',
     profileView: '',
     mediaQuery: '',
-    mediaLikes: JSON.parse(localStorage.getItem('media-likes') || '[]'),
+    mediaLikes: (() => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem('media-likes') || '[]');
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch {
+        return [];
+      }
+    })(),
     aiMessages: (() => {
       try {
         const parsed = JSON.parse(localStorage.getItem('loza-ai-messages') || '[]');
@@ -186,7 +193,10 @@
   }
 
   function isMediaSectionLocked(id) {
-    return isClubOnlyMediaSection(id) && !hasClubAccess();
+    if (isStaffUser()) return false;
+    if (id === 'all') return !hasLibraryAccess();
+    if (isClubOnlyMediaSection(id)) return !hasClubAccess();
+    return !hasLibraryAccess();
   }
 
   function canPostInRoom(room) {
@@ -892,14 +902,91 @@
         </div>
         <div class="insta-post-caption">
           ${titleHtml}
-          <strong>${esc(authorName)}</strong> ${esc(captionBody).replace(/\n/g, '<br>')}
+          <strong>${esc(authorName)}</strong> ${formatFeedCaption(captionBody)}
         </div>
       </article>`;
     }).join('');
     return `<div class="feed-page"><div class="feed-list insta-feed">${posts}</div></div>`;
   }
 
+  function isClubHref(href) {
+    try {
+      const url = new URL(href, window.location.origin);
+      return url.origin === window.location.origin
+        || /(?:^|\.)lozapsy\.help$/i.test(url.hostname)
+        || /(?:^|\.)loza-club\.ru$/i.test(url.hostname);
+    } catch {
+      return String(href || '').startsWith('/') || String(href || '').startsWith('?');
+    }
+  }
+
+  function formatFeedCaption(text) {
+    let html = esc(text);
+    html = html.replace(/https?:\/\/[^\s<]+/gi, (rawUrl) => {
+      const trailing = rawUrl.match(/[),.;]+$/)?.[0] || '';
+      const url = trailing ? rawUrl.slice(0, -trailing.length) : rawUrl;
+      const safe = esc(url);
+      const extra = isClubHref(url) ? '' : ' target="_blank" rel="noopener noreferrer"';
+      return `<a class="feed-link" href="${safe}"${extra}>${safe}</a>${trailing}`;
+    });
+    return html.replace(/\n/g, '<br>');
+  }
+
+  function openClubHref(href) {
+    try {
+      const url = new URL(href, window.location.origin);
+      const params = new URLSearchParams(url.search);
+      const pathMedia = url.pathname.match(/\/m\/([^/]+)/);
+      const pathPost = url.pathname.match(/\/p\/([^/]+)/);
+      const mediaId = params.get('media') || (pathMedia ? decodeURIComponent(pathMedia[1]) : '');
+      const postId = params.get('post') || (pathPost ? decodeURIComponent(pathPost[1]) : '');
+      const tab = params.get('tab');
+      const room = params.get('room');
+      if (mediaId) {
+        state.tab = 'media';
+        syncPageShell('media');
+        renderNav();
+        if (state.libraryItems.some((item) => item.id === mediaId)) openItem(mediaId);
+        else renderScreen();
+        return;
+      }
+      if (postId || tab === 'feed') {
+        state.tab = 'feed';
+        syncPageShell('feed');
+        renderScreen();
+        return;
+      }
+      if (tab === 'chat' || room) {
+        state.tab = 'chat';
+        state.chatView = room ? 'thread' : 'rooms';
+        if (room && state.chatRooms.some((item) => item.id === room)) {
+          state.selectedRoomId = room;
+          state.chatView = 'thread';
+          prepareChatThreadEntry(room);
+        }
+        syncPageShell('chat');
+        renderScreen();
+        return;
+      }
+      if (tab && D.TAB_TITLES?.[tab]) {
+        state.tab = tab;
+        syncPageShell(tab);
+        renderScreen();
+      }
+    } catch {
+      window.open(href, '_blank', 'noopener,noreferrer');
+    }
+  }
+
   function bindFeed(root) {
+    $$('.feed-link', root).forEach((link) => {
+      link.addEventListener('click', (event) => {
+        const href = link.getAttribute('href') || '';
+        if (!isClubHref(href)) return;
+        event.preventDefault();
+        openClubHref(href);
+      });
+    });
     $$('.insta-post-media img', root).forEach((img) => {
       img.addEventListener('error', () => {
         const fallback = img.getAttribute('data-fallback') || '';
@@ -1284,13 +1371,13 @@
       const liked = state.mediaLikes.includes(item.id);
       const kind = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : item.kind === 'movie' ? 'Киноклуб' : 'Текст';
       const lockBadge = item.locked
-        ? '<span class="access-badge locked">Закрытый клуб</span>'
+        ? `<span class="access-badge locked">${item.requiredTier === 'club' ? 'Закрытый клуб' : 'По подписке'}</span>`
         : '<span class="access-badge free">Открыто</span>';
       const ctaLabel = item.locked
         ? 'Открыть доступ'
         : (item.kind === 'video' ? 'Смотреть' : item.kind === 'audio' ? 'Слушать' : item.kind === 'movie' ? 'Открыть' : 'Читать');
       const lockOverlay = item.locked
-        ? `<span class="media-lock-overlay" aria-hidden="true">${ic('lock', 22)}<em>Материал закрытого клуба</em></span>`
+        ? `<span class="media-lock-overlay" aria-hidden="true">${ic('lock', 22)}<em>${item.requiredTier === 'club' ? 'Материал закрытого клуба' : 'Материал по подписке'}</em></span>`
         : '';
       const isPoster = item.kind === 'movie';
       const cover = item.poster
@@ -1302,7 +1389,7 @@
         <div class="media-feed-card-head"><img class="media-feed-card-logo" src="${asset('/assets/webp/new_logo.webp')}" alt="" /><span>Лоза · ${esc(sectionTitle(item.sectionId))} · ${kind}</span>${lockBadge}</div>
         <button class="media-feed-card-visual${isPoster ? ' is-poster' : ''}" type="button" data-open-item="${esc(item.id)}">${cover}${lockOverlay}</button>
         <button class="media-feed-card-title" type="button" data-open-item="${esc(item.id)}">${esc(item.title)}</button>
-      <p class="media-feed-card-desc">${esc(M.getMaterialSummary(item)).replace(/\n/g, '<br>')}</p>
+      ${mediaSummaryHtml(item)}
         <div class="media-feed-card-actions">
           <button type="button" class="${item.locked ? 'media-cta-locked' : 'media-cta-open'}" data-open-item="${esc(item.id)}">${item.locked ? ic('lock', 16) : ic('play', 16)}<span>${ctaLabel}</span></button>
           <button class="${liked ? 'media-action-liked' : ''}" type="button" data-like-item="${esc(item.id)}">${ic('heart', 18, { fill: liked ? 'currentColor' : 'none' })}</button>
@@ -1312,15 +1399,55 @@
     }).join('');
   }
 
+  function mediaSummaryHtml(item) {
+    const text = String(M.getMaterialSummary(item) || '').trim();
+    if (!text) return '';
+    const limit = 220;
+    if (text.length <= limit) {
+      return `<p class="media-feed-card-desc">${esc(text).replace(/\n/g, '<br>')}</p>`;
+    }
+    const snippet = `${text.slice(0, limit).replace(/\s+\S*$/, '')}…`;
+    return `<div class="media-desc-fold" data-desc-fold="${esc(item.id)}">
+      <p class="media-feed-card-desc is-collapsed">${esc(snippet).replace(/\n/g, '<br>')}</p>
+      <p class="media-feed-card-desc is-expanded" hidden>${esc(text).replace(/\n/g, '<br>')}</p>
+      <button type="button" class="media-desc-toggle" data-desc-toggle="${esc(item.id)}">Ещё</button>
+    </div>`;
+  }
+
+  function mediaFeedRoot(node) {
+    return node?.closest?.('.media-feed-page') || $('.media-feed-page') || node;
+  }
+
   function bindMediaCardActions(root) {
     $$('[data-like-item]', root).forEach((b) => {
-      b.onclick = () => {
-        const id = b.dataset.likeItem;
-        if (state.mediaLikes.includes(id)) state.mediaLikes = state.mediaLikes.filter((x) => x !== id);
-        else state.mediaLikes.push(id);
-        localStorage.setItem('media-likes', JSON.stringify(state.mediaLikes));
-        // Soft refresh cards only — keep search focus/caret
-        refreshMediaResults(root);
+      b.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = String(b.dataset.likeItem || '');
+        if (!id) return;
+        const liked = state.mediaLikes.includes(id);
+        state.mediaLikes = liked
+          ? state.mediaLikes.filter((x) => x !== id)
+          : [...state.mediaLikes, id];
+        try { localStorage.setItem('media-likes', JSON.stringify(state.mediaLikes)); } catch { /* ignore */ }
+        b.classList.toggle('media-action-liked', !liked);
+        b.innerHTML = ic('heart', 18, { fill: liked ? 'none' : 'currentColor' });
+        b.setAttribute('aria-pressed', liked ? 'false' : 'true');
+      };
+    });
+    $$('[data-desc-toggle]', root).forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const wrap = btn.closest('.media-desc-fold');
+        if (!wrap) return;
+        const open = !wrap.classList.contains('is-open');
+        wrap.classList.toggle('is-open', open);
+        const collapsed = wrap.querySelector('.is-collapsed');
+        const expanded = wrap.querySelector('.is-expanded');
+        if (collapsed) collapsed.hidden = open;
+        if (expanded) expanded.hidden = !open;
+        btn.textContent = open ? 'Свернуть' : 'Ещё';
       };
     });
     $$('[data-open-item]', root).forEach((b) => {
@@ -1352,11 +1479,12 @@
   }
 
   function refreshMediaResults(root) {
+    const page = mediaFeedRoot(root);
     const items = filteredMediaItems();
-    const list = $('.media-feed-list', root);
-    const noteHost = $('.media-feed-search-note', root);
-    const header = $('.media-feed-header', root);
-    const clearBtn = $('#media-clear', root);
+    const list = $('.media-feed-list', page);
+    const noteHost = $('.media-feed-search-note', page);
+    const header = $('.media-feed-header', page);
+    const clearBtn = $('#media-clear', page);
     if (clearBtn) clearBtn.hidden = !state.mediaQuery;
     if (list) {
       list.innerHTML = mediaCardsHtml(items) || '<div class="media-feed-empty"><p>Ничего не найдено</p></div>';
@@ -1371,7 +1499,7 @@
     } else if (noteHtml && header) {
       header.insertAdjacentHTML('beforeend', noteHtml);
     }
-    root._mediaControlsRemeasure?.();
+    page._mediaControlsRemeasure?.();
   }
 
   function renderMedia() {
@@ -1507,10 +1635,6 @@
           : 'Откройте тариф «Медиатека. Теория» или «Клуб», чтобы смотреть и слушать материалы без ограничений.',
         preferPlan: clubOnly ? 'club_30' : 'library_30',
       });
-      return;
-    }
-    if (item.kind === 'audio' && M.resolveAudioUrl(item)) {
-      openAudioPlayerModal(item);
       return;
     }
     captureListScroll();
@@ -1725,13 +1849,36 @@
       </section>`;
   }
 
+  function materialCopyHtml(item) {
+    const summary = String(item.description || '').trim();
+    const full = String(item.transcript || item.body || '').trim();
+    const summaryClean = summary ? M.cleanContentText(summary) : '';
+    const fullClean = full && !M.isPlaceholderMediaCopy?.(full) ? M.cleanContentText(full) : '';
+    const same = Boolean(
+      summaryClean
+      && fullClean
+      && summaryClean.replace(/\s+/g, ' ') === fullClean.replace(/\s+/g, ' '),
+    );
+
+    if (item.locked) {
+      return summaryClean ? `<div class="material-article">${materialBodyHtml(summaryClean)}</div>` : '';
+    }
+
+    const parts = [];
+    if (summaryClean) parts.push(materialBodyHtml(summaryClean));
+    if (fullClean && !same) {
+      parts.push(`<section class="material-paid-text"><h2>Для участников</h2>${materialBodyHtml(fullClean)}</section>`);
+    }
+    if (!parts.length && fullClean) parts.push(materialBodyHtml(fullClean));
+    return parts.length ? `<div class="material-article">${parts.join('')}</div>` : '';
+  }
+
   function renderMaterialDetail(item) {
     const hasMediaLayout = M.itemHasMediaLayout(item);
-    const materialBody = M.getMaterialBody(item);
     const displayTitle = esc(M.cleanDisplayText(item.title));
     const displayMeta = esc(M.cleanDisplayText(item.meta));
     const kindLabel = item.kind === 'video' ? 'Видео' : item.kind === 'audio' ? 'Аудио' : 'Материал';
-    const bodyParagraphs = materialBodyHtml(materialBody);
+    const copy = materialCopyHtml(item);
     const titleClass = M.cleanDisplayText(item.title).length > 70 ? ' is-long' : '';
 
     if (hasMediaLayout) {
@@ -1742,6 +1889,7 @@
           <span class="material-kicker">${displayMeta}</span>
           <h1${titleClass ? ` class="${titleClass.trim()}"` : ''}>${displayTitle}</h1>
           ${materialLessonExtrasHtml(item)}
+          ${copy}
         </div>
       </div>`;
     }
@@ -1751,7 +1899,7 @@
       <article class="material-immersive-body">
         <span class="material-kicker">${displayMeta}</span>
         <h1${titleClass ? ` class="${titleClass.trim()}"` : ''}>${displayTitle}</h1>
-        <div class="material-article">${bodyParagraphs}</div>
+        ${copy}
       </article>
     </div>`;
   }
@@ -3377,10 +3525,15 @@
   }
 
   function applyClientLocks() {
+    const freeIds = new Set(D.FREE_SLUGS || []);
     state.libraryItems = (state.libraryItems || []).map((item) => {
       if (isStaffUser()) return { ...item, locked: false };
+      if (freeIds.has(item.id)) return { ...item, locked: false, requiredTier: 'basic' };
       if (isClubOnlyMediaSection(item.sectionId) && !hasClubAccess()) {
         return { ...item, locked: true, requiredTier: 'club' };
+      }
+      if (!hasLibraryAccess()) {
+        return { ...item, locked: true, requiredTier: item.requiredTier || 'library' };
       }
       return item;
     });
@@ -5061,7 +5214,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '66';
+      const version = window.LOZA_ASSET_VERSION || '67';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

@@ -403,5 +403,6 @@
     extractKinescopeUrl,
     kinescopeEmbed,
     formatAudioTime,
+    isPlaceholderMediaCopy,
   };
 })();
