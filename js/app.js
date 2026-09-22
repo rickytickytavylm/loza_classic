@@ -118,6 +118,10 @@
     chatScrollPending: false, // next thread render should apply the resume position
     chatTyping: null, // { roomId, authorName, until }
     chatHistoryLoading: false,
+    chatTag: '',
+    chatTagHits: [],
+    chatTagHasMore: false,
+    chatTagLoading: false,
     chatStreamStatus: 'connecting', // connecting | live | offline
     // Persisted so your own messages stay "yours" after a reload, even when the
     // session drops and the server briefly treats you as a fresh guest.
@@ -769,6 +773,9 @@
         if (state.profileView === 'about') {
           shell.innerHTML = renderAboutLoza();
           bindAboutLoza(shell);
+        } else if (state.profileView === 'care') {
+          shell.innerHTML = renderCare();
+          bindCare(shell);
         } else {
           shell.innerHTML = renderProfile();
           bindProfile(shell);
@@ -1795,11 +1802,10 @@
   }
 
   function materialBodyHtml(text) {
-    return String(text || '').split(/\n\s*\n/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean)
-      .map((paragraph) => `<p>${esc(paragraph).replace(/\n/g, '<br>')}</p>`)
-      .join('');
+    return String(text || '').replace(/\r\n/g, '\n').split('\n').map((line) => {
+      if (!line.trim()) return '<p class="material-blank"></p>';
+      return `<p>${esc(line.trim())}</p>`;
+    }).join('');
   }
 
   function innerHeader(label) {
@@ -2160,10 +2166,9 @@
       return `<a class="chat-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${trailing}`;
     });
 
-    html = html.replace(
-      /#([\p{L}\p{N}_]{2,40})/gu,
-      '<span class="chat-hashtag">#$1</span>',
-    );
+    html = html.replace(/#([\p{L}\p{N}_]{2,40})/gu, (_, tag) => (
+      `<button type="button" class="chat-hashtag" data-chat-tag="${esc(tag)}">#${esc(tag)}</button>`
+    ));
     // Keep line breaks from textarea (Telegram-style multi-line messages).
     return html.replace(/\n/g, '<br>');
   }
@@ -2617,18 +2622,29 @@
 
   /** Keyed timeline entries so the thread can be patched instead of rebuilt. */
   function chatTimelineItems(room) {
-    const messages = room?.messages || [];
+    const filtering = Boolean(state.chatTag);
+    const messages = filtering ? (state.chatTagHits || []) : (room?.messages || []);
+    if (filtering && state.chatTagLoading && !messages.length) {
+      return [{
+        key: 'tag-loading',
+        sig: 'loading',
+        html: '<div class="empty-chat" data-key="tag-loading" data-sig="loading"><p>Собираем сообщения…</p></div>',
+      }];
+    }
     if (!messages.length) {
+      const text = filtering
+        ? `С тегом #${state.chatTag} в этом чате пока ничего нет.`
+        : 'Напишите первое сообщение.';
       return [{
         key: 'empty',
-        sig: 'empty',
-        html: '<div class="empty-chat" data-key="empty" data-sig="empty"><p>Напишите первое сообщение.</p></div>',
+        sig: filtering ? `empty-${state.chatTag}` : 'empty',
+        html: `<div class="empty-chat" data-key="empty" data-sig="empty"><p>${esc(text)}</p></div>`,
       }];
     }
 
     const items = [];
     let lastDateKey = '';
-    const anchor = state.chatUnreadAnchor?.roomId === room?.id ? state.chatUnreadAnchor : null;
+    const anchor = !filtering && state.chatUnreadAnchor?.roomId === room?.id ? state.chatUnreadAnchor : null;
     messages.forEach((message) => {
       if (anchor && anchor.beforeId === message.id) {
         items.push({
@@ -2807,6 +2823,7 @@
           </div>
           <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>
         </header>
+        ${chatTagBarHtml()}
         ${chatPinnedBarHtml(selectedRoom)}
         <div class="telegram-messages">
           <div class="telegram-messages-canvas">
@@ -3063,6 +3080,47 @@
     });
   }
 
+  function chatTagBarHtml() {
+    const tags = ['вопрос', 'знакомство'];
+    const chips = tags.map((tag) => (
+      `<button type="button" class="chat-tag-chip${state.chatTag === tag ? ' is-active' : ''}" data-chat-tag-pick="${esc(tag)}">#${esc(tag)}</button>`
+    )).join('');
+    const clear = state.chatTag
+      ? '<button type="button" class="chat-tag-clear" data-chat-tag-clear>Все сообщения</button>'
+      : '';
+    return `<div class="chat-tag-bar" aria-label="Теги чата">${chips}${clear}</div>`;
+  }
+
+  function clearChatTag() {
+    state.chatTag = '';
+    state.chatTagHits = [];
+    state.chatTagHasMore = false;
+    state.chatTagLoading = false;
+    renderScreen();
+  }
+
+  async function openChatTag(tag) {
+    const roomId = state.selectedRoomId;
+    const normalized = String(tag || '').replace(/^#+/, '').trim().toLowerCase();
+    if (!roomId || !normalized) return;
+    state.chatTag = normalized;
+    state.chatTagHits = [];
+    state.chatTagHasMore = false;
+    state.chatTagLoading = true;
+    renderScreen();
+    try {
+      const data = await API.chatTaggedMessages(roomId, '', normalized);
+      if (state.chatTag !== normalized || state.selectedRoomId !== roomId) return;
+      state.chatTagHits = (data.messages || []).map(normalizeChatMessage);
+      state.chatTagHasMore = Boolean(data.hasMore);
+    } catch {
+      showAppToast('Не удалось собрать сообщения по тегу', { title: 'Чат', tone: 'warn' });
+    } finally {
+      state.chatTagLoading = false;
+      if (state.tab === 'chat' && state.chatTag === normalized) renderScreen();
+    }
+  }
+
   function bindChatMessageGestures(root) {
     $$('.chat-bubble[data-message-id]', root).forEach((bubble) => {
       // Optimistic bubbles have no server id yet, so no menu actions for them.
@@ -3155,6 +3213,14 @@
       bubble.addEventListener('touchcancel', () => resetPress());
     });
 
+    $$('[data-chat-tag]', root).forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openChatTag(btn.dataset.chatTag);
+      };
+    });
+
     $$('[data-react]', root).forEach((chip) => {
       chip.onclick = async (event) => {
         event.stopPropagation();
@@ -3218,6 +3284,9 @@
           return;
         }
         state.selectedRoomId = b.dataset.room;
+        state.chatTag = '';
+        state.chatTagHits = [];
+        state.chatTagHasMore = false;
         state.chatView = 'thread';
         prepareChatThreadEntry(b.dataset.room);
         clearChatCompose();
@@ -3233,6 +3302,16 @@
       setImmersive();
     });
     $('#chat-settings', root)?.addEventListener('click', () => openChatBgPicker());
+    $$('[data-chat-tag-pick]', root).forEach((btn) => {
+      btn.onclick = () => {
+        const tag = btn.dataset.chatTagPick;
+        if (state.chatTag === tag) clearChatTag();
+        else openChatTag(tag);
+      };
+    });
+    $$('[data-chat-tag-clear]', root).forEach((btn) => {
+      btn.onclick = () => clearChatTag();
+    });
     $('#chat-compose-cancel', root)?.addEventListener('click', () => cancelChatCompose());
 
     const messages = $('.telegram-messages', root);
@@ -3240,7 +3319,10 @@
       positionChatThread(messages);
       messages.addEventListener('scroll', () => {
         queueChatReadCheck();
-        if (messages.scrollTop < 80) loadOlderChatMessages();
+        if (messages.scrollTop < 80) {
+          if (state.chatTag) loadOlderChatTagMessages();
+          else loadOlderChatMessages();
+        }
       }, { passive: true });
     }
     bindChatThreadInteractions(root);
@@ -3949,7 +4031,7 @@
           <div class="ios-list">
             ${iosRow('shieldCheck', 'О «Лозе»', 'Бережная поддержка родителей подростков', 'about')}
             ${iosRow('feed', 'Лента клуба', 'Заметки и короткие разборы', 'feed')}
-            ${iosRow('messageCircle', 'Поддержка', 'Написать в Telegram', 'support')}
+            ${iosRow('messageCircle', 'Служба заботы', 'Оплата, срок и отключение подписки', 'care')}
           </div>
         </div>
         ${authed ? `<div class="ios-group">
@@ -3993,6 +4075,32 @@
 
   function bindAboutLoza(root) {
     $('[data-about-back]', root)?.addEventListener('click', () => {
+      state.profileView = '';
+      renderScreen();
+    });
+  }
+
+  function renderCare() {
+    return `<section class="about-loza-page">
+      <header class="inner-page-header">
+        <button class="inner-page-back" type="button" data-care-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
+        ${innerBrand('Служба заботы')}
+        <span class="inner-page-spacer" aria-hidden="true"></span>
+      </header>
+      <article class="about-loza-card">
+        <p class="about-loza-kicker">Если что-то с оплатой</p>
+        <h1>Служба заботы</h1>
+        <p class="about-loza-lead">Не успели положить деньги, нужна прежняя скидка, хотите узнать срок подписки или отключить её.</p>
+        <div class="care-links">
+          <a class="care-link" href="https://vk.com/write-212494761" target="_blank" rel="noopener noreferrer">Написать во ВКонтакте</a>
+          <a class="care-link" href="https://t.me/lozapsybot?start=dl-178999411111ca656f77f9" target="_blank" rel="noopener noreferrer">Написать в Telegram</a>
+        </div>
+      </article>
+    </section>`;
+  }
+
+  function bindCare(root) {
+    $('[data-care-back]', root)?.addEventListener('click', () => {
       state.profileView = '';
       renderScreen();
     });
@@ -4079,8 +4187,9 @@
           renderScreen();
           return;
         }
-        if (action === 'support') {
-          window.open('https://t.me/ksanka_rr', '_blank', 'noopener,noreferrer');
+        if (action === 'care' || action === 'support') {
+          state.profileView = 'care';
+          renderScreen();
           return;
         }
         if (action === 'logout') {
@@ -4349,6 +4458,33 @@
       }
     } catch {
       // A failed refresh must not blank the thread; keep what we already have.
+    }
+  }
+
+  async function loadOlderChatTagMessages() {
+    const roomId = state.selectedRoomId;
+    if (!state.chatTag || !roomId || !state.chatTagHasMore || state.chatHistoryLoading) return;
+    const oldest = (state.chatTagHits || []).find((item) => !item.pending && !item.failed);
+    if (!oldest) return;
+    state.chatHistoryLoading = true;
+    const scroller = $('.telegram-messages');
+    const prevHeight = scroller?.scrollHeight || 0;
+    try {
+      const data = await API.chatTaggedMessages(roomId, oldest.id, state.chatTag);
+      if (state.chatTag && state.selectedRoomId === roomId) {
+        const existing = new Set((state.chatTagHits || []).map((item) => item.id));
+        const fresh = (data.messages || []).map(normalizeChatMessage).filter((item) => !existing.has(item.id));
+        if (fresh.length) {
+          state.chatTagHits = [...fresh, ...state.chatTagHits];
+          renderChatLive();
+          if (scroller) scroller.scrollTop = scroller.scrollHeight - prevHeight;
+        }
+        state.chatTagHasMore = Boolean(data.hasMore);
+      }
+    } catch {
+      showAppToast('Не удалось подгрузить сообщения по тегу', { title: 'Чат', tone: 'warn' });
+    } finally {
+      state.chatHistoryLoading = false;
     }
   }
 
@@ -5155,7 +5291,28 @@
     window.setTimeout(() => splash.remove(), 400);
   }
 
+  function blockEdgeExit() {
+    try {
+      const stay = () => history.pushState({ lozaStay: 1 }, '', location.href);
+      stay();
+      window.addEventListener('popstate', stay);
+    } catch {
+      /* ignore */
+    }
+    if (document.querySelector('.edge-swipe-guard')) return;
+    ['left', 'right'].forEach((side) => {
+      const guard = document.createElement('div');
+      guard.className = `edge-swipe-guard is-${side}`;
+      guard.setAttribute('aria-hidden', 'true');
+      const stop = (event) => event.preventDefault();
+      guard.addEventListener('touchstart', stop, { passive: false });
+      guard.addEventListener('touchmove', stop, { passive: false });
+      document.body.appendChild(guard);
+    });
+  }
+
   async function init() {
+    blockEdgeExit();
     syncCompactLayout();
     window.addEventListener('pageshow', syncCompactLayout);
     window.addEventListener('resize', syncCompactLayout);
@@ -5220,7 +5377,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '68';
+      const version = window.LOZA_ASSET_VERSION || '69';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

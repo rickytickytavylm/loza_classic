@@ -108,6 +108,11 @@
       if (before) params.set('before', before);
       return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
     },
+    chatTaggedMessages: (roomId, before, tag) => {
+      const params = new URLSearchParams({ guestId: getGuestId(), tag: String(tag || ''), limit: '200' });
+      if (before) params.set('before', before);
+      return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
+    },
     markChatRead: (roomId, messageId) =>
       request(`/chat/rooms/${roomId}/read`, {
         method: 'POST',

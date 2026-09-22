@@ -25,8 +25,7 @@
     value = value.replace(/#(?=[\p{L}\d])/gu, '');
     value = value.replace(/(^|\n)\s*вопрос[.:]\s*/gi, '$1');
     value = value.replace(/^\++\s*/gm, '');
-    value = value.replace(/\n{3,}/g, '\n\n');
-    return value.trim();
+    return value.replace(/[ \t]+\n/g, '\n').replace(/^\n+|\n+$/g, '');
   }
 
   function isPlaceholderMediaCopy(text) {

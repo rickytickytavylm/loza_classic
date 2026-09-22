@@ -2543,6 +2543,11 @@ html.chat-no-select body * {
   word-break: break-word;
 }
 
+button.chat-hashtag {
+  pointer-events: auto;
+  text-decoration: none;
+}
+
 .chat-bubble.mine .bubble-body > p a.chat-link {
   color: #2f7a28;
 }
@@ -2838,8 +2843,67 @@ html.chat-no-select body * {
 }
 
 .chat-hashtag {
+  padding: 0;
+  border: 0;
   color: #2f7cc0;
+  background: transparent;
+  font: inherit;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-tag-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px 4px;
+}
+
+.chat-tag-chip,
+.chat-tag-clear {
+  padding: 6px 10px;
+  border: 1px solid rgba(var(--plum-rgb), 0.16);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chat-tag-chip.is-active {
+  color: #fff;
+  background: #5f4b78;
+  border-color: transparent;
+}
+
+.edge-swipe-guard {
+  position: fixed;
+  top: 0;
+  bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  width: 18px;
+  z-index: 45;
+  touch-action: pan-y;
+}
+
+.edge-swipe-guard.is-left { left: 0; }
+.edge-swipe-guard.is-right { right: 0; }
+
+.care-links {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.care-link {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 16px;
+  color: var(--ink);
+  background: rgba(var(--plum-rgb), 0.1);
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .chat-bubble.mine .chat-hashtag {
@@ -7046,18 +7110,22 @@ html:not(.is-staff) .telegram-thread {
 }
 
 .material-article {
-  display: grid;
-  gap: 16px;
+  display: block;
   margin-top: 20px;
 }
 
 .material-article p {
-  margin: 0;
+  margin: 0 0 0.95em;
   color: var(--ink);
   font-size: 16px;
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.material-article p.material-blank {
+  height: 0.85em;
+  margin: 0;
 }
 
 .ai-inner-header {
