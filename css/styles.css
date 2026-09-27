@@ -2876,6 +2876,17 @@ button.chat-hashtag {
   border-color: transparent;
 }
 
+.material-video-file {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  background: #111;
+}
+
+.material-meeting-link {
+  margin: 12px 16px;
+}
+
 .edge-swipe-guard {
   position: fixed;
   top: 0;

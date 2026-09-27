@@ -14,6 +14,9 @@
 </head>
 <body>
   <article class="legal">
+    <p style="position:sticky;top:0;z-index:5;margin:0 0 18px;padding:8px 0;background:#f7f4fb;">
+      <a id="legal-back" href="./" style="display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:12px;background:#5f4b78;color:#fff;font-weight:800;text-decoration:none;">← Назад в приложение</a>
+    </p>
     <h1>Условия использования клуба «Лоза»</h1>
     <p>Используя сайт и сервисы клуба «Лоза», вы соглашаетесь с правилами участия и условиями доступа к материалам.</p>
     <ul>
@@ -24,5 +27,21 @@
     </ul>
     <p>По вопросам: clubloza@yandex.ru</p>
   </article>
+  <script>
+    document.getElementById('legal-back').addEventListener('click', function (event) {
+      if (window.parent && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: 'loza:close-legal' }, window.location.origin);
+        return;
+      }
+      if (window.history.length > 1) {
+        event.preventDefault();
+        var left = false;
+        window.addEventListener('pagehide', function () { left = true; }, { once: true });
+        window.history.back();
+        window.setTimeout(function () { if (!left) window.location.href = './'; }, 500);
+      }
+    });
+  </script>
 </body>
 </html>

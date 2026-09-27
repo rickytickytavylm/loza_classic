@@ -566,8 +566,8 @@
       <section class="paywall-modal glass-panel consent-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <h2>Согласие на обработку данных</h2>
         <p>Чтобы пользоваться клубом, примите условия и политику конфиденциальности.</p>
-        <label class="auth-consent"><input type="checkbox" id="gate-terms" /><span>Принимаю <a href="./terms.html" target="_blank" rel="noopener">условия использования</a> и даю <a href="./consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a></span></label>
-        <label class="auth-consent"><input type="checkbox" id="gate-privacy" /><span>Ознакомлен(а) с <a href="https://lozapsy.ru/politika-konfidencialnosti/" target="_blank" rel="noopener">политикой конфиденциальности</a></span></label>
+        <label class="auth-consent"><input type="checkbox" id="gate-terms" /><span>Принимаю <a href="./terms.html">условия использования</a> и даю <a href="./consent.html">согласие на обработку персональных данных</a></span></label>
+        <label class="auth-consent"><input type="checkbox" id="gate-privacy" /><span>Ознакомлен(а) с <a href="./privacy.html">политикой конфиденциальности</a></span></label>
         <p class="checkout-note" id="consent-status"></p>
         <button type="button" class="primary-button" id="consent-save">Продолжить</button>
       </section>
@@ -1825,6 +1825,13 @@
 
     if (kinescopeEmbedUrl) {
       return `<div class="${frameClass}"><iframe allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen src="${esc(kinescopeEmbedUrl)}" title="${esc(M.cleanDisplayText(item.title))}"></iframe></div>`;
+    }
+    const fileVideo = String(item.mediaUrl || '');
+    if (item.kind !== 'audio' && /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(fileVideo) && !/kinescope\.io/i.test(fileVideo)) {
+      return `<div class="${frameClass}"><video class="material-video-file" controls playsinline preload="metadata" src="${esc(fileVideo)}" title="${esc(M.cleanDisplayText(item.title))}"></video></div>`;
+    }
+    if (/zoom\.(?:us|com)\/|telemost\.yandex\./i.test(fileVideo)) {
+      return `<a class="primary-button material-meeting-link" href="${esc(fileVideo)}" target="_blank" rel="noopener">Открыть эфир</a>`;
     }
     if (audioUrl) {
       const title = esc(M.cleanDisplayText(item.title));
@@ -5052,6 +5059,45 @@
     });
   }
 
+  function legalFrameUrl(href) {
+    const value = String(href || '');
+    if (/consent\.html/i.test(value)) return './consent.html';
+    if (/privacy\.html|politika-konfidencialnosti/i.test(value)) return './privacy.html';
+    return './terms.html';
+  }
+
+  function closeLegalSheet() {
+    document.getElementById('legal-sheet')?.remove();
+    document.body.classList.remove('legal-open');
+  }
+
+  function openLegalSheet(href) {
+    closeLegalSheet();
+    const sheet = document.createElement('div');
+    sheet.id = 'legal-sheet';
+    sheet.className = 'legal-sheet';
+    sheet.innerHTML = `<div class="legal-sheet-bar"><button type="button" id="legal-sheet-back">← Назад</button></div><iframe class="legal-sheet-frame" src="${legalFrameUrl(href)}" title="Документ"></iframe>`;
+    document.body.appendChild(sheet);
+    document.body.classList.add('legal-open');
+    sheet.querySelector('#legal-sheet-back')?.addEventListener('click', closeLegalSheet);
+  }
+
+  function bindLegalLinks() {
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'loza:close-legal') closeLegalSheet();
+    });
+    document.addEventListener('click', (event) => {
+      const link = event.target.closest?.('a[href]');
+      if (!link) return;
+      const href = link.getAttribute('href') || '';
+      if (!/terms\.html|consent\.html|privacy\.html|politika-konfidencialnosti/i.test(href)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openLegalSheet(href);
+    }, true);
+  }
+
   function showAuthScreen(errorText) {
     const root = $('#auth-screen');
     if (!root) return;
@@ -5312,6 +5358,7 @@
   }
 
   async function init() {
+    bindLegalLinks();
     blockEdgeExit();
     syncCompactLayout();
     window.addEventListener('pageshow', syncCompactLayout);
@@ -5377,7 +5424,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '69';
+      const version = window.LOZA_ASSET_VERSION || '70';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
