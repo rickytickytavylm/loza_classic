@@ -206,8 +206,25 @@
   function canPostInRoom(room) {
     if (!room) return false;
     if (isStaffUser()) return true;
+    if (!hasClubAccess()) return false;
     if (room.canPost === false) return false;
     return !room.locked;
+  }
+
+  function lockChatRoomsForViewer(rooms) {
+    if (isStaffUser() || hasClubAccess()) {
+      return (rooms || []).map((room) => ({ ...room, locked: Boolean(room.locked) }));
+    }
+    return (rooms || []).map((room) => ({
+      ...room,
+      locked: true,
+      requiredTier: 'club',
+      unreadCount: 0,
+      serverUnreadCount: 0,
+      hasMore: false,
+      messages: [],
+      pinned: [],
+    }));
   }
 
   const FALLBACK_PLANS = [
@@ -249,6 +266,18 @@
 
   function libraryPlanInfo(plan) {
     return plan?.info || D.LIBRARY_PLAN_INFO || '';
+  }
+
+  function paymentBrand() {
+    if (state.paymentProvider === 'prodamus') return 'Продамус';
+    if (state.paymentProvider === 'yookassa') return 'ЮKassa';
+    return '';
+  }
+
+  function paymentCheckoutNote() {
+    const brand = paymentBrand();
+    if (brand) return `Оплата картой через ${brand}. После оплаты доступ откроется сам.`;
+    return 'После оплаты доступ откроется сам.';
   }
 
   function planCardHtml(plan, { featured = false } = {}) {
@@ -593,6 +622,10 @@
 
   function enterChatTab() {
     state.tab = 'chat';
+    if (!hasClubAccess()) {
+      state.chatView = 'rooms';
+      state.selectedRoomId = '';
+    }
     const shell = $('#page-shell');
     shell.scrollTop = 0;
     shell.className = 'page-shell page-shell-chat';
@@ -678,6 +711,16 @@
           state.user = data.user || state.user;
         }
         closePortal();
+        if (!hasClubAccess()) {
+          enterChatTab();
+          openPaywall({
+            reason: 'chat',
+            title: 'Чаты только с тарифа «Клуб»',
+            text: 'Правила приняты. Читать и писать в чатах можно после оплаты тарифа «Клуб».',
+            preferPlan: 'club_30',
+          });
+          return;
+        }
         openChatIntroGuide({ afterRules: true });
       } catch (error) {
         if (status) status.textContent = error instanceof Error ? error.message : 'Не удалось сохранить';
@@ -1679,7 +1722,7 @@
         <h2>${esc(title || 'Открыть доступ')}</h2>
         <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
         <div class="plan-grid">${cards || '<p class="checkout-note">Тарифы пока недоступны. Обновите страницу.</p>'}</div>
-        <p class="checkout-note" id="paywall-status">После оплаты доступ откроется автоматически.</p>
+        <p class="checkout-note" id="paywall-status">${esc(paymentCheckoutNote())}</p>
         <button type="button" class="paywall-later" id="paywall-later">Позже</button>
       </section>
     </div>`;
@@ -1733,7 +1776,7 @@
       const returnUrl = `${window.location.origin}${window.location.pathname}?payment=return`;
       const payment = await API.createPayment(planCode, returnUrl);
 
-      // Prefer real YooKassa redirect whenever we got an external confirmation URL.
+      // Real checkout (Prodamus or YooKassa) always leaves the app.
       if (payment.confirmationUrl && isExternalCheckoutUrl(payment.confirmationUrl) && payment.test !== true) {
         if (statusEl) statusEl.textContent = 'Переходим к оплате…';
         window.location.href = payment.confirmationUrl;
@@ -1746,6 +1789,7 @@
         await loadSession();
         await loadContent();
         await loadChatRooms();
+        startChatStream();
         closePortal();
         renderScreen();
         showAppToast('Тестовая подписка активирована.', { title: 'Оплата' });
@@ -1759,8 +1803,8 @@
     } catch (error) {
       if (statusEl) {
         const code = error instanceof Error ? error.message : '';
-        if (code === 'YOOKASSA_INVALID_CREDENTIALS') {
-          statusEl.textContent = 'Касса не настроена. Проверьте ключ Продамуса на Timeweb.';
+        if (code === 'YOOKASSA_INVALID_CREDENTIALS' || code === 'PRODAMUS_DOMAIN is not configured') {
+          statusEl.textContent = 'Касса ещё не подключена. Нужны ключи Продамуса на сервере.';
         } else {
           statusEl.textContent = code || 'Не удалось создать оплату';
         }
@@ -1785,6 +1829,7 @@
       await loadSession();
       await loadContent();
       await loadChatRooms();
+      startChatStream();
       renderScreen();
     } catch {
       /* ignore return sync errors */
@@ -2778,7 +2823,8 @@
   }
 
   function renderChat() {
-    const selectedRoom = state.chatRooms.find((r) => r.id === state.selectedRoomId) || state.chatRooms[0];
+    const selectedRoom = state.chatRooms.find((r) => r.id === state.selectedRoomId)
+      || (hasClubAccess() ? state.chatRooms.find((room) => !room.locked) : null);
     const preset = D.CHAT_BG_PRESETS.find((p) => p.id === state.chatBg) || D.CHAT_BG_PRESETS[0];
 
     const roomButtons = state.chatRooms.map((room, i) => {
@@ -2806,7 +2852,9 @@
 
     const placeholder = state.chatCompose?.mode === 'edit' ? 'Изменить сообщение' : 'Сообщение';
     const allowPost = canPostInRoom(selectedRoom);
-    const composerHtml = allowPost
+    const composerHtml = !hasClubAccess()
+      ? '<div class="chat-readonly-note" role="status">Чаты открываются после оплаты тарифа «Клуб».</div>'
+      : allowPost
       ? `<div id="chat-compose-slot" data-sig="${esc(chatComposeSlotSignature())}">${renderChatComposeBar()}${renderChatAttachmentTray()}</div>
         <form class="telegram-composer" id="chat-form">
           <input type="file" id="chat-file" accept="image/*" multiple hidden />
@@ -4020,7 +4068,7 @@
         <div class="ios-group">
           <div class="ios-group-title">Подписка</div>
           <div class="plan-grid profile-plan-grid">${planCards || '<p class="ios-footnote">Тарифы загрузятся после обновления.</p>'}</div>
-          <p class="ios-footnote" id="profile-pay-status">Оплата картой. Если тариф с продлением — следующее списание пройдёт само.</p>
+          <p class="ios-footnote" id="profile-pay-status">${esc(paymentCheckoutNote())}</p>
         </div>
         <div class="ios-group">
           <div class="ios-group-title">Быстрый доступ</div>
@@ -4400,7 +4448,7 @@
     try {
       const data = await API.chatRooms();
       if (data.access) state.access = data.access;
-      state.chatRooms = (data.rooms || []).filter((room) => {
+      state.chatRooms = lockChatRoomsForViewer((data.rooms || [])).filter((room) => {
         if (room.slug !== 'posts') return true;
         return Boolean(state.user) || isStaffUser();
       }).map((room) => {
@@ -4412,6 +4460,7 @@
           if (!message.pending && !message.failed) byId.set(message.id, message);
         });
         incoming.forEach((message) => byId.set(message.id, { ...byId.get(message.id), ...message }));
+        if (room.locked) byId.clear();
         const messages = [...byId.values()].sort(
           (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
         );
@@ -4441,7 +4490,7 @@
 
       pendingByRoom.forEach((pending, roomId) => {
         const room = state.chatRooms.find((item) => item.id === roomId);
-        if (!room) return;
+        if (!room || room.locked) return;
         const stillInFlight = pending.filter((p) => !room.messages.some((m) => (
           !m.pending
           && !m.failed
@@ -4452,11 +4501,15 @@
         )));
         room.messages = [...room.messages, ...stillInFlight];
       });
-      if (state.selectedRoomId && !state.chatRooms.some((item) => item.id === state.selectedRoomId)) {
+      const selected = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+      if (state.selectedRoomId && (!selected || selected.locked)) {
         state.selectedRoomId = '';
         state.chatView = 'rooms';
       }
-      if (!state.selectedRoomId && state.chatRooms[0]) state.selectedRoomId = state.chatRooms[0].id;
+      if (!state.selectedRoomId) {
+        const openRoom = state.chatRooms.find((room) => !room.locked);
+        if (openRoom) state.selectedRoomId = openRoom.id;
+      }
       if (!state.introSeeded) {
         state.chatRooms.forEach((room) => (room.messages || []).forEach((message) => {
           if (isIntroMessage(message.body)) state.seenIntroIds.add(message.id);
@@ -4734,7 +4787,7 @@
     }
 
     const room = state.chatRooms.find((item) => item.id === payload.roomId);
-    if (!room) return false;
+    if (!room || room.locked || !hasClubAccess()) return false;
     if (payload.type === 'deleted') {
       const before = room.messages.length;
       room.messages = room.messages.filter((message) => message.id !== payload.messageId);
@@ -4821,6 +4874,13 @@
   }
 
   function startChatStream() {
+    if (!hasClubAccess()) {
+      try { state.chatStream?.close(); } catch { /* ignore */ }
+      state.chatStream = null;
+      state.chatStreamReady = false;
+      ensureChatPolling();
+      return;
+    }
     if (state.chatStream || !window.EventSource) {
       ensureChatPolling();
       return;
@@ -5424,7 +5484,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '70';
+      const version = window.LOZA_ASSET_VERSION || '71';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
