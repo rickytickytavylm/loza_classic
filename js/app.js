@@ -230,6 +230,7 @@
   const FALLBACK_PLANS = [
     {
       code: 'library_30',
+      tier: 'library',
       planName: 'Медиатека. Теория',
       priceRub: 2000,
       planDays: 30,
@@ -239,6 +240,7 @@
     },
     {
       code: 'club_30',
+      tier: 'club',
       planName: 'Клуб',
       priceRub: 6300,
       planDays: 30,
@@ -247,6 +249,7 @@
     },
     {
       code: 'club_90',
+      tier: 'club',
       planName: 'Клуб на 90 дней',
       priceRub: 14000,
       planDays: 90,
@@ -255,6 +258,7 @@
     },
     {
       code: 'club_plus_30',
+      tier: 'club_plus',
       planName: 'Клуб Плюс',
       priceRub: 20000,
       planDays: 30,
@@ -269,15 +273,11 @@
   }
 
   function paymentBrand() {
-    if (state.paymentProvider === 'prodamus') return 'Продамус';
-    if (state.paymentProvider === 'yookassa') return 'ЮKassa';
-    return '';
+    return 'Продамус';
   }
 
   function paymentCheckoutNote() {
-    const brand = paymentBrand();
-    if (brand) return `Оплата картой через ${brand}. После оплаты доступ откроется сам.`;
-    return 'После оплаты доступ откроется сам.';
+    return 'Оплата картой через Продамус. После оплаты доступ откроется сам.';
   }
 
   function planCardHtml(plan, { featured = false } = {}) {
@@ -293,7 +293,7 @@
       <span class="plan-card-desc">${esc(plan.description || '')}</span>
       ${info ? `<p class="plan-card-note">${esc(info)}</p>` : ''}
       ${benefits ? `<ul class="plan-card-benefits">${benefits}</ul>` : ''}
-      <button type="button" class="plan-card-buy" data-buy-plan="${esc(plan.code)}">Оплатить</button>
+      <button type="button" class="plan-card-buy" data-buy-plan="${esc(plan.code)}">Оплатить картой</button>
     </article>`;
   }
 
@@ -1718,7 +1718,7 @@
     $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
       <section class="paywall-modal glass-panel" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
-        <span class="paywall-kicker">Закрытый клуб</span>
+        <span class="paywall-kicker">Оплата через Продамус</span>
         <h2>${esc(title || 'Открыть доступ')}</h2>
         <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
         <div class="plan-grid">${cards || '<p class="checkout-note">Тарифы пока недоступны. Обновите страницу.</p>'}</div>
@@ -1803,8 +1803,12 @@
     } catch (error) {
       if (statusEl) {
         const code = error instanceof Error ? error.message : '';
-        if (code === 'YOOKASSA_INVALID_CREDENTIALS' || code === 'PRODAMUS_DOMAIN is not configured') {
-          statusEl.textContent = 'Касса ещё не подключена. Нужны ключи Продамуса на сервере.';
+        if (
+          code === 'PRODAMUS_NOT_CONFIGURED'
+          || code === 'PRODAMUS_DOMAIN is not configured'
+          || code === 'YOOKASSA_INVALID_CREDENTIALS'
+        ) {
+          statusEl.textContent = 'Касса Продамус ещё не подключена на сервере.';
         } else {
           statusEl.textContent = code || 'Не удалось создать оплату';
         }
@@ -1822,15 +1826,32 @@
       const clean = window.location.pathname + window.location.hash;
       window.history.replaceState({}, '', clean || './');
 
+      if (paymentFlag === 'fail') {
+        showAppToast('Оплата не прошла. Можно попробовать ещё раз.', { title: 'Оплата', tone: 'warn', hold: 7000 });
+        return;
+      }
+
       if (paymentFlag === 'mock' && paymentId) {
         await API.completeMockPayment(paymentId);
       }
 
-      await loadSession();
+      for (let i = 0; i < 6; i += 1) {
+        await loadSession();
+        if (hasLibraryAccess() || hasClubAccess()) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
       await loadContent();
       await loadChatRooms();
       startChatStream();
       renderScreen();
+      if (hasLibraryAccess() || hasClubAccess()) {
+        showAppToast('Доступ открыт.', { title: 'Оплата' });
+      } else {
+        showAppToast('Если деньги списались, доступ откроется через минуту. Обновите приложение.', {
+          title: 'Оплата',
+          hold: 8000,
+        });
+      }
     } catch {
       /* ignore return sync errors */
     }
@@ -5484,7 +5505,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '71';
+      const version = window.LOZA_ASSET_VERSION || '72';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

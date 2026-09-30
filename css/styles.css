@@ -5610,7 +5610,8 @@ body.material-immersive-open {
   margin-bottom: 12px;
 }
 
-.checkout-yookassa {
+.checkout-yookassa,
+.checkout-prodamus {
   font-size: 24px;
   font-weight: 900;
   letter-spacing: -0.04em;
