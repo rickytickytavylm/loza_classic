@@ -203,6 +203,8 @@
         method: 'POST',
         body: JSON.stringify({ guestId: getGuestId() }),
       }),
+    remindClubOpen: () =>
+      request('/club/remind', { method: 'POST', body: '{}' }),
     createPayment: (planCode, returnUrl) =>
       request('/payments/create', {
         method: 'POST',

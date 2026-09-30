@@ -280,6 +280,22 @@
     return 'Оплата картой через Продамус. После оплаты доступ откроется сам.';
   }
 
+  function clubPlanIsClosed(plan) {
+    return (plan?.tier === 'club' || plan?.tier === 'club_plus')
+      && state.access?.clubEntryOpen === false;
+  }
+
+  function clubPlanActionHtml(plan) {
+    if (!clubPlanIsClosed(plan)) {
+      return `<button type="button" class="plan-card-buy" data-buy-plan="${esc(plan.code)}">Оплатить картой</button>`;
+    }
+    if (state.access?.clubReminderSet) {
+      return `<p class="plan-card-note">Вход для новых участников открыт 1–3 числа. Напомним 1 и 3 числа.</p>`;
+    }
+    return `<p class="plan-card-note">Вход для новых участников открыт 1–3 числа. Кто уже был в клубе, заходит в любой день.</p>
+      <button type="button" class="plan-card-buy" data-club-remind="1">Напомнить об открытии</button>`;
+  }
+
   function planCardHtml(plan, { featured = false } = {}) {
     const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
     const days = plan.planDays === 90 ? '90 дней' : '30 дней';
@@ -293,7 +309,7 @@
       <span class="plan-card-desc">${esc(plan.description || '')}</span>
       ${info ? `<p class="plan-card-note">${esc(info)}</p>` : ''}
       ${benefits ? `<ul class="plan-card-benefits">${benefits}</ul>` : ''}
-      <button type="button" class="plan-card-buy" data-buy-plan="${esc(plan.code)}">Оплатить картой</button>
+      ${clubPlanActionHtml(plan)}
     </article>`;
   }
 
@@ -453,6 +469,44 @@
         { title: 'Уведомления', tone: 'warn' },
       );
       return false;
+    }
+  }
+
+  async function requestClubReminder(statusEl) {
+    if (!isAuthorized() || !state.user) {
+      showAuthScreen('Чтобы напомнить об открытии, войдите через Яндекс.');
+      return;
+    }
+    if (statusEl) statusEl.textContent = 'Включаем напоминание…';
+    if (!canUseWebPush()) {
+      const text = isPWA()
+        ? 'Разрешите уведомления в настройках телефона.'
+        : 'Сначала установите приложение на экран телефона и разрешите уведомления.';
+      if (statusEl) statusEl.textContent = text;
+      showAppToast(text, { title: 'Напоминание', tone: 'warn' });
+      return;
+    }
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
+    if (permission !== 'granted') {
+      if (statusEl) statusEl.textContent = 'Без разрешения уведомление не придёт.';
+      return;
+    }
+    try {
+      await subscribeWebPush();
+      setNotificationSetting(true);
+      await API.remindClubOpen();
+      if (state.access) state.access.clubReminderSet = true;
+      if (statusEl) statusEl.textContent = 'Напомним 1 и 3 числа, если вы ещё не в клубе.';
+      showAppToast('Напомним 1 и 3 числа, если вы ещё не в клубе.', { title: 'Клуб' });
+      renderScreen();
+    } catch (error) {
+      const code = String(error?.message || '');
+      const text = code === 'PUSH_NOT_CONFIGURED'
+        ? 'Уведомления на сервере ещё не включены.'
+        : 'Не удалось сохранить напоминание.';
+      if (statusEl) statusEl.textContent = text;
     }
   }
 
@@ -1728,9 +1782,7 @@
     </div>`;
     bindModalClose();
     $('#paywall-later')?.addEventListener('click', closePortal);
-    $$('[data-buy-plan]', $('#portal')).forEach((btn) => {
-      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#paywall-status'));
-    });
+    bindPlanBuyActions($('#portal'), $('#paywall-status'));
   }
 
   function showAppToast(message, { title = 'Лоза', tone = 'ok', onOpen = null, hold = 4200 } = {}) {
@@ -1809,6 +1861,8 @@
           || code === 'YOOKASSA_INVALID_CREDENTIALS'
         ) {
           statusEl.textContent = 'Касса Продамус ещё не подключена на сервере.';
+        } else if (code === 'CLUB_ENTRY_CLOSED') {
+          statusEl.textContent = 'Вход в клуб для новых участников открыт 1–3 числа.';
         } else {
           statusEl.textContent = code || 'Не удалось создать оплату';
         }
@@ -2630,6 +2684,51 @@
       scroller.scrollTop = scroller.scrollHeight;
     }
     updateChatReadFromScroll(scroller);
+    updateChatJumps(scroller);
+  }
+
+  function nextReplyToMe(scroller) {
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+    const me = currentChatUserId();
+    if (!room || !me || !scroller) return '';
+    const scRect = scroller.getBoundingClientRect();
+    let below = '';
+    let above = '';
+    (room.messages || []).forEach((message) => {
+      if (message.pending || message.mine) return;
+      if (message.replyTo?.authorId !== me) return;
+      const node = scroller.querySelector(`[data-message-id="${message.id}"]`);
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      const visible = rect.bottom > scRect.top + 28 && rect.top < scRect.bottom - 28;
+      if (visible) return;
+      if (rect.top >= scRect.bottom - 8) below = below || message.id;
+      else above = message.id;
+    });
+    return below || above;
+  }
+
+  function updateChatJumps(scroller = $('.telegram-messages')) {
+    const mention = $('#chat-jump-mention');
+    const bottom = $('#chat-jump-bottom');
+    if (!mention || !bottom || !scroller) return;
+    const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    const target = nextReplyToMe(scroller);
+    mention.hidden = !target;
+    mention.dataset.target = target || '';
+    bottom.hidden = gap < 80;
+  }
+
+  function scrollChatToMessage(messageId) {
+    const scroller = $('.telegram-messages');
+    const target = scroller?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!scroller || !target) return;
+    const scRect = scroller.getBoundingClientRect();
+    const elRect = target.getBoundingClientRect();
+    scroller.scrollTop += elRect.top - scRect.top - 72;
+    target.classList.add('is-flash');
+    window.setTimeout(() => target.classList.remove('is-flash'), 1200);
+    updateChatJumps(scroller);
   }
 
   function setChatReply(message) {
@@ -2906,6 +3005,12 @@
             ${selectedRoom?.hasMore ? '<div class="chat-history-hint" data-key="history-hint" data-sig="hint">Прокрутите вверх за историей</div>' : ''}
             ${timeline.join('')}
           </div>
+        </div>
+        <div class="chat-jump" id="chat-jump">
+          <button type="button" class="chat-jump-btn" id="chat-jump-mention" hidden aria-label="К ответу вам">@</button>
+          <button type="button" class="chat-jump-btn" id="chat-jump-bottom" hidden aria-label="К последнему сообщению">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
         </div>
         ${composerHtml}
       </section>
@@ -3399,7 +3504,15 @@
           if (state.chatTag) loadOlderChatTagMessages();
           else loadOlderChatMessages();
         }
+        updateChatJumps(messages);
       }, { passive: true });
+      $('#chat-jump-mention')?.addEventListener('click', () => {
+        const target = $('#chat-jump-mention')?.dataset.target;
+        if (target) scrollChatToMessage(target);
+      });
+      $('#chat-jump-bottom')?.addEventListener('click', () => {
+        messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
+      });
     }
     bindChatThreadInteractions(root);
     $$('[data-scroll-to]', root).forEach((btn) => {
@@ -4247,10 +4360,17 @@
     openDeleteAccountModal();
   }
 
-  function bindProfile(root) {
+  function bindPlanBuyActions(root, statusEl) {
     $$('[data-buy-plan]', root).forEach((btn) => {
-      btn.onclick = () => startCheckout(btn.dataset.buyPlan, $('#profile-pay-status', root));
+      btn.onclick = () => startCheckout(btn.dataset.buyPlan, statusEl);
     });
+    $$('[data-club-remind]', root).forEach((btn) => {
+      btn.onclick = () => requestClubReminder(statusEl);
+    });
+  }
+
+  function bindProfile(root) {
+    bindPlanBuyActions(root, $('#profile-pay-status', root));
     $$('[data-profile-action]', root).forEach((btn) => {
       btn.onclick = () => {
         const action = btn.dataset.profileAction;
@@ -4736,6 +4856,7 @@
     if (patchChatThread()) {
       patchChatComposeSlot();
       patchChatRoomPreviews();
+      updateChatJumps();
       return;
     }
     renderChatFull();
@@ -4768,6 +4889,7 @@
     }
     const nextList = $('.telegram-messages');
     if (nextList) nextList.scrollTop = atBottom ? nextList.scrollHeight : prevScroll;
+    updateChatJumps(nextList);
   }
 
   function applyChatEvent(payload) {
@@ -5505,7 +5627,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '72';
+      const version = window.LOZA_ASSET_VERSION || '73';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
