@@ -746,7 +746,7 @@
     document.body.classList.add('rules-open');
     $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
       <section class="paywall-modal glass-panel consent-modal club-rules-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
-        <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
+        <button class="paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 16)}</button>
         <span class="paywall-kicker">Чаты клуба</span>
         <h2>${esc(D.CLUB_RULES_TITLE || 'Правила клуба')}</h2>
         ${clubRulesHtml()}
@@ -1771,7 +1771,7 @@
     document.body.classList.add('paywall-open');
     $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop" id="modal-close">
       <section class="paywall-modal glass-panel" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
-        <button class="icon-button paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 18)}</button>
+        <button class="paywall-close" type="button" id="modal-x" aria-label="Закрыть">${ic('x', 16)}</button>
         <span class="paywall-kicker">Оплата через Продамус</span>
         <h2>${esc(title || 'Открыть доступ')}</h2>
         <p>${esc(text || 'Выберите тариф по условиям клуба Лоза.')}</p>
@@ -5648,7 +5648,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '75';
+      const version = window.LOZA_ASSET_VERSION || '76';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
