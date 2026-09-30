@@ -2352,8 +2352,8 @@ body.rules-open {
 .chat-jump {
   position: absolute;
   right: 14px;
-  bottom: calc(148px + env(safe-area-inset-bottom, 0px));
-  z-index: 6;
+  bottom: 76px;
+  z-index: 8;
   display: flex;
   flex-direction: column;
   gap: 8px;

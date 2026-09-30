@@ -2687,16 +2687,22 @@
     updateChatJumps(scroller);
   }
 
+  function messageRepliesToMe(message, room) {
+    if (!message?.replyTo || message.pending || isMyChatMessage(message)) return false;
+    const me = currentChatUserId();
+    if (me && message.replyTo.authorId === me) return true;
+    const quoted = (room?.messages || []).find((item) => item.id === message.replyTo.id);
+    return Boolean(quoted && isMyChatMessage(quoted));
+  }
+
   function nextReplyToMe(scroller) {
     const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
-    const me = currentChatUserId();
-    if (!room || !me || !scroller) return '';
+    if (!room || !scroller) return '';
     const scRect = scroller.getBoundingClientRect();
     let below = '';
     let above = '';
     (room.messages || []).forEach((message) => {
-      if (message.pending || message.mine) return;
-      if (message.replyTo?.authorId !== me) return;
+      if (!messageRepliesToMe(message, room)) return;
       const node = scroller.querySelector(`[data-message-id="${message.id}"]`);
       if (!node) return;
       const rect = node.getBoundingClientRect();
@@ -2708,10 +2714,24 @@
     return below || above;
   }
 
+  function placeChatJump() {
+    const jump = $('#chat-jump');
+    const thread = jump?.closest('.telegram-thread');
+    if (!jump || !thread) return;
+    const threadBottom = thread.getBoundingClientRect().bottom;
+    const tops = ['#chat-compose-slot', '#chat-form', '.chat-readonly-note', '.telegram-composer']
+      .map((selector) => $(selector, thread))
+      .filter((el) => el && el.getBoundingClientRect().height > 8)
+      .map((el) => el.getBoundingClientRect().top);
+    const stackTop = tops.length ? Math.min(...tops) : threadBottom;
+    jump.style.bottom = `${Math.max(16, Math.round(threadBottom - stackTop + 14))}px`;
+  }
+
   function updateChatJumps(scroller = $('.telegram-messages')) {
     const mention = $('#chat-jump-mention');
     const bottom = $('#chat-jump-bottom');
     if (!mention || !bottom || !scroller) return;
+    placeChatJump();
     const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
     const target = nextReplyToMe(scroller);
     mention.hidden = !target;
@@ -3513,6 +3533,7 @@
       $('#chat-jump-bottom')?.addEventListener('click', () => {
         messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
       });
+      placeChatJump();
     }
     bindChatThreadInteractions(root);
     $$('[data-scroll-to]', root).forEach((btn) => {
@@ -5627,7 +5648,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '74';
+      const version = window.LOZA_ASSET_VERSION || '75';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
