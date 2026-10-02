@@ -3550,12 +3550,6 @@ button.chat-hashtag {
 }
 
 .bubble-photo[style*="aspect-ratio"] { background: rgba(var(--plum-rgb), 0.1); }
-.bubble-photo[style*="aspect-ratio"] img { opacity: 0; transition: opacity 0.25s ease; }
-.bubble-photo.is-loaded img { opacity: 1; }
-
-@media (prefers-reduced-motion: reduce) {
-  .bubble-photo[style*="aspect-ratio"] img { transition: none; opacity: 1; }
-}
 
 .bubble-photos.is-grid .bubble-photo img {
   aspect-ratio: 1 / 1;

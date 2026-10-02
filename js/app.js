@@ -2535,7 +2535,7 @@
         ? ` style="aspect-ratio:${item.width} / ${item.height}"`
         : '';
       return `<button type="button" class="bubble-photo" data-photo="${esc(item.url)}"${ratio}>
-        <img src="${esc(item.url)}" alt="${esc(item.fileName || 'Фото')}" loading="lazy" decoding="async" onload="this.closest('.bubble-photo')?.classList.add('is-loaded')" onerror="this.closest('.bubble-photo')?.remove()" />
+        <img src="${esc(item.url)}" alt="${esc(item.fileName || 'Фото')}" loading="lazy" decoding="async" onerror="this.closest('.bubble-photo')?.remove()" />
       </button>`;
     }).join('');
     return `<div class="bubble-photos${images.length > 1 ? ' is-grid' : ''}">${tiles}</div>`;
@@ -4551,7 +4551,11 @@
   }
 
   function feedFingerprint(posts) {
-    return (posts || []).map((post) => `${post.id}:${post.body}:${post.imageUrl || ''}:${post.comments || 0}`).join('|');
+    // Only structural changes should trigger a full feed rebuild. Volatile
+    // counters (likes/comments) update in place, so they stay out of the
+    // fingerprint — otherwise the whole feed re-renders every poll and the
+    // images visibly flicker.
+    return (posts || []).map((post) => `${post.id}:${post.body}:${post.imageUrl || ''}:${post.videoUrl || ''}`).join('|');
   }
 
   async function loadFeed() {
@@ -5687,7 +5691,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '79';
+      const version = window.LOZA_ASSET_VERSION || '80';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
