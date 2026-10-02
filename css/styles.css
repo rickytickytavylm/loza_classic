@@ -2145,7 +2145,6 @@ body.rules-open {
 .chat-room-skeleton-lines i:first-child { width: 45%; }
 .chat-room-skeleton-lines i:last-child { width: 78%; }
 
-.chat-rooms-skeleton,
 .chat-room-skeleton-avatar,
 .chat-room-skeleton-lines i {
   animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
@@ -2157,7 +2156,6 @@ body.rules-open {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-rooms-skeleton,
   .chat-room-skeleton-avatar,
   .chat-room-skeleton-lines i { animation: none; }
 }
@@ -5735,7 +5733,7 @@ body.material-immersive-open {
 }
 
 .checkout-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 24px;
