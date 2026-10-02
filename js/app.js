@@ -118,6 +118,7 @@
     chatScrollPending: false, // next thread render should apply the resume position
     chatTyping: null, // { roomId, authorName, until }
     chatHistoryLoading: false,
+    chatRoomsLoaded: false,
     chatTag: '',
     chatTagHits: [],
     chatTagHasMore: false,
@@ -2356,7 +2357,9 @@
       authorId: currentChatUserId(),
       authorName: state.user?.name || 'Вы',
       reactions: [],
-      attachments: (attachments || []).map((item) => ({ url: item.previewUrl, mimeType: 'image/*' })),
+      attachments: (attachments || []).map((item) => ({
+        url: item.previewUrl, mimeType: 'image/*', width: item.width, height: item.height,
+      })),
       replyTo: compose?.mode === 'reply'
         ? { id: compose.messageId, authorName: compose.authorName, body: compose.preview }
         : null,
@@ -2404,12 +2407,18 @@
       try {
         // The reverse proxy in front of the API rejects multipart bodies around
         // 1 MB, so phone photos need to be shrunk client-side before upload.
-        const file = await shrinkChatImage(entry.file);
-        const data = await API.uploadChatImage(file);
+        const { file, width, height } = await shrinkChatImage(entry.file);
         const current = state.chatAttachments.find((item) => item.localId === entry.localId);
-        if (!current) return;
-        current.id = data.attachment?.id;
-        current.status = current.id ? 'ready' : 'error';
+        if (current && width && height) {
+          current.width = width;
+          current.height = height;
+          renderChatLive();
+        }
+        const data = await API.uploadChatImage(file, { width, height });
+        const target = state.chatAttachments.find((item) => item.localId === entry.localId);
+        if (!target) return;
+        target.id = data.attachment?.id;
+        target.status = target.id ? 'ready' : 'error';
       } catch (error) {
         const current = state.chatAttachments.find((item) => item.localId === entry.localId);
         if (current) current.status = 'error';
@@ -2432,8 +2441,15 @@
   async function shrinkChatImage(file) {
     const maxSide = 2048;
     const targetBytes = 700 * 1024;
+    let dims = null;
+    try {
+      const probe = await loadChatImageSource(file);
+      dims = { width: probe.width, height: probe.height };
+      if (probe.bitmap?.close) probe.bitmap.close();
+    } catch { /* dimensions stay unknown */ }
+
     if (file.size <= targetBytes && !/image\/(heic|heif)/i.test(file.type)) {
-      return file;
+      return { file, ...(dims || {}) };
     }
 
     try {
@@ -2453,9 +2469,10 @@
         quality -= 0.1;
         blob = await canvasToBlob(canvas, quality);
       }
-      return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+      const shrunk = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+      return { file: shrunk, width, height };
     } catch {
-      return file;
+      return { file, ...(dims || {}) };
     }
   }
 
@@ -2511,10 +2528,16 @@
       !item.mimeType || /^image\//i.test(item.mimeType)
     ));
     if (!images.length) return '';
-    const tiles = images.map((item) => `
-      <button type="button" class="bubble-photo" data-photo="${esc(item.url)}">
-        <img src="${esc(item.url)}" alt="${esc(item.fileName || 'Фото')}" loading="lazy" decoding="async" onerror="this.closest('.bubble-photo')?.remove()" />
-      </button>`).join('');
+    const single = images.length === 1;
+    const tiles = images.map((item) => {
+      // Reserve the slot before the photo loads so the thread never jumps.
+      const ratio = single && item.width && item.height
+        ? ` style="aspect-ratio:${item.width} / ${item.height}"`
+        : '';
+      return `<button type="button" class="bubble-photo" data-photo="${esc(item.url)}"${ratio}>
+        <img src="${esc(item.url)}" alt="${esc(item.fileName || 'Фото')}" loading="lazy" decoding="async" onload="this.closest('.bubble-photo')?.classList.add('is-loaded')" onerror="this.closest('.bubble-photo')?.remove()" />
+      </button>`;
+    }).join('');
     return `<div class="bubble-photos${images.length > 1 ? ' is-grid' : ''}">${tiles}</div>`;
   }
 
@@ -2799,7 +2822,7 @@
       message.editedAt || '',
       mine ? 'm' : 'i',
       message.authorName || message.author?.name || '',
-      (message.attachments || []).map((item) => item.url).join(','),
+      (message.attachments || []).map((item) => `${item.url}:${item.width || 0}x${item.height || 0}`).join(','),
       (message.reactions || []).map((r) => `${r.emoji}${r.count}${r.mine ? '*' : ''}`).join(''),
       message.replyTo
         ? `${message.replyTo.id}${message.replyTo.deleted ? 'd' : ''}${message.replyTo.body || ''}`
@@ -2835,6 +2858,15 @@
     }
 
     const items = [];
+    if (!filtering && room?.hasMore) {
+      items.push({
+        key: 'history-top',
+        sig: state.chatHistoryLoading ? 'load' : 'hint',
+        html: state.chatHistoryLoading
+          ? '<div class="chat-history-hint is-loading" data-key="history-top" data-sig="load"><span class="chat-history-spinner" aria-hidden="true"></span>Загружаем историю…</div>'
+          : '<div class="chat-history-hint" data-key="history-top" data-sig="hint">Прокрутите вверх за историей</div>',
+      });
+    }
     let lastDateKey = '';
     const anchor = !filtering && state.chatUnreadAnchor?.roomId === room?.id ? state.chatUnreadAnchor : null;
     messages.forEach((message) => {
@@ -2988,7 +3020,9 @@
 
     const roomsListInner = roomButtons
       ? `<div class="telegram-room-group">${roomButtons}</div>`
-      : '<p class="chat-muted">Комнаты пока не созданы в базе.</p>';
+      : (state.chatRoomsLoaded
+        ? '<p class="chat-muted">Комнаты пока не созданы в базе.</p>'
+        : `<div class="chat-rooms-skeleton" aria-hidden="true">${Array.from({ length: 4 }, () => '<div class="chat-room-skeleton"><span class="chat-room-skeleton-avatar"></span><span class="chat-room-skeleton-lines"><i></i><i></i></span></div>').join('')}</div>`);
 
     const placeholder = state.chatCompose?.mode === 'edit' ? 'Изменить сообщение' : 'Сообщение';
     const allowPost = canPostInRoom(selectedRoom);
@@ -3022,7 +3056,6 @@
         ${chatPinnedBarHtml(selectedRoom)}
         <div class="telegram-messages">
           <div class="telegram-messages-canvas">
-            ${selectedRoom?.hasMore ? '<div class="chat-history-hint" data-key="history-hint" data-sig="hint">Прокрутите вверх за историей</div>' : ''}
             ${timeline.join('')}
           </div>
         </div>
@@ -4649,6 +4682,7 @@
       });
       persistChatReads();
       syncUnreadBadges();
+      state.chatRoomsLoaded = true;
 
       pendingByRoom.forEach((pending, roomId) => {
         const room = state.chatRooms.find((item) => item.id === roomId);
@@ -4719,21 +4753,26 @@
     state.chatHistoryLoading = true;
     const scroller = $('.telegram-messages');
     const prevHeight = scroller?.scrollHeight || 0;
+    // Swap the top hint for a spinner in place (same height, no scroll jump).
+    renderChatLive();
     try {
       const data = await API.chatRoomMessages(room.id, oldest.id);
       const older = (data.messages || []).map(normalizeChatMessage);
       const existing = new Set((room.messages || []).map((item) => item.id));
       const fresh = older.filter((item) => !existing.has(item.id));
+      room.hasMore = Boolean(data.hasMore);
       if (fresh.length) {
         room.messages = [...fresh, ...room.messages];
+        state.chatHistoryLoading = false;
         renderChatLive();
         if (scroller) scroller.scrollTop = scroller.scrollHeight - prevHeight;
-      }
-      room.hasMore = Boolean(data.hasMore);
-      if (!room.hasMore) {
-        $('.chat-history-hint')?.remove();
+      } else {
+        state.chatHistoryLoading = false;
+        renderChatLive();
       }
     } catch {
+      state.chatHistoryLoading = false;
+      renderChatLive();
       showAppToast('Не удалось подгрузить историю', { title: 'Чат', tone: 'warn' });
     } finally {
       state.chatHistoryLoading = false;
@@ -5648,7 +5687,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '77';
+      const version = window.LOZA_ASSET_VERSION || '78';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

@@ -134,11 +134,15 @@
           guestId: getGuestId(),
         }),
       }),
-    uploadChatImage: async (file) => {
+    uploadChatImage: async (file, dimensions) => {
       // FormData sets its own multipart boundary — never send a JSON content type.
       const form = new FormData();
       form.append('file', file);
       form.append('guestId', getGuestId());
+      if (dimensions?.width && dimensions?.height) {
+        form.append('width', String(dimensions.width));
+        form.append('height', String(dimensions.height));
+      }
       const response = await fetch(`${API_URL}/chat/upload`, {
         method: 'POST',
         cache: 'no-store',

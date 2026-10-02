@@ -2087,11 +2087,79 @@ body.rules-open {
 
 .chat-history-hint {
   align-self: center;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
   margin: 8px 0 4px;
   color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
   font-weight: 600;
   text-align: center;
+}
+
+.chat-history-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  animation: chat-attach-spin 0.7s linear infinite;
+}
+
+.chat-rooms-skeleton {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.chat-room-skeleton {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 8px;
+}
+
+.chat-room-skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(var(--plum-rgb), 0.12);
+}
+
+.chat-room-skeleton-lines {
+  display: grid;
+  gap: 7px;
+  flex: 1 1 auto;
+}
+
+.chat-room-skeleton-lines i {
+  display: block;
+  height: 11px;
+  border-radius: 6px;
+  background: rgba(var(--plum-rgb), 0.12);
+}
+
+.chat-room-skeleton-lines i:first-child { width: 45%; }
+.chat-room-skeleton-lines i:last-child { width: 78%; }
+
+.chat-rooms-skeleton,
+.chat-room-skeleton-avatar,
+.chat-room-skeleton-lines i {
+  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes chat-skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-rooms-skeleton,
+  .chat-room-skeleton-avatar,
+  .chat-room-skeleton-lines i { animation: none; }
 }
 
 .chat-bubble.is-failed .bubble-body {
@@ -3463,11 +3531,32 @@ button.chat-hashtag {
   cursor: zoom-in;
 }
 
+/* A single photo reserves its slot via inline aspect-ratio so the thread does
+   not jump when the image decodes. The grid keeps square tiles. */
+.bubble-photos:not(.is-grid) .bubble-photo {
+  width: min(260px, 72vw);
+  max-height: 340px;
+}
+
+.bubble-photos:not(.is-grid) .bubble-photo[style*="aspect-ratio"] img {
+  max-height: none;
+  height: 100%;
+}
+
 .bubble-photo img {
   display: block;
   width: 100%;
   max-height: 320px;
   object-fit: cover;
+  opacity: 1;
+}
+
+.bubble-photo[style*="aspect-ratio"] { background: rgba(var(--plum-rgb), 0.1); }
+.bubble-photo[style*="aspect-ratio"] img { opacity: 0; transition: opacity 0.25s ease; }
+.bubble-photo.is-loaded img { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-photo[style*="aspect-ratio"] img { transition: none; opacity: 1; }
 }
 
 .bubble-photos.is-grid .bubble-photo img {
