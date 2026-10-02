@@ -6632,6 +6632,40 @@ body.material-immersive-open {
   padding: 4px 14px 16px;
 }
 
+.insta-post-react {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid rgba(43, 39, 53, 0.08);
+}
+
+.insta-post-react-copy {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.insta-like-cta {
+  flex-shrink: 0;
+  margin-left: auto;
+  gap: 6px;
+  padding: 8px 15px;
+  border-radius: 999px;
+  background: rgba(43, 39, 53, 0.06);
+}
+
+.insta-like-cta.insta-liked {
+  background: rgba(224, 55, 93, 0.12);
+}
+
+.insta-like-cta:active {
+  transform: scale(0.96);
+}
+
 .insta-post-media iframe {
   position: absolute;
   inset: 0;

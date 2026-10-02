@@ -933,6 +933,15 @@
     return `<button class="insta-action${liked ? ' insta-liked' : ''}" type="button" data-like="${esc(postId)}">${ic('heart', 24, { fill: liked ? 'currentColor' : 'none' })}<span>${likes}</span></button>`;
   }
 
+  // A second like control at the end of a long post, so a reader can react
+  // right where they finished instead of scrolling back up to the top bar.
+  function feedReadReaction(postId, liked, likes) {
+    return `<div class="insta-post-react">
+      <span class="insta-post-react-copy">Откликнулось? Поставьте лайк</span>
+      <button class="insta-action insta-like-cta${liked ? ' insta-liked' : ''}" type="button" data-like="${esc(postId)}">${ic('heart', 24, { fill: liked ? 'currentColor' : 'none' })}<span>${likes}</span></button>
+    </div>`;
+  }
+
   function extractKinescopeUrl(text) {
     if (typeof M.extractKinescopeUrl === 'function') return M.extractKinescopeUrl(text);
     const match = String(text || '').match(/https?:\/\/(?:www\.)?kinescope\.io\/[^\s<>"']+/i);
@@ -1012,6 +1021,7 @@
               <p class="insta-post-caption-name"><strong>${esc(authorName)}</strong></p>
               ${titleHtml}
               ${captionBody ? `<div class="insta-post-caption-body">${formatFeedCaption(captionBody)}</div>` : ''}
+              ${captionBody ? feedReadReaction(post.id, liked, likes) : ''}
             </div>
           </div>
         </div>
@@ -5691,7 +5701,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '80';
+      const version = window.LOZA_ASSET_VERSION || '81';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
