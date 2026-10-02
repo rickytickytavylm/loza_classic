@@ -6621,6 +6621,27 @@ body.material-immersive-open {
   white-space: pre-wrap;
 }
 
+.insta-post-caption-body.is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+}
+
+.insta-post-more {
+  margin-top: 6px;
+  padding: 0;
+  color: var(--olive-dark);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.insta-post-more[hidden] {
+  display: none;
+}
+
 .insta-post-title {
   margin: 4px 0 0;
   font-size: 17px;

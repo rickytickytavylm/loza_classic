@@ -157,6 +157,7 @@
     aiSending: false,
     feedLikes: {},
     feedComments: {},
+    feedExpanded: {},
     listScroll: null, // { tab, media, shell } — restore after closing a material
     access: null,
     aiUsage: null,
@@ -942,6 +943,15 @@
     </div>`;
   }
 
+  // Long posts collapse to a snippet with a "show more" toggle (VK-style), so
+  // the bottom like stays close to the top of the post and visible. bindFeed
+  // hides the toggle for short posts that fit without clamping.
+  function feedCaptionBlock(postId, captionBody) {
+    const expanded = Boolean(state.feedExpanded[postId]);
+    return `<div class="insta-post-caption-body${expanded ? '' : ' is-clamped'}" data-body="${esc(postId)}">${formatFeedCaption(captionBody)}</div>
+      <button class="insta-post-more" type="button" data-more="${esc(postId)}" hidden>${expanded ? 'Свернуть' : 'Показать полностью'}</button>`;
+  }
+
   function extractKinescopeUrl(text) {
     if (typeof M.extractKinescopeUrl === 'function') return M.extractKinescopeUrl(text);
     const match = String(text || '').match(/https?:\/\/(?:www\.)?kinescope\.io\/[^\s<>"']+/i);
@@ -1020,7 +1030,7 @@
             <div class="insta-post-caption-copy">
               <p class="insta-post-caption-name"><strong>${esc(authorName)}</strong></p>
               ${titleHtml}
-              ${captionBody ? `<div class="insta-post-caption-body">${formatFeedCaption(captionBody)}</div>` : ''}
+              ${captionBody ? feedCaptionBlock(post.id, captionBody) : ''}
               ${captionBody ? feedReadReaction(post.id, liked, likes) : ''}
             </div>
           </div>
@@ -1113,6 +1123,24 @@
         const fallback = img.getAttribute('data-fallback') || '';
         if (fallback && img.src !== fallback) img.src = fallback;
       });
+    });
+    $$('.insta-post-caption-body', root).forEach((body) => {
+      const id = body.dataset.body;
+      if (!id) return;
+      const moreBtn = root.querySelector(`.insta-post-more[data-more="${CSS.escape(id)}"]`);
+      if (!moreBtn) return;
+      // Keep the toggle only when the text is actually clipped (or already open).
+      moreBtn.hidden = !state.feedExpanded[id] && body.scrollHeight - body.clientHeight <= 4;
+    });
+    $$('.insta-post-more', root).forEach((btn) => {
+      btn.onclick = () => {
+        const id = btn.dataset.more;
+        const expand = !state.feedExpanded[id];
+        state.feedExpanded[id] = expand;
+        const body = root.querySelector(`.insta-post-caption-body[data-body="${CSS.escape(id)}"]`);
+        if (body) body.classList.toggle('is-clamped', !expand);
+        btn.textContent = expand ? 'Свернуть' : 'Показать полностью';
+      };
     });
     $$('[data-like]', root).forEach((b) => {
       b.onclick = async () => {
@@ -5701,7 +5729,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '81';
+      const version = window.LOZA_ASSET_VERSION || '82';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
