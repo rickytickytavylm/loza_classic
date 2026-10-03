@@ -721,8 +721,9 @@ button {
 
 .editorial-card {
   display: grid;
-  grid-template-rows: auto auto auto;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  height: 100%;
   min-height: 0;
   overflow: visible;
   border-radius: 24px;
@@ -4959,7 +4960,7 @@ html.is-compact .hero-actions {
     grid-auto-flow: column;
     grid-auto-columns: min(84vw, 300px);
     grid-template-columns: unset;
-    align-items: start;
+    align-items: stretch;
     gap: 12px;
     margin-inline: -12px;
     padding-inline: 12px 24px;
@@ -5956,8 +5957,15 @@ body.material-immersive-open {
     padding-bottom: 24px;
   }
 
+  .page-shell-media {
+    flex: 0 0 auto;
+    min-height: auto;
+    padding: 0 0 24px;
+  }
+
   .media-feed-page {
-    padding-bottom: 24px;
+    flex: 0 1 auto;
+    padding-bottom: 0;
   }
 
   /*
@@ -5966,11 +5974,7 @@ body.material-immersive-open {
     the mobile-only auto-hide overlay served no purpose on a mouse-driven page.
   */
   .page-shell-media {
-    overflow-y: auto;
-  }
-
-  .media-feed-page {
-    flex: 0 1 auto;
+    overflow: visible;
   }
 
   .media-feed-controls,
@@ -5989,6 +5993,14 @@ body.material-immersive-open {
     flex: 0 1 auto;
     overflow: visible;
     padding-top: 0;
+  }
+
+  .media-feed-header {
+    padding-top: 0;
+  }
+
+  .media-feed-list {
+    padding-top: 4px;
   }
 }
 
@@ -6455,6 +6467,107 @@ body.material-immersive-open {
   gap: 0;
 }
 
+.feed-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 48px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.feed-empty-state p {
+  max-width: 360px;
+  margin: 0;
+}
+
+.insta-post-skeleton {
+  pointer-events: none;
+}
+
+.insta-skeleton-head,
+.insta-skeleton-actions {
+  display: flex;
+  align-items: center;
+}
+
+.insta-skeleton-head {
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.insta-skeleton-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 10px;
+  background: rgba(var(--plum-rgb), 0.1);
+}
+
+.insta-skeleton-copy {
+  display: grid;
+  flex: 1;
+  gap: 7px;
+}
+
+.insta-skeleton-copy i,
+.insta-skeleton-actions i,
+.insta-skeleton-lines i {
+  display: block;
+  border-radius: 999px;
+  background: rgba(var(--plum-rgb), 0.1);
+  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.insta-skeleton-copy i:first-child { width: 34%; height: 11px; }
+.insta-skeleton-copy i:last-child { width: 52%; height: 9px; }
+
+.insta-skeleton-media {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background:
+    linear-gradient(110deg, rgba(var(--plum-rgb), 0.07) 8%, rgba(255, 255, 255, 0.52) 18%, rgba(var(--plum-rgb), 0.07) 33%);
+  background-size: 220% 100%;
+  animation: feed-skeleton-shimmer 1.25s linear infinite;
+}
+
+.insta-skeleton-actions {
+  gap: 16px;
+  padding: 9px 14px 4px;
+}
+
+.insta-skeleton-actions i {
+  width: 26px;
+  height: 12px;
+}
+
+.insta-skeleton-actions i:last-child {
+  margin-left: auto;
+}
+
+.insta-skeleton-lines {
+  display: grid;
+  gap: 8px;
+  padding: 6px 14px 16px;
+}
+
+.insta-skeleton-lines i { height: 10px; }
+.insta-skeleton-lines i:nth-child(2) { width: 92%; }
+.insta-skeleton-lines i:nth-child(3) { width: 68%; }
+
+@keyframes feed-skeleton-shimmer {
+  to { background-position-x: -220%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insta-skeleton-copy i,
+  .insta-skeleton-actions i,
+  .insta-skeleton-lines i,
+  .insta-skeleton-media {
+    animation: none;
+  }
+}
+
 @media (min-width: 761px) {
   .page-shell-feed {
     padding-inline: 16px;
@@ -6556,7 +6669,7 @@ body.material-immersive-open {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 10px 14px 0;
+  padding: 6px 14px 0;
 }
 
 .insta-action {
@@ -6587,7 +6700,7 @@ body.material-immersive-open {
 }
 
 .insta-post-caption {
-  padding: 8px 14px 16px;
+  padding: 4px 14px 14px;
   font-size: 14px;
   line-height: 1.55;
 }
@@ -6617,7 +6730,7 @@ body.material-immersive-open {
 }
 
 .insta-post-caption-body {
-  margin-top: 4px;
+  margin-top: 2px;
   white-space: pre-wrap;
 }
 
@@ -6657,8 +6770,8 @@ body.material-immersive-open {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 14px;
-  padding-top: 13px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid rgba(43, 39, 53, 0.08);
 }
 
@@ -7271,7 +7384,7 @@ html:not(.is-staff) .telegram-thread {
   }
 
   .material-immersive-media {
-    padding: var(--m-24) var(--m-pad-x) 0;
+    padding: var(--m-12) var(--m-pad-x) 0;
   }
 
   .material-video-immersive {
@@ -7280,7 +7393,7 @@ html:not(.is-staff) .telegram-thread {
   }
 
   .material-immersive-body {
-    padding: var(--m-24) var(--m-pad-x) calc(48px + env(safe-area-inset-bottom, 0px));
+    padding: var(--m-20) var(--m-pad-x) calc(28px + env(safe-area-inset-bottom, 0px));
   }
 }
 

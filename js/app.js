@@ -89,7 +89,13 @@
     user: null,
     selectedItemId: '',
     selectedMovieId: '',
-    feedPosts: [...D.FEED_POSTS],
+    // Never paint bundled demo posts before the API answers: that caused a
+    // visible flash of unrelated content on every cold feed open.
+    feedPosts: [],
+    feedLoaded: false,
+    feedLoading: false,
+    feedLoadPromise: null,
+    feedError: false,
     librarySections: [...LIBRARY.sections],
     libraryItems: [...LIBRARY.items],
     movies: [...D.MOVIES],
@@ -626,8 +632,13 @@
     setImmersive();
     applyMemberCopyLock();
     if (tab === 'feed') {
+      const wasLoaded = state.feedLoaded;
+      const before = feedFingerprint(state.feedPosts);
       loadFeed().then(() => {
-        if (state.tab === 'feed') renderScreen();
+        if (
+          state.tab === 'feed'
+          && (!wasLoaded || feedFingerprint(state.feedPosts) !== before)
+        ) renderScreen();
       });
     }
     if (tab === 'media') {
@@ -988,7 +999,25 @@
     return isDirectImageUrl(value) ? value : '';
   }
 
+  function renderFeedSkeleton() {
+    const cards = Array.from({ length: 2 }, () => `
+      <article class="insta-post insta-post-skeleton" aria-hidden="true">
+        <div class="insta-skeleton-head"><span class="insta-skeleton-avatar"></span><span class="insta-skeleton-copy"><i></i><i></i></span></div>
+        <div class="insta-skeleton-media"></div>
+        <div class="insta-skeleton-actions"><i></i><i></i><i></i></div>
+        <div class="insta-skeleton-lines"><i></i><i></i><i></i></div>
+      </article>`).join('');
+    return `<div class="feed-page"><div class="feed-list insta-feed feed-skeleton" aria-busy="true" aria-label="Загружаем ленту">${cards}</div></div>`;
+  }
+
   function renderFeed() {
+    if (!state.feedLoaded) return renderFeedSkeleton();
+    if (!state.feedPosts.length) {
+      const copy = state.feedError
+        ? 'Не удалось загрузить ленту. Проверьте соединение и попробуйте ещё раз.'
+        : 'Публикаций пока нет.';
+      return `<div class="feed-page"><div class="feed-empty-state"><p>${copy}</p>${state.feedError ? '<button class="secondary-button" type="button" data-feed-retry>Повторить</button>' : ''}</div></div>`;
+    }
     const posts = state.feedPosts.map((post, index) => {
       const authorName = 'Лоза';
       const liked = Boolean(state.feedLikes[post.id] || post.liked);
@@ -1025,14 +1054,11 @@
           <button class="insta-action insta-action-share" type="button" data-share="${esc(post.id)}">${ic('send', 24)}</button>
         </div>
         <div class="insta-post-caption">
-          <div class="insta-post-byline">
-            <img class="insta-post-caption-logo" src="${localAsset('assets/webp/new_logo.webp')}" alt="Лоза" />
-            <div class="insta-post-caption-copy">
-              <p class="insta-post-caption-name"><strong>${esc(authorName)}</strong></p>
-              ${titleHtml}
-              ${captionBody ? feedCaptionBlock(post.id, captionBody) : ''}
-              ${captionBody ? feedReadReaction(post.id, liked, likes) : ''}
-            </div>
+          <div class="insta-post-caption-copy">
+            <p class="insta-post-caption-name"><strong>${esc(authorName)}</strong></p>
+            ${titleHtml}
+            ${captionBody ? feedCaptionBlock(post.id, captionBody) : ''}
+            ${captionBody ? feedReadReaction(post.id, liked, likes) : ''}
           </div>
         </div>
       </article>`;
@@ -1110,6 +1136,14 @@
   }
 
   function bindFeed(root) {
+    $('[data-feed-retry]', root)?.addEventListener('click', () => {
+      state.feedLoaded = false;
+      state.feedError = false;
+      renderScreen();
+      loadFeed().then(() => {
+        if (state.tab === 'feed') renderScreen();
+      });
+    });
     $$('.feed-link', root).forEach((link) => {
       link.addEventListener('click', (event) => {
         const href = link.getAttribute('href') || '';
@@ -4597,9 +4631,12 @@
   }
 
   async function loadFeed() {
-    try {
-      const data = await API.feed();
-      if (Array.isArray(data.posts)) {
+    if (state.feedLoadPromise) return state.feedLoadPromise;
+    state.feedLoading = true;
+    state.feedLoadPromise = (async () => {
+      try {
+        const data = await API.feed();
+        if (!Array.isArray(data.posts)) throw new Error('Feed response is invalid');
         state.feedPosts = data.posts.map((p) => {
           const rawRole = p.author?.role || p.authorRole || '';
           return {
@@ -4619,10 +4656,17 @@
         state.feedPosts.forEach((post) => {
           state.feedLikes[post.id] = Boolean(post.liked);
         });
+        state.feedError = false;
+        state.feedLoaded = true;
+      } catch {
+        state.feedError = true;
+        state.feedLoaded = true;
+      } finally {
+        state.feedLoading = false;
+        state.feedLoadPromise = null;
       }
-    } catch {
-      /* fallback */
-    }
+    })();
+    return state.feedLoadPromise;
   }
 
   function ensureFeedPolling() {
@@ -5189,8 +5233,9 @@
       if (!state.chatStream) startChatStream();
       else if (Date.now() - state.chatStreamSeenAt > CHAT_STREAM_STALE_MS) restartChatStream();
       if (state.tab === 'feed') {
+        const before = feedFingerprint(state.feedPosts);
         loadFeed().then(() => {
-          if (state.tab === 'feed') renderScreen();
+          if (state.tab === 'feed' && feedFingerprint(state.feedPosts) !== before) renderScreen();
         });
       }
     };
@@ -5729,7 +5774,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '82';
+      const version = window.LOZA_ASSET_VERSION || '83';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
