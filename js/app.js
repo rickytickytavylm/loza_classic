@@ -1055,7 +1055,6 @@
         </div>
         <div class="insta-post-caption">
           <div class="insta-post-caption-copy">
-            <p class="insta-post-caption-name"><strong>${esc(authorName)}</strong></p>
             ${titleHtml}
             ${captionBody ? feedCaptionBlock(post.id, captionBody) : ''}
             ${captionBody ? feedReadReaction(post.id, liked, likes) : ''}
@@ -5774,7 +5773,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '83';
+      const version = window.LOZA_ASSET_VERSION || '84';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
