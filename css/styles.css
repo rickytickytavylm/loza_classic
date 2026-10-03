@@ -5957,12 +5957,24 @@ body.material-immersive-open {
     padding-bottom: 24px;
   }
 
-  .page-shell-media {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 0 0 24px;
+  /*
+    Scroll the whole desktop media frame. The shell's topbar spacer is then
+    part of the scrollable content instead of becoming a permanent empty band
+    above the cards after the filters have scrolled away.
+  */
+  .shell.shell-media-scroll {
     overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .shell.shell-media-scroll .page-shell-media {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
 
   .media-feed-page {
