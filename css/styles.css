@@ -5958,9 +5958,11 @@ body.material-immersive-open {
   }
 
   .page-shell-media {
-    flex: 0 0 auto;
-    min-height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 0 0 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .media-feed-page {
@@ -5973,10 +5975,6 @@ body.material-immersive-open {
     scroller. Without this, a short list left a huge empty block below it, and
     the mobile-only auto-hide overlay served no purpose on a mouse-driven page.
   */
-  .page-shell-media {
-    overflow: visible;
-  }
-
   .media-feed-controls,
   .media-feed-page.media-controls-hidden .media-feed-controls {
     position: static;
