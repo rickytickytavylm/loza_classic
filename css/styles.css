@@ -5963,9 +5963,13 @@ body.material-immersive-open {
     floating-overlay spacer, so the bar joins the normal flow and the reserved
     padding goes away. Bottom: the mobile bottom-nav padding, which has no nav
     to sit above here.
+
+    The .page-shell-media prefix is load-bearing: the base .media-feed-* rules
+    live LATER in this file, so a bare selector here loses the cascade. The
+    extra class outranks them regardless of source order.
   */
-  .media-feed-controls,
-  .media-feed-page.media-controls-hidden .media-feed-controls {
+  .page-shell-media .media-feed-controls,
+  .page-shell-media .media-feed-page.media-controls-hidden .media-feed-controls {
     position: static;
     transform: none;
     opacity: 1;
@@ -5976,11 +5980,11 @@ body.material-immersive-open {
     border-bottom: 0;
   }
 
-  .media-feed-scroll {
+  .page-shell-media .media-feed-scroll {
     padding-top: 0;
   }
 
-  .media-feed-page {
+  .page-shell-media .media-feed-page {
     padding-bottom: 24px;
   }
 }
