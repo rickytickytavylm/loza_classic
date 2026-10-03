@@ -5958,34 +5958,11 @@ body.material-immersive-open {
   }
 
   /*
-    Scroll the whole desktop media frame. The shell's topbar spacer is then
-    part of the scrollable content instead of becoming a permanent empty band
-    above the cards after the filters have scrolled away.
-  */
-  .shell.shell-media-scroll {
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .shell.shell-media-scroll .page-shell-media {
-    flex: 0 0 auto;
-    min-height: 0;
-    padding: 0;
-    overflow-x: hidden;
-    overflow-y: visible;
-  }
-
-  .media-feed-page {
-    flex: 0 1 auto;
-    padding-bottom: 0;
-  }
-
-  /*
-    Desktop: the feed flows in the page scroll instead of a full-height inner
-    scroller. Without this, a short list left a huge empty block below it, and
-    the mobile-only auto-hide overlay served no purpose on a mouse-driven page.
+    Desktop keeps the SAME single scroller as mobile (.media-feed-scroll).
+    We only drop the two sources of dead bands on a mouse page. Top: the
+    floating-overlay spacer, so the bar joins the normal flow and the reserved
+    padding goes away. Bottom: the mobile bottom-nav padding, which has no nav
+    to sit above here.
   */
   .media-feed-controls,
   .media-feed-page.media-controls-hidden .media-feed-controls {
@@ -6000,17 +5977,11 @@ body.material-immersive-open {
   }
 
   .media-feed-scroll {
-    flex: 0 1 auto;
-    overflow: visible;
     padding-top: 0;
   }
 
-  .media-feed-header {
-    padding-top: 0;
-  }
-
-  .media-feed-list {
-    padding-top: 4px;
+  .media-feed-page {
+    padding-bottom: 24px;
   }
 }
 

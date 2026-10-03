@@ -601,7 +601,6 @@
     if (!shell) return;
     shell.className = `page-shell${pageShellModifier(tab)}`;
     shell.setAttribute('aria-label', D.TAB_TITLES[tab] || tab);
-    shell.closest('.shell')?.classList.toggle('shell-media-scroll', tab === 'media');
   }
 
   function setTab(tab) {
@@ -627,8 +626,6 @@
     }
     const shell = $('#page-shell');
     if (shell) shell.scrollTop = 0;
-    const frame = shell?.closest('.shell');
-    if (frame) frame.scrollTop = 0;
     syncPageShell(tab);
     renderNav();
     renderScreen();
@@ -1786,7 +1783,6 @@
       tab: state.tab,
       media: $('.media-feed-scroll')?.scrollTop || 0,
       shell: $('#page-shell')?.scrollTop || 0,
-      frame: $('.shell')?.scrollTop || 0,
     };
   }
 
@@ -1800,8 +1796,6 @@
         if (feed) feed.scrollTop = saved.media;
         const shell = $('#page-shell');
         if (shell) shell.scrollTop = saved.shell;
-        const frame = $('.shell');
-        if (frame) frame.scrollTop = saved.frame || 0;
       });
     });
   }
@@ -5779,7 +5773,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '87';
+      const version = window.LOZA_ASSET_VERSION || '88';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
