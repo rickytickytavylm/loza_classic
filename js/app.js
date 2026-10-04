@@ -293,7 +293,14 @@
       && state.access?.clubEntryOpen === false;
   }
 
+  const TIER_ORDER = ['basic', 'library', 'club', 'club_plus'];
+
   function clubPlanActionHtml(plan) {
+    // No-end-date access is paid for outside the app: never invite a second payment for it.
+    if (state.access?.accessForever
+      && TIER_ORDER.indexOf(plan?.tier) <= TIER_ORDER.indexOf(currentTier())) {
+      return '<p class="plan-card-note">У вас доступ без срока, оплачивать не нужно.</p>';
+    }
     if (!clubPlanIsClosed(plan)) {
       return `<button type="button" class="plan-card-buy" data-buy-plan="${esc(plan.code)}">Оплатить картой</button>`;
     }
@@ -4309,7 +4316,7 @@
     const subtitle = authed
       ? [email, phone].filter(Boolean).join(' · ') || 'Участник клуба «Лоза»'
       : 'Психологический клуб «Лоза» · войдите, чтобы сохранить прогресс';
-    const until = state.access?.accessUntil
+    const until = state.access?.accessUntil && !state.access.accessForever
       ? new Date(state.access.accessUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
       : '';
     const aiLimit = state.access?.capabilities?.aiWeeklyLimit;
@@ -4317,9 +4324,11 @@
     const aiLine = aiLimit == null
       ? 'AI без ограничений'
       : `AI: ${aiUsed} / ${aiLimit} за неделю`;
-    const accessLine = until
-      ? `${tierLabel(currentTier())} · до ${until}`
-      : `${tierLabel(currentTier())} · ${aiLine}`;
+    const accessLine = state.access?.accessForever
+      ? `${tierLabel(currentTier())} · бессрочно`
+      : until
+        ? `${tierLabel(currentTier())} · до ${until}`
+        : `${tierLabel(currentTier())} · ${aiLine}`;
 
     const planCards = (state.plans || []).map((plan) => planCardHtml(plan)).join('');
 
@@ -5787,7 +5796,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '90';
+      const version = window.LOZA_ASSET_VERSION || '91';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
