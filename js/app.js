@@ -2493,10 +2493,11 @@
       } catch (error) {
         const current = state.chatAttachments.find((item) => item.localId === entry.localId);
         if (current) current.status = 'error';
+        const code = String(error?.message);
         showAppToast(
-          String(error?.message) === 'IMAGE_TOO_LARGE'
-            ? 'Фото больше 6 МБ — выберите другое'
-            : 'Не удалось загрузить фото',
+          code === 'IMAGE_TOO_LARGE' ? 'Фото больше 6 МБ — выберите другое'
+            : code === 'CHAT_RATE_LIMITED' ? 'Слишком много фото подряд. Подождите несколько минут.'
+              : 'Не удалось загрузить фото',
           { title: 'Чат', tone: 'warn' },
         );
       }
@@ -3341,8 +3342,10 @@
           try {
             await API.reportChatMessage(message.id, 'user_report');
             showAppToast('Жалоба отправлена', { title: 'Чат' });
-          } catch {
-            window.alert('Не удалось отправить жалобу.');
+          } catch (error) {
+            window.alert(String(error?.message) === 'CHAT_RATE_LIMITED'
+              ? 'Вы уже отправили много жалоб за этот час. Модераторы их получили.'
+              : 'Не удалось отправить жалобу.');
           }
           return;
         }
@@ -3754,7 +3757,12 @@
           };
         }
         renderChatLive();
-        if (code !== 'VALIDATION_ERROR' && code !== 'CHAT_READ_ONLY') {
+        if (code === 'CHAT_RATE_LIMITED') {
+          showAppToast('Слишком много сообщений подряд. Подождите минуту и нажмите !, чтобы отправить.', {
+            title: 'Чат',
+            tone: 'warn',
+          });
+        } else if (code !== 'VALIDATION_ERROR' && code !== 'CHAT_READ_ONLY') {
           showAppToast('Не отправилось — нажмите ! чтобы повторить', { title: 'Чат', tone: 'warn' });
         }
       }
@@ -3784,11 +3792,13 @@
       }
       releaseChatAttachmentPreviews(payload.attachments || []);
       renderChatLive();
-    } catch {
+    } catch (error) {
       message.pending = false;
       message.failed = true;
       renderChatLive();
-      showAppToast('Снова не удалось отправить', { title: 'Чат', tone: 'warn' });
+      showAppToast(String(error?.message) === 'CHAT_RATE_LIMITED'
+        ? 'Слишком много сообщений подряд. Подождите минуту.'
+        : 'Снова не удалось отправить', { title: 'Чат', tone: 'warn' });
     }
   }
 
@@ -4797,8 +4807,10 @@
         }));
         state.introSeeded = true;
       }
-    } catch {
+    } catch (error) {
       // A failed refresh must not blank the thread; keep what we already have.
+      // Blocked mid-session: sign out with the same notice a fresh launch shows.
+      if (String(error?.message) === 'USER_BLOCKED') loadSession();
     }
   }
 
@@ -5141,6 +5153,8 @@
     if (state.chatPollTimer) return;
     state.chatPollTimer = window.setInterval(() => {
       if (document.hidden) return;
+      // Locked rooms carry no messages: nothing to refresh until the club opens.
+      if (!hasClubAccess()) return;
       state.chatPollTick += 1;
       if (!state.chatStreamReady) {
         pollChatRooms();
@@ -5773,7 +5787,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '89';
+      const version = window.LOZA_ASSET_VERSION || '90';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
