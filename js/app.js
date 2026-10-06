@@ -252,7 +252,7 @@
       code: 'club_30',
       tier: 'club',
       planName: 'Доступ к материалам и чату закрытого клуба «Лоза» для родителей подростков, абонемент на 30 дней',
-      priceRub: 6300,
+      priceRub: 7300,
       planDays: 30,
       description: 'Полный доступ к клубу на 30 дней с закрытыми чатами и AI без лимита',
       benefits: ['Доступ ко всему контенту', 'AI без ограничений', 'Закрытые чаты клуба'],
@@ -261,7 +261,7 @@
       code: 'club_90',
       tier: 'club',
       planName: 'Доступ к материалам и чату закрытого клуба «Лоза» для родителей подростков, абонемент на 90 дней',
-      priceRub: 14000,
+      priceRub: 17000,
       planDays: 90,
       description: 'Полный доступ к клубу на 90 дней',
       benefits: ['Доступ ко всему контенту', 'AI без ограничений', 'Закрытые чаты клуба'],
@@ -299,8 +299,8 @@
 
   const PLAN_PRICES = {
     library_30: 4000,
-    club_30: 6300,
-    club_90: 14000,
+    club_30: 7300,
+    club_90: 17000,
     club_plus_30: 23000,
   };
 
@@ -5853,7 +5853,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '94';
+      const version = window.LOZA_ASSET_VERSION || '95';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
