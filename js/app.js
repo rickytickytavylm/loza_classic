@@ -240,7 +240,7 @@
       code: 'library_30',
       tier: 'library',
       planName: 'Доступ к теоретической части медиатеки закрытого клуба для родителей «Лоза»',
-      priceRub: 2000,
+      priceRub: 4000,
       planDays: 30,
       autoRenew: true,
       cardTitle: 'Медиатека',
@@ -270,7 +270,7 @@
       code: 'club_plus_30',
       tier: 'club_plus',
       planName: 'Доступ к материалам и чату закрытого клуба «Лоза» для родителей подростков + 2 консультации психолога, абонемент на 30 дней',
-      priceRub: 20000,
+      priceRub: 23000,
       planDays: 30,
       description: 'Клуб плюс 2 личные консультации психолога',
       benefits: ['Всё из тарифа «Клуб»', '2 личные консультации'],
@@ -5843,7 +5843,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '92';
+      const version = window.LOZA_ASSET_VERSION || '93';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
