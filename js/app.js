@@ -297,10 +297,20 @@
 
   const TIER_ORDER = ['basic', 'library', 'club', 'club_plus'];
 
+  const PLAN_PRICES = {
+    library_30: 4000,
+    club_30: 6300,
+    club_90: 14000,
+    club_plus_30: 23000,
+  };
+
   function shownPlan(plan) {
-    if (plan?.code !== 'library_30') return plan;
+    if (!plan) return plan;
+    const priceRub = PLAN_PRICES[plan.code] || plan.priceRub;
+    if (plan.code !== 'library_30') return { ...plan, priceRub };
     return {
       ...plan,
+      priceRub,
       cardTitle: 'Медиатека',
       description: 'Доступ к теоретической части закрытого клуба «Лоза».',
       info: 'Что не входит: задания, разборы участниц, чаты.',
@@ -5843,7 +5853,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '93';
+      const version = window.LOZA_ASSET_VERSION || '94';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
