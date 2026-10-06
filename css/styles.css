@@ -5828,6 +5828,34 @@ body.material-immersive-open {
   line-height: 1.4;
 }
 
+.plan-renew {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.plan-renew p,
+.plan-renew ol {
+  margin: 0;
+}
+
+.plan-renew ol {
+  padding-left: 18px;
+}
+
+.plan-renew summary {
+  width: fit-content;
+  color: var(--olive-dark);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.plan-renew a {
+  color: var(--olive-dark);
+}
+
 .plan-card-benefits {
   margin: 0;
   padding-left: 18px;

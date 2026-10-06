@@ -242,9 +242,11 @@
       planName: 'Доступ к теоретической части медиатеки закрытого клуба для родителей «Лоза»',
       priceRub: 2000,
       planDays: 30,
-      description: 'Закрытая медиатека и AI 15 запросов в неделю',
-      info: D.LIBRARY_PLAN_INFO,
-      benefits: ['Подкасты, вопросы, эфиры и киноклуб', 'AI — 15 запросов в неделю'],
+      autoRenew: true,
+      cardTitle: 'Медиатека',
+      description: 'Доступ к теоретической части закрытого клуба «Лоза».',
+      info: 'Что не входит: задания, разборы участниц, чаты.',
+      benefits: ['Подкасты, вопросы, эфиры, киноклуб', 'AI — 15 запросов в неделю'],
     },
     {
       code: 'club_30',
@@ -295,6 +297,32 @@
 
   const TIER_ORDER = ['basic', 'library', 'club', 'club_plus'];
 
+  function shownPlan(plan) {
+    if (plan?.code !== 'library_30') return plan;
+    return {
+      ...plan,
+      cardTitle: 'Медиатека',
+      description: 'Доступ к теоретической части закрытого клуба «Лоза».',
+      info: 'Что не входит: задания, разборы участниц, чаты.',
+      benefits: ['Подкасты, вопросы, эфиры, киноклуб', 'AI — 15 запросов в неделю'],
+    };
+  }
+
+  function planRenewHtml(plan) {
+    if (plan?.autoRenew === false) return '';
+    return `<div class="plan-renew">
+      <p>Списание за продление подписки происходит автоматически.</p>
+      <details>
+        <summary>Как отменить подписку</summary>
+        <ol>
+          <li>По ссылке из письма, которое придёт на почту незадолго до продления.</li>
+          <li>Написать в службу заботы: Профиль, пункт «Служба заботы», и попросить отключить подписку.</li>
+          <li>Написать в поддержку Prodamus, сервис, через который проходит оплата. <a href="https://help.prodamus.ru/payform/rekurrent-i-kluby/kak-otkazatsya-ot-podpiski" target="_blank" rel="noopener noreferrer">Как отказаться от подписки</a>.</li>
+        </ol>
+      </details>
+    </div>`;
+  }
+
   function clubPlanActionHtml(plan) {
     // No-end-date access is paid for outside the app: never invite a second payment for it.
     if (state.access?.accessForever
@@ -312,19 +340,22 @@
   }
 
   function planCardHtml(plan, { featured = false } = {}) {
-    const price = `${Number(plan.priceRub).toLocaleString('ru-RU')} ₽`;
-    const days = plan.planDays === 90 ? '90 дней' : '30 дней';
-    const info = plan.code === 'library_30' ? libraryPlanInfo(plan) : '';
-    const benefits = (plan.benefits || []).slice(0, 3)
+    const shown = shownPlan(plan);
+    const price = `${Number(shown.priceRub).toLocaleString('ru-RU')} ₽`;
+    const days = shown.planDays === 90 ? '90 дней' : '30 дней';
+    const info = shown.code === 'library_30' ? libraryPlanInfo(shown) : '';
+    const benefits = (shown.benefits || []).slice(0, 3)
       .map((line) => `<li>${esc(line)}</li>`)
       .join('');
     return `<article class="plan-card${featured ? ' is-featured' : ''}">
-      <strong>${esc(plan.planName)}</strong>
+      <strong>${esc(shown.cardTitle || shown.planName)}</strong>
       <span class="plan-card-price">${price}<small> / ${days}</small></span>
-      <span class="plan-card-desc">${esc(plan.description || '')}</span>
-      ${info ? `<p class="plan-card-note">${esc(info)}</p>` : ''}
+      <span class="plan-card-desc">${esc(shown.description || '')}</span>
+      ${shown.code === 'library_30' && benefits ? '<p class="plan-card-note">Что входит</p>' : ''}
       ${benefits ? `<ul class="plan-card-benefits">${benefits}</ul>` : ''}
-      ${clubPlanActionHtml(plan)}
+      ${info ? `<p class="plan-card-note">${esc(info)}</p>` : ''}
+      ${planRenewHtml(shown)}
+      ${clubPlanActionHtml(shown)}
     </article>`;
   }
 
@@ -574,13 +605,29 @@
     document.documentElement.classList.toggle('is-staff', isStaffUser());
     if (isStaffUser() || state.copyLockBound) return;
     state.copyLockBound = true;
-    const block = (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('input, textarea, [contenteditable="true"]')) return;
-      if (target.closest('.insta-post, .media-feed-card, .material-page, .chat-bubble-main, .telegram-thread, .telegram-messages, .telegram-room-list')) {
-        event.preventDefault();
+    const locked = '.insta-post, .media-feed-card, .material-page, .chat-bubble-main, .telegram-thread, .telegram-messages, .telegram-room-list';
+    const asElement = (node) => (node instanceof Element ? node : node?.parentElement || null);
+    const inField = (node) => Boolean(asElement(node)?.closest('input, textarea, [contenteditable="true"]'));
+    const hitsLocked = (event) => {
+      if (inField(event.target)) return false;
+      if (event.target instanceof Element && event.target.closest(locked)) return true;
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount || inField(sel.anchorNode)) return false;
+      const range = sel.getRangeAt(0);
+      const root = asElement(range.commonAncestorContainer);
+      if (!root) return false;
+      if (root.closest(locked)) return true;
+      for (const node of root.querySelectorAll(locked)) {
+        try {
+          if (range.intersectsNode(node)) return true;
+        } catch {
+          /* node left the document */
+        }
       }
+      return false;
+    };
+    const block = (event) => {
+      if (hitsLocked(event)) event.preventDefault();
     };
     document.addEventListener('copy', block);
     document.addEventListener('cut', block);
@@ -5796,7 +5843,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '91';
+      const version = window.LOZA_ASSET_VERSION || '92';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
