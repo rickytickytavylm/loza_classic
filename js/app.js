@@ -2958,6 +2958,7 @@
       message.editedAt || '',
       mine ? 'm' : 'i',
       message.authorName || message.author?.name || '',
+      message.author?.publicStatus || '',
       (message.attachments || []).map((item) => `${item.url}:${item.width || 0}x${item.height || 0}`).join(','),
       (message.reactions || []).map((r) => `${r.emoji}${r.count}${r.mine ? '*' : ''}`).join(''),
       message.replyTo
@@ -3037,8 +3038,9 @@
 
   function renderChatBubble(message, mine, sig) {
     const signature = sig ?? chatBubbleSignature(message, mine);
+    const authorStatus = String(message.author?.publicStatus || '').trim();
     const author = !mine
-      ? `<strong class="bubble-author">${esc(message.authorName || message.author?.name || 'Участник клуба')}</strong>`
+      ? `<div class="bubble-author-row"><strong class="bubble-author">${esc(message.authorName || message.author?.name || 'Участник клуба')}</strong>${authorStatus ? `<span class="bubble-status">${esc(authorStatus)}</span>` : ''}</div>`
       : '';
     const reply = message.replyTo
       ? `<button type="button" class="bubble-reply" data-scroll-to="${esc(message.replyTo.id)}">
@@ -5853,7 +5855,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '95';
+      const version = window.LOZA_ASSET_VERSION || '96';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

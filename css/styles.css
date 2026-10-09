@@ -3270,6 +3270,33 @@ button.chat-hashtag {
   font-weight: 800;
 }
 
+.bubble-author-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 2px;
+}
+
+.bubble-author-row .bubble-author {
+  margin-bottom: 0;
+}
+
+/* Подпись команды рядом с именем, например «Психолог Лозы». */
+.bubble-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #6d3f94;
+  background: rgba(201, 167, 255, 0.28);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
 .bubble-body p {
   margin: 0;
   color: #111;
@@ -3593,6 +3620,15 @@ button.chat-hashtag {
 }
 
 /* Keep the bubbles readable on photos: text stays above media */
+.chat-bubble.is-photo-only .bubble-author-row {
+  margin: 0;
+  height: 0;
+}
+
+.chat-bubble.is-photo-only .bubble-status {
+  display: none;
+}
+
 .chat-bubble.is-photo-only .bubble-author {
   top: 8px;
   left: 8px;
