@@ -2959,6 +2959,7 @@
       mine ? 'm' : 'i',
       message.authorName || message.author?.name || '',
       message.author?.publicStatus || '',
+      message.author?.avatarUrl || '',
       (message.attachments || []).map((item) => `${item.url}:${item.width || 0}x${item.height || 0}`).join(','),
       (message.reactions || []).map((r) => `${r.emoji}${r.count}${r.mine ? '*' : ''}`).join(''),
       message.replyTo
@@ -3006,7 +3007,7 @@
     }
     let lastDateKey = '';
     const anchor = !filtering && state.chatUnreadAnchor?.roomId === room?.id ? state.chatUnreadAnchor : null;
-    messages.forEach((message) => {
+    messages.forEach((message, messageIndex) => {
       if (anchor && anchor.beforeId === message.id) {
         items.push({
           key: 'unread-divider',
@@ -3026,18 +3027,47 @@
         lastDateKey = dateKey;
       }
       const mine = isMyChatMessage(message);
-      const sig = chatBubbleSignature(message, mine);
+      // Как в Telegram: аватарка только у последнего сообщения подряд от одного автора.
+      const next = messages[messageIndex + 1];
+      const nextSameRun = Boolean(
+        next
+        && !isMyChatMessage(next)
+        && chatAuthorKey(next) === chatAuthorKey(message)
+        && new Date(next.createdAt || Date.now()).toDateString() === dateKey,
+      );
+      const showAvatar = !mine && !nextSameRun;
+      const sig = `${chatBubbleSignature(message, mine)}${showAvatar ? 'a' : 'n'}`;
       items.push({
         key: `msg-${message.id}`,
         sig,
-        html: renderChatBubble(message, mine, sig),
+        html: renderChatBubble(message, mine, sig, showAvatar),
       });
     });
     return items;
   }
 
-  function renderChatBubble(message, mine, sig) {
+  function chatAuthorKey(message) {
+    return String(message.author?.id || message.authorId || message.authorName || '');
+  }
+
+  /** Круглая аватарка автора: фото (своё или из Яндекса), под ним буква на цветном фоне. */
+  function chatAvatarHtml(message, visible) {
+    if (!visible) return '<span class="bubble-avatar is-spacer" aria-hidden="true"></span>';
+    const name = String(message.authorName || message.author?.name || 'Участник').trim();
+    const letter = esc((name[0] || '?').toUpperCase());
+    const seed = chatAuthorKey(message) || name;
+    let hue = 0;
+    for (let i = 0; i < seed.length; i += 1) hue = (hue * 31 + seed.charCodeAt(i)) % 360;
+    const url = String(message.author?.avatarUrl || '').trim();
+    const photo = /^https?:\/\//i.test(url)
+      ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />`
+      : '';
+    return `<span class="bubble-avatar" style="--av-hue:${hue}" aria-hidden="true"><span>${letter}</span>${photo}</span>`;
+  }
+
+  function renderChatBubble(message, mine, sig, showAvatar = true) {
     const signature = sig ?? chatBubbleSignature(message, mine);
+    const avatarHtml = mine ? '' : chatAvatarHtml(message, showAvatar);
     const authorStatus = String(message.author?.publicStatus || '').trim();
     const author = !mine
       ? `<div class="bubble-author-row"><strong class="bubble-author">${esc(message.authorName || message.author?.name || 'Участник клуба')}</strong>${authorStatus ? `<span class="bubble-status">${esc(authorStatus)}</span>` : ''}</div>`
@@ -3087,7 +3117,8 @@
     const mediaOnly = (photoOnly || meetingOnly) && !reply && !intro;
     const mediaClass = `${mediaOnly ? ' is-media-only' : ''}${photoOnly && mediaOnly ? ' is-photo-only' : ''}`;
 
-    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming'}${introClass}${meetingClass}${photoClass}${mediaClass}${message.pending ? ' is-pending' : ''}${message.failed ? ' is-failed' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}${message.failed ? ' data-failed="1"' : ''}>
+    return `<article class="chat-bubble ${mine ? 'mine' : 'incoming has-avatar'}${introClass}${meetingClass}${photoClass}${mediaClass}${message.pending ? ' is-pending' : ''}${message.failed ? ' is-failed' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}${message.failed ? ' data-failed="1"' : ''}>
+      ${avatarHtml}
       <div class="bubble-body">
         ${author}${reply}${introBadge}
         ${photos}
@@ -5855,7 +5886,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '96';
+      const version = window.LOZA_ASSET_VERSION || '97';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
