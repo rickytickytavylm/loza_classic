@@ -113,6 +113,7 @@
     chatView: 'rooms',
     selectedRoomId: '',
     chatCompose: null, // { mode: 'reply'|'edit', messageId, preview, authorName, body? }
+    chatDrafts: {}, // { [roomId]: text } — survives leaving the chat to check a movie
     chatAttachments: [], // { localId, previewUrl, status: 'uploading'|'ready'|'error', id? }
     pushEndpoint: '',
     // Per-room read marks: { [roomId]: { id, at } } — the newest message the
@@ -683,6 +684,7 @@
     document.body.classList.remove('material-immersive-open');
     closePortal();
     if (tab !== 'chat') {
+      captureChatDraft();
       state.chatView = 'rooms';
       state.selectedRoomId = '';
       clearChatCompose();
@@ -3194,6 +3196,9 @@
         : `<div class="chat-rooms-skeleton" aria-hidden="true">${Array.from({ length: 4 }, () => '<div class="chat-room-skeleton"><span class="chat-room-skeleton-avatar"></span><span class="chat-room-skeleton-lines"><i></i><i></i></span></div>').join('')}</div>`);
 
     const placeholder = state.chatCompose?.mode === 'edit' ? 'Изменить сообщение' : 'Сообщение';
+    const roomDraft = state.chatCompose?.mode === 'edit'
+      ? ''
+      : (state.chatDrafts[selectedRoom?.id] || '');
     const allowPost = canPostInRoom(selectedRoom);
     const composerHtml = !hasClubAccess()
       ? '<div class="chat-readonly-note" role="status">Чаты открываются после оплаты тарифа «Клуб».</div>'
@@ -3202,7 +3207,7 @@
         <form class="telegram-composer" id="chat-form">
           <input type="file" id="chat-file" accept="image/*" multiple hidden />
           <button class="telegram-composer-attach" type="button" id="chat-attach" aria-label="Прикрепить фото">${ic('paperclip', 21)}</button>
-          <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter"></textarea>
+          <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter">${esc(roomDraft)}</textarea>
           <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>`
       : `<div class="chat-readonly-note" role="status">Здесь публикует команда клуба. Участники отвечают в чате для общения.</div>`;
@@ -3688,6 +3693,7 @@
           });
           return;
         }
+        captureChatDraft();
         state.selectedRoomId = b.dataset.room;
         state.chatTag = '';
         state.chatTagHits = [];
@@ -3700,6 +3706,7 @@
       };
     });
     $('#chat-back', root)?.addEventListener('click', () => {
+      captureChatDraft();
       state.chatView = 'rooms';
       state.chatUnreadAnchor = null;
       clearChatCompose();
@@ -3757,7 +3764,12 @@
       if (draft && !draft.value) draft.value = state.chatCompose.body;
     }
     bindChatDraftAutosize(draft);
-    draft?.addEventListener('input', pulseChatTyping);
+    draft?.addEventListener('input', () => {
+      pulseChatTyping();
+      if (state.chatCompose?.mode === 'edit' || !state.selectedRoomId) return;
+      if (draft.value) state.chatDrafts[state.selectedRoomId] = draft.value;
+      else delete state.chatDrafts[state.selectedRoomId];
+    });
 
     const fileInput = $('#chat-file', root);
     $('#chat-attach', root)?.addEventListener('click', () => fileInput?.click());
@@ -3792,6 +3804,7 @@
 
       input.value = '';
       resizeChatDraft(input);
+      if (state.selectedRoomId) delete state.chatDrafts[state.selectedRoomId];
 
       // Show the bubble right away; the server copy replaces it on reply.
       const pending = editing ? null : addPendingChatMessage(body, attachments, compose);
@@ -3897,6 +3910,14 @@
         ? 'Слишком много сообщений подряд. Подождите минуту.'
         : 'Снова не удалось отправить', { title: 'Чат', tone: 'warn' });
     }
+  }
+
+  function captureChatDraft() {
+    const roomId = state.selectedRoomId;
+    const draftEl = $('#chat-draft');
+    if (!roomId || !draftEl || state.chatCompose?.mode === 'edit') return;
+    if (draftEl.value) state.chatDrafts[roomId] = draftEl.value;
+    else delete state.chatDrafts[roomId];
   }
 
   function resizeChatDraft(el) {
@@ -5886,7 +5907,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '97';
+      const version = window.LOZA_ASSET_VERSION || '98';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
