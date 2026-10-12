@@ -869,6 +869,28 @@
     return state.user?.avatarUrl || state.user?.yandexAvatarUrl || '';
   }
 
+  function hasCustomAvatar() {
+    const own = String(state.user?.avatarUrl || '').trim();
+    const yandex = String(state.user?.yandexAvatarUrl || '').trim();
+    if (!own || /avatars\.yandex\.net/i.test(own)) return false;
+    return own !== yandex;
+  }
+
+  function applyOwnAvatar(user) {
+    state.user = user || state.user;
+    const url = userAvatarUrl();
+    const id = state.user?.id;
+    if (!id) return;
+    const paint = (message) => {
+      const authorId = message.author?.id || message.authorId;
+      if (authorId === id && message.author) message.author.avatarUrl = url;
+    };
+    for (const room of state.chatRooms) {
+      for (const message of room.messages || []) paint(message);
+    }
+    for (const message of state.chatTagHits || []) paint(message);
+  }
+
   function userInitial() {
     const name = userDisplayName();
     return (name[0] || '?').toUpperCase();
@@ -4442,16 +4464,24 @@
         : `${tierLabel(currentTier())} · ${aiLine}`;
 
     const planCards = (state.plans || []).map((plan) => planCardHtml(plan)).join('');
+    const avatarFace = `<span class="profile-ios-avatar${avatar ? ' has-photo' : ''}">${avatarHtml}</span>`;
+    const avatarBlock = authed
+      ? `<button type="button" class="profile-avatar-wrap" id="profile-avatar-pick" aria-label="Поставить своё фото">${avatarFace}<span class="profile-avatar-badge" aria-hidden="true">${ic('imagePlus', 14)}</span></button>`
+      : `<div class="profile-avatar-wrap">${avatarFace}</div>`;
+    const resetLabel = state.user?.yandexAvatarUrl ? 'Вернуть фото из Яндекса' : 'Убрать своё фото';
 
     return `<div class="profile-ios">
       <section class="profile-ios-hero">
-        <div class="profile-ios-avatar${avatar ? ' has-photo' : ''}">${avatarHtml}</div>
+        ${avatarBlock}
         <div class="profile-ios-identity">
           <h1>${esc(name)}</h1>
           <p>${esc(subtitle)}</p>
           <p class="profile-access-line">${esc(accessLine)}</p>
+          ${authed ? `<p class="profile-avatar-note" id="profile-avatar-status">Нажмите на фото, чтобы поставить своё</p>` : ''}
+          ${authed && hasCustomAvatar() ? `<button type="button" class="profile-avatar-reset" data-profile-action="avatar-reset">${esc(resetLabel)}</button>` : ''}
         </div>
       </section>
+      ${authed ? '<input type="file" id="profile-avatar-file" accept="image/*" hidden />' : ''}
 
       <div class="profile-ios-aside">
         <div class="ios-group">
@@ -4624,8 +4654,63 @@
     });
   }
 
+  async function prepareAvatarJpeg(file) {
+    let source;
+    try {
+      source = await loadChatImageSource(file);
+    } catch {
+      throw new Error('BAD_IMAGE');
+    }
+    const side = Math.min(source.width, source.height);
+    if (!side) {
+      if (source.bitmap?.close) source.bitmap.close();
+      throw new Error('BAD_IMAGE');
+    }
+    const sx = Math.round((source.width - side) / 2);
+    const sy = Math.round((source.height - side) / 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    canvas.getContext('2d').drawImage(source.bitmap, sx, sy, side, side, 0, 0, 512, 512);
+    if (source.bitmap?.close) source.bitmap.close();
+    const blob = await canvasToBlob(canvas, 0.86);
+    if (!blob) throw new Error('BAD_IMAGE');
+    return new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+  }
+
+  function avatarErrorText(error) {
+    const code = String(error?.message || '');
+    if (code === 'BAD_IMAGE' || code === 'UNSUPPORTED_IMAGE_TYPE') {
+      return 'Это фото не открылось. Выберите jpeg или png.';
+    }
+    if (code === 'IMAGE_TOO_LARGE') return 'Фото слишком большое.';
+    if (code === 'AVATAR_RATE_LIMITED') return 'Слишком много смен подряд. Подождите немного.';
+    return 'Не удалось сохранить фото';
+  }
+
   function bindProfile(root) {
     bindPlanBuyActions(root, $('#profile-pay-status', root));
+    const pick = $('#profile-avatar-pick', root);
+    const fileInput = $('#profile-avatar-file', root);
+    pick?.addEventListener('click', () => fileInput?.click());
+    fileInput?.addEventListener('change', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!file) return;
+      const status = $('#profile-avatar-status', root);
+      if (status) status.textContent = 'Сохраняем фото…';
+      pick.disabled = true;
+      try {
+        const jpeg = await prepareAvatarJpeg(file);
+        const data = await API.uploadAvatar(jpeg);
+        if (data.user) applyOwnAvatar(data.user);
+        syncHeaderIdentity();
+        renderScreen();
+      } catch (error) {
+        if (status) status.textContent = avatarErrorText(error);
+        pick.disabled = false;
+      }
+    });
     $$('[data-profile-action]', root).forEach((btn) => {
       btn.onclick = () => {
         const action = btn.dataset.profileAction;
@@ -4649,6 +4734,20 @@
         }
         if (action === 'delete-account') {
           handleDeleteAccount();
+          return;
+        }
+        if (action === 'avatar-reset') {
+          const status = $('#profile-avatar-status', root);
+          btn.disabled = true;
+          if (status) status.textContent = 'Возвращаем фото…';
+          API.resetAvatar().then((data) => {
+            if (data.user) applyOwnAvatar(data.user);
+            syncHeaderIdentity();
+            renderScreen();
+          }).catch(() => {
+            if (status) status.textContent = 'Не удалось вернуть фото';
+            btn.disabled = false;
+          });
           return;
         }
         if (['home', 'feed', 'media', 'chat', 'movies', 'ai'].includes(action)) {
@@ -5907,7 +6006,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '98';
+      const version = window.LOZA_ASSET_VERSION || '99';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

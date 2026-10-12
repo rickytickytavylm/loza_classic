@@ -90,6 +90,23 @@
     setToken,
     getGuestId,
     me: () => request('/me'),
+    uploadAvatar: async (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch(`${API_URL}/me/avatar`, {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'include',
+        headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `API ${response.status}`);
+      }
+      return response.json();
+    },
+    resetAvatar: () => request('/me/avatar', { method: 'DELETE' }),
     acceptConsents: (payload) =>
       request('/me/consents', { method: 'PATCH', body: JSON.stringify(payload) }),
     logout: () => request('/auth/logout', { method: 'POST', body: '{}' }),
