@@ -107,6 +107,8 @@
       return response.json();
     },
     resetAvatar: () => request('/me/avatar', { method: 'DELETE' }),
+    saveName: (name) => request('/me/name', { method: 'PATCH', body: JSON.stringify({ name }) }),
+    resetName: () => request('/me/name', { method: 'DELETE' }),
     acceptConsents: (payload) =>
       request('/me/consents', { method: 'PATCH', body: JSON.stringify(payload) }),
     logout: () => request('/auth/logout', { method: 'POST', body: '{}' }),

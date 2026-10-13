@@ -869,6 +869,12 @@
     return state.user?.avatarUrl || state.user?.yandexAvatarUrl || '';
   }
 
+  function hasCustomName() {
+    const own = String(state.user?.name || '').trim();
+    const yandex = String(state.user?.yandexName || '').trim();
+    return Boolean(yandex) && own !== yandex;
+  }
+
   function hasCustomAvatar() {
     const own = String(state.user?.avatarUrl || '').trim();
     const yandex = String(state.user?.yandexAvatarUrl || '').trim();
@@ -881,9 +887,15 @@
     const url = userAvatarUrl();
     const id = state.user?.id;
     if (!id) return;
+    const name = userDisplayName();
     const paint = (message) => {
       const authorId = message.author?.id || message.authorId;
-      if (authorId === id && message.author) message.author.avatarUrl = url;
+      if (authorId !== id) return;
+      message.authorName = name;
+      if (message.author) {
+        message.author.avatarUrl = url;
+        message.author.name = name;
+      }
     };
     for (const room of state.chatRooms) {
       for (const message of room.messages || []) paint(message);
@@ -4475,6 +4487,13 @@
         ${avatarBlock}
         <div class="profile-ios-identity">
           <h1>${esc(name)}</h1>
+          ${authed ? `<button type="button" class="profile-avatar-reset" id="profile-name-edit">Изменить имя</button>
+          <form class="profile-name-form" id="profile-name-form" hidden>
+            <input id="profile-name-input" maxlength="40" value="${esc(name)}" autocomplete="name" aria-label="Имя в клубе" />
+            <button type="submit">Сохранить</button>
+          </form>
+          <p class="profile-avatar-note" id="profile-name-status" hidden></p>
+          ${hasCustomName() ? '<button type="button" class="profile-avatar-reset" data-profile-action="name-reset">Вернуть имя из Яндекса</button>' : ''}` : ''}
           <p>${esc(subtitle)}</p>
           <p class="profile-access-line">${esc(accessLine)}</p>
           ${authed ? `<p class="profile-avatar-note" id="profile-avatar-status">Нажмите на фото, чтобы поставить своё</p>` : ''}
@@ -4711,6 +4730,32 @@
         pick.disabled = false;
       }
     });
+    $('#profile-name-edit', root)?.addEventListener('click', () => {
+      const form = $('#profile-name-form', root);
+      if (form) form.hidden = false;
+      $('#profile-name-input', root)?.focus();
+    });
+    $('#profile-name-form', root)?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = $('#profile-name-input', root);
+      const status = $('#profile-name-status', root);
+      if (status) {
+        status.hidden = false;
+        status.textContent = 'Сохраняем имя…';
+      }
+      try {
+        const data = await API.saveName(input?.value || '');
+        if (data.user) applyOwnAvatar(data.user);
+        syncHeaderIdentity();
+        renderScreen();
+      } catch (error) {
+        if (status) {
+          status.textContent = String(error?.message) === 'NAME_INVALID'
+            ? 'Имя: от 2 до 40 букв. Можно пробел и дефис.'
+            : 'Не удалось сохранить имя';
+        }
+      }
+    });
     $$('[data-profile-action]', root).forEach((btn) => {
       btn.onclick = () => {
         const action = btn.dataset.profileAction;
@@ -4734,6 +4779,23 @@
         }
         if (action === 'delete-account') {
           handleDeleteAccount();
+          return;
+        }
+        if (action === 'name-reset') {
+          const status = $('#profile-name-status', root);
+          btn.disabled = true;
+          if (status) {
+            status.hidden = false;
+            status.textContent = 'Возвращаем имя…';
+          }
+          API.resetName().then((data) => {
+            if (data.user) applyOwnAvatar(data.user);
+            syncHeaderIdentity();
+            renderScreen();
+          }).catch(() => {
+            if (status) status.textContent = 'Не удалось вернуть имя';
+            btn.disabled = false;
+          });
           return;
         }
         if (action === 'avatar-reset') {
@@ -6006,7 +6068,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '100';
+      const version = window.LOZA_ASSET_VERSION || '101';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

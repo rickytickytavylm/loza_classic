@@ -7712,6 +7712,39 @@ div.profile-avatar-wrap {
   cursor: pointer;
 }
 
+.profile-name-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.profile-name-form input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(var(--plum-rgb), 0.16);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+.profile-name-form button {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--action);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .profile-ios-avatar.has-photo {
   background: #ddd6cf;
 }
