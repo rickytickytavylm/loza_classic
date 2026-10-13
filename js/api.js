@@ -122,9 +122,10 @@
     addFeedComment: (postId, body) =>
       request(`/feed/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
     chatRooms: () => request(`/chat/rooms?guestId=${encodeURIComponent(getGuestId())}`),
-    chatRoomMessages: (roomId, before) => {
+    chatRoomMessages: (roomId, before, limit) => {
       const params = new URLSearchParams({ guestId: getGuestId() });
       if (before) params.set('before', before);
+      if (limit) params.set('limit', String(limit));
       return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
     },
     chatTaggedMessages: (roomId, before, tag) => {

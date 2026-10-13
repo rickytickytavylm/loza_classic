@@ -687,6 +687,8 @@
       captureChatDraft();
       state.chatView = 'rooms';
       state.selectedRoomId = '';
+      chatPositionedRoomId = '';
+      cancelChatSettle();
       clearChatCompose();
       clearChatAttachments();
     }
@@ -2835,6 +2837,9 @@
   /** Mark the bottom-most visible message as read; refresh badges when it moves. */
   function updateChatReadFromScroll(scroller) {
     if (!scroller || document.hidden) return;
+    // While the opening position is still settling, what is on screen is not
+    // what the person has read yet.
+    if (chatSettling) return;
     const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
     if (!room) return;
     const scRect = scroller.getBoundingClientRect();
@@ -2864,13 +2869,38 @@
     state.chatScrollPending = true;
   }
 
-  /** Scroll a freshly rendered thread: resume position or bottom for first visits. */
-  function positionChatThread(scroller) {
-    if (!scroller) return;
-    const wantsResume = state.chatScrollPending
-      && state.chatUnreadAnchor?.roomId === state.selectedRoomId;
-    state.chatScrollPending = false;
-    const anchorEl = wantsResume ? scroller.querySelector('[data-key="unread-divider"]') : null;
+  let chatPositionedRoomId = ''; // room whose thread already got its opening position
+  let chatSettling = false;      // opening position is still being held (iOS resizes the screen)
+  let chatSettleResume = false;
+  let chatSettleTimers = [];
+  let chatEntryTouched = false;  // the person started scrolling on their own
+  let chatBackfillRoom = '';
+
+  function cancelChatSettle() {
+    chatSettleTimers.forEach((timer) => window.clearTimeout(timer));
+    chatSettleTimers = [];
+    chatSettling = false;
+  }
+
+  function endChatSettle() {
+    const wasSettling = chatSettling;
+    cancelChatSettle();
+    if (wasSettling) updateChatReadFromScroll($('.telegram-messages'));
+  }
+
+  function onChatEntryTouch() {
+    chatEntryTouched = true;
+    endChatSettle();
+  }
+
+  function watchChatEntryTouch(scroller) {
+    ['touchstart', 'wheel', 'mousedown', 'keydown'].forEach((type) => {
+      scroller.addEventListener(type, onChatEntryTouch, { passive: true, once: true });
+    });
+  }
+
+  function placeChatScroll(scroller, resume) {
+    const anchorEl = resume ? scroller.querySelector('[data-key="unread-divider"]') : null;
     if (anchorEl) {
       const scRect = scroller.getBoundingClientRect();
       const elRect = anchorEl.getBoundingClientRect();
@@ -2878,8 +2908,115 @@
     } else {
       scroller.scrollTop = scroller.scrollHeight;
     }
-    updateChatReadFromScroll(scroller);
     updateChatJumps(scroller);
+  }
+
+  /**
+   * If the person stopped reading further back than the page we loaded,
+   * fetch older pages until the first unread message is there.
+   */
+  async function backfillUnreadHistory(roomId) {
+    const room = state.chatRooms.find((item) => item.id === roomId);
+    const mark = state.chatReads[roomId];
+    if (!room || room.locked || !mark || !room.hasMore || chatBackfillRoom === roomId) return false;
+    const firstLoaded = () => (room.messages || []).find((item) => !item.pending && !item.failed);
+    const covers = () => {
+      const first = firstLoaded();
+      return !first || new Date(first.createdAt || 0).getTime() <= mark.at;
+    };
+    if (covers()) return false;
+    chatBackfillRoom = roomId;
+    let loaded = false;
+    try {
+      for (let step = 0; step < 6 && room.hasMore && !covers(); step += 1) {
+        const oldest = firstLoaded();
+        if (!oldest) break;
+        const data = await API.chatRoomMessages(roomId, oldest.id, 80);
+        const existing = new Set((room.messages || []).map((item) => item.id));
+        const fresh = (data.messages || []).map(normalizeChatMessage).filter((item) => !existing.has(item.id));
+        room.hasMore = Boolean(data.hasMore);
+        if (!fresh.length) break;
+        room.messages = [...fresh, ...room.messages];
+        loaded = true;
+      }
+    } catch {
+      /* the thread simply stays on what is already loaded */
+    } finally {
+      chatBackfillRoom = '';
+    }
+    return loaded;
+  }
+
+  function startUnreadBackfill(roomId) {
+    backfillUnreadHistory(roomId).then((loaded) => {
+      if (!loaded || state.tab !== 'chat' || state.selectedRoomId !== roomId) return;
+      const room = state.chatRooms.find((item) => item.id === roomId);
+      const scroller = $('.telegram-messages');
+      if (!room || !scroller) return;
+      state.chatUnreadAnchor = computeUnreadAnchor(room);
+      const prevHeight = scroller.scrollHeight;
+      const prevTop = scroller.scrollTop;
+      renderChatLive();
+      const list = $('.telegram-messages');
+      if (!list) return;
+      if (chatEntryTouched) {
+        // They already started scrolling: keep what they see where it is.
+        list.scrollTop = prevTop + (list.scrollHeight - prevHeight);
+        updateChatReadFromScroll(list);
+      } else {
+        placeChatScroll(list, Boolean(state.chatUnreadAnchor));
+        if (!chatSettling) updateChatReadFromScroll(list);
+      }
+    });
+  }
+
+  /**
+   * Scroll a freshly rendered thread: resume position or bottom for first visits.
+   * On phones the screen keeps changing size for a moment after opening (address
+   * bar, immersive mode, images), so the opening position is re-applied a few
+   * times until the person touches the list.
+   */
+  function positionChatThread(scroller) {
+    if (!scroller) return;
+    // Thread is hidden (rooms list on a phone): wait until it is really opened.
+    if (!scroller.clientHeight && state.chatView !== 'thread') return;
+
+    const entering = state.chatScrollPending || chatPositionedRoomId !== state.selectedRoomId;
+    const resume = state.chatScrollPending
+      && state.chatUnreadAnchor?.roomId === state.selectedRoomId;
+    state.chatScrollPending = false;
+
+    if (!entering) {
+      if (chatSettling) {
+        watchChatEntryTouch(scroller);
+        placeChatScroll(scroller, chatSettleResume);
+        return;
+      }
+      placeChatScroll(scroller, false);
+      updateChatReadFromScroll(scroller);
+      return;
+    }
+
+    chatPositionedRoomId = state.selectedRoomId;
+    chatEntryTouched = false;
+    cancelChatSettle();
+    chatSettling = true;
+    chatSettleResume = resume;
+    watchChatEntryTouch(scroller);
+    placeChatScroll(scroller, resume);
+    const delays = [60, 250, 700];
+    delays.forEach((delay, index) => {
+      chatSettleTimers.push(window.setTimeout(() => {
+        const list = $('.telegram-messages');
+        if (!chatSettling || !list || state.selectedRoomId !== chatPositionedRoomId) {
+          cancelChatSettle();
+          return;
+        }
+        placeChatScroll(list, chatSettleResume);
+        if (index === delays.length - 1) endChatSettle();
+      }, delay));
+    });
+    if (resume) startUnreadBackfill(state.selectedRoomId);
   }
 
   function messageRepliesToMe(message, room) {
@@ -3203,6 +3340,13 @@
     const selectedRoom = state.chatRooms.find((r) => r.id === state.selectedRoomId)
       || (hasClubAccess() ? state.chatRooms.find((room) => !room.locked) : null);
     const preset = D.CHAT_BG_PRESETS.find((p) => p.id === state.chatBg) || D.CHAT_BG_PRESETS[0];
+
+    // Wide screens show the thread straight away, without tapping a room.
+    if (selectedRoom && !selectedRoom.locked && !state.chatScrollPending
+      && chatPositionedRoomId !== selectedRoom.id) {
+      state.selectedRoomId = selectedRoom.id;
+      prepareChatThreadEntry(selectedRoom.id);
+    }
 
     const roomButtons = state.chatRooms.map((room, i) => {
       const last = room.messages?.[room.messages.length - 1];
@@ -3743,6 +3887,8 @@
       captureChatDraft();
       state.chatView = 'rooms';
       state.chatUnreadAnchor = null;
+      chatPositionedRoomId = '';
+      cancelChatSettle();
       clearChatCompose();
       renderScreen();
       setImmersive();
@@ -5054,13 +5200,17 @@
         );
 
         if (room.lastReadMessageId) {
+          // The server remembers where this person stopped, on every device.
+          // Prefer its timestamp: the message itself may be older than the page we loaded.
           const readMsg = messages.find((item) => item.id === room.lastReadMessageId)
             || incoming.find((item) => item.id === room.lastReadMessageId);
-          if (readMsg) {
-            const at = new Date(readMsg.createdAt || 0).getTime();
+          const at = room.lastReadAt
+            ? new Date(room.lastReadAt).getTime()
+            : new Date(readMsg?.createdAt || 0).getTime();
+          if (at) {
             const current = state.chatReads[room.id];
             if (!current || current.at < at) {
-              state.chatReads[room.id] = { id: readMsg.id, at };
+              state.chatReads[room.id] = { id: room.lastReadMessageId, at };
             }
           }
         }
@@ -5142,6 +5292,7 @@
   async function loadOlderChatMessages() {
     const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
     if (!room || room.locked || !room.hasMore || state.chatHistoryLoading) return;
+    if (chatBackfillRoom === room.id || chatSettling) return;
     const oldest = (room.messages || []).find((item) => !item.pending && !item.failed);
     if (!oldest) return;
 
@@ -6085,7 +6236,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '102';
+      const version = window.LOZA_ASSET_VERSION || '103';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
