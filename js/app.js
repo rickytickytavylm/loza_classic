@@ -4484,21 +4484,24 @@
 
     return `<div class="profile-ios">
       <section class="profile-ios-hero">
-        ${avatarBlock}
-        <div class="profile-ios-identity">
-          <h1>${esc(name)}</h1>
-          ${authed ? `<button type="button" class="profile-avatar-reset" id="profile-name-edit">Изменить имя</button>
-          <form class="profile-name-form" id="profile-name-form" hidden>
-            <input id="profile-name-input" maxlength="40" value="${esc(name)}" autocomplete="name" aria-label="Имя в клубе" />
-            <button type="submit">Сохранить</button>
-          </form>
-          <p class="profile-avatar-note" id="profile-name-status" hidden></p>
-          ${hasCustomName() ? '<button type="button" class="profile-avatar-reset" data-profile-action="name-reset">Вернуть имя из Яндекса</button>' : ''}` : ''}
-          <p>${esc(subtitle)}</p>
-          <p class="profile-access-line">${esc(accessLine)}</p>
-          ${authed ? `<p class="profile-avatar-note" id="profile-avatar-status">Нажмите на фото, чтобы поставить своё</p>` : ''}
-          ${authed && hasCustomAvatar() ? `<button type="button" class="profile-avatar-reset" data-profile-action="avatar-reset">${esc(resetLabel)}</button>` : ''}
+        <div class="profile-ios-top">
+          ${avatarBlock}
+          <div class="profile-ios-identity">
+            <h1>${esc(name)}</h1>
+            ${authed ? '<button type="button" class="profile-avatar-reset" id="profile-name-edit">Изменить имя</button>' : ''}
+            ${authed && hasCustomName() ? '<button type="button" class="profile-avatar-reset" data-profile-action="name-reset">Вернуть имя из Яндекса</button>' : ''}
+            <p>${esc(subtitle)}</p>
+            <p class="profile-access-line">${esc(accessLine)}</p>
+            ${authed ? `<p class="profile-avatar-note" id="profile-avatar-status">Нажмите на фото, чтобы поставить своё</p>` : ''}
+            ${authed && hasCustomAvatar() ? `<button type="button" class="profile-avatar-reset" data-profile-action="avatar-reset">${esc(resetLabel)}</button>` : ''}
+          </div>
         </div>
+        ${authed ? `<form class="profile-name-form" id="profile-name-form" hidden>
+          <input id="profile-name-input" maxlength="40" value="${esc(name)}" autocomplete="name" enterkeyhint="done" aria-label="Имя в клубе" />
+          <button type="submit">Сохранить</button>
+          <button type="button" class="profile-name-cancel" id="profile-name-cancel">Отмена</button>
+          <p class="profile-avatar-note" id="profile-name-status" hidden></p>
+        </form>` : ''}
       </section>
       ${authed ? '<input type="file" id="profile-avatar-file" accept="image/*" hidden />' : ''}
 
@@ -4732,8 +4735,22 @@
     });
     $('#profile-name-edit', root)?.addEventListener('click', () => {
       const form = $('#profile-name-form', root);
+      const edit = $('#profile-name-edit', root);
       if (form) form.hidden = false;
-      $('#profile-name-input', root)?.focus();
+      if (edit) edit.hidden = true;
+      const input = $('#profile-name-input', root);
+      input?.focus();
+      input?.select();
+    });
+    $('#profile-name-cancel', root)?.addEventListener('click', () => {
+      const form = $('#profile-name-form', root);
+      const edit = $('#profile-name-edit', root);
+      const input = $('#profile-name-input', root);
+      const status = $('#profile-name-status', root);
+      if (input) input.value = userDisplayName();
+      if (status) status.hidden = true;
+      if (form) form.hidden = true;
+      if (edit) edit.hidden = false;
     });
     $('#profile-name-form', root)?.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -6068,7 +6085,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '101';
+      const version = window.LOZA_ASSET_VERSION || '102';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
