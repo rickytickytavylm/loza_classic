@@ -2865,6 +2865,8 @@ button.chat-hashtag {
   inset: -2px;
   border-radius: 16px;
   pointer-events: none;
+  /* Must stay invisible at rest: once the shine ends, this layer still sits over the text. */
+  opacity: 0;
   background: linear-gradient(
     110deg,
     rgba(255, 255, 255, 0) 20%,
@@ -2872,6 +2874,7 @@ button.chat-hashtag {
     rgba(255, 255, 255, 0) 72%
   );
   background-size: 220% 100%;
+  background-repeat: no-repeat;
   animation: intro-shine 1500ms ease-out 120ms 2;
 }
 
@@ -2898,9 +2901,14 @@ button.chat-hashtag {
 @keyframes intro-shine {
   from {
     background-position: 180% 0;
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
   }
   to {
     background-position: -60% 0;
+    opacity: 0;
   }
 }
 
