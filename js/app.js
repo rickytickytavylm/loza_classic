@@ -3382,10 +3382,14 @@
       ? '<div class="chat-readonly-note" role="status">Чаты открываются после оплаты тарифа «Клуб».</div>'
       : allowPost
       ? `<div id="chat-compose-slot" data-sig="${esc(chatComposeSlotSignature())}">${renderChatComposeBar()}${renderChatAttachmentTray()}</div>
+        <div class="chat-emoji-panel" id="chat-emoji-panel" hidden>
+          ${(D.CHAT_QUICK_EMOJIS || []).map((emoji) => `<button type="button" class="chat-compose-emoji" data-compose-emoji="${esc(emoji)}" aria-label="${esc(emoji)}">${emoji}</button>`).join('')}
+        </div>
         <form class="telegram-composer" id="chat-form">
           <input type="file" id="chat-file" accept="image/*" multiple hidden />
           <button class="telegram-composer-attach" type="button" id="chat-attach" aria-label="Прикрепить фото">${ic('paperclip', 21)}</button>
           <textarea id="chat-draft" rows="1" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="enter">${esc(roomDraft)}</textarea>
+          <button class="telegram-composer-emoji" type="button" id="chat-emoji" aria-label="Эмодзи" aria-expanded="false">${ic('smile', 22)}</button>
           <button class="telegram-composer-send" type="submit" aria-label="Отправить">${ic('arrowUp', 20)}</button>
         </form>`
       : `<div class="chat-readonly-note" role="status">Здесь публикует команда клуба. Участники отвечают в чате для общения.</div>`;
@@ -3953,6 +3957,19 @@
 
     const fileInput = $('#chat-file', root);
     $('#chat-attach', root)?.addEventListener('click', () => fileInput?.click());
+    const emojiPanel = $('#chat-emoji-panel', root);
+    const emojiToggle = $('#chat-emoji', root);
+    emojiToggle?.addEventListener('click', () => {
+      if (!emojiPanel) return;
+      const open = emojiPanel.hidden;
+      emojiPanel.hidden = !open;
+      emojiToggle.classList.toggle('is-open', open);
+      emojiToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    $$('[data-compose-emoji]', root).forEach((btn) => {
+      btn.addEventListener('pointerdown', (event) => event.preventDefault());
+      btn.addEventListener('click', () => insertChatEmoji(btn.dataset.composeEmoji || ''));
+    });
     fileInput?.addEventListener('change', () => {
       const files = fileInput.files;
       if (files?.length) addChatAttachments(files);
@@ -3984,6 +4001,11 @@
 
       input.value = '';
       resizeChatDraft(input);
+      const emojiPanel = $('#chat-emoji-panel', root);
+      const emojiToggle = $('#chat-emoji', root);
+      if (emojiPanel) emojiPanel.hidden = true;
+      emojiToggle?.classList.remove('is-open');
+      emojiToggle?.setAttribute('aria-expanded', 'false');
       if (state.selectedRoomId) delete state.chatDrafts[state.selectedRoomId];
 
       // Show the bubble right away; the server copy replaces it on reply.
@@ -4098,6 +4120,19 @@
     if (!roomId || !draftEl || state.chatCompose?.mode === 'edit') return;
     if (draftEl.value) state.chatDrafts[roomId] = draftEl.value;
     else delete state.chatDrafts[roomId];
+  }
+
+  function insertChatEmoji(emoji) {
+    const input = $('#chat-draft');
+    if (!input || !emoji) return;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    input.value = `${input.value.slice(0, start)}${emoji}${input.value.slice(end)}`;
+    const caret = start + emoji.length;
+    try { input.setSelectionRange(caret, caret); } catch { /* ignore */ }
+    input.focus();
+    resizeChatDraft(input);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function resizeChatDraft(el) {
@@ -6236,7 +6271,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '103';
+      const version = window.LOZA_ASSET_VERSION || '104';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
