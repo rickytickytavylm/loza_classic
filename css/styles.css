@@ -3531,13 +3531,13 @@ button.chat-hashtag {
   font-size: 14px;
 }
 
-.chat-mention {
+.bubble-body p .chat-mention {
   font-weight: 700;
-  color: #5f4b78;
+  color: #2f7cc0;
 }
 
-.chat-bubble.mine .chat-mention {
-  color: #1d6a28;
+.chat-bubble.mine .bubble-body p .chat-mention {
+  color: #1f7a32;
 }
 
 .chat-compose-emoji {
