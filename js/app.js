@@ -4251,6 +4251,7 @@
   let chatMentionQuery = '';
   let chatMentionHold = '';
   let chatMentionLoad = null;
+  let chatMentionCaret = null;
 
   function chatMentionToken(value, caret) {
     const before = String(value || '').slice(0, caret);
@@ -4342,10 +4343,10 @@
     const photo = /^https?:\/\//i.test(url)
       ? `<img src="${esc(url)}" alt="" onerror="this.remove()" />`
       : '';
-    return `<button type="button" class="chat-mention-row${index === chatMentionActive ? ' is-active' : ''}" data-index="${index}" role="option">
+    return `<div class="chat-mention-row${index === chatMentionActive ? ' is-active' : ''}" data-index="${index}" role="option">
       <span class="chat-mention-avatar" style="--av-hue:${hue}"><span>${letter}</span>${photo}</span>
       <strong>${esc(name)}</strong>
-    </button>`;
+    </div>`;
   }
 
   function markChatMentionActive() {
@@ -4379,13 +4380,7 @@
           ? filtered.map((member, index) => chatMentionRowHtml(member, index)).join('')
           : `<p class="chat-mention-status">${emptyText}</p>`);
       sheet.innerHTML = `<div class="chat-mention-head">Участники</div><div class="chat-mention-list" role="listbox">${rows}</div>`;
-      $$('.chat-mention-row', sheet).forEach((row) => {
-        row.addEventListener('pointerdown', (event) => {
-          event.preventDefault();
-          const member = chatMentionVisible[Number(row.dataset.index)];
-          if (member) insertChatMention(member);
-        });
-      });
+      bindChatMentionScroll(sheet.querySelector('.chat-mention-list'));
     } else {
       markChatMentionActive();
     }
@@ -4436,10 +4431,53 @@
     paintChatMentionSheet(state.chatMentionMembers, token.query);
   }
 
-  function insertChatMention(member) {
+  function bindChatMentionScroll(list) {
+    if (!list) return;
+    let startX = 0;
+    let startY = 0;
+    let startScroll = 0;
+    let moved = false;
+    let index = -1;
+    list.addEventListener('pointerdown', (event) => {
+      const row = event.target.closest?.('.chat-mention-row');
+      if (!row) return;
+      startX = event.clientX;
+      startY = event.clientY;
+      startScroll = list.scrollTop;
+      moved = false;
+      index = Number(row.dataset.index);
+      const draft = $('#chat-draft');
+      chatMentionCaret = draft ? (draft.selectionStart ?? draft.value.length) : null;
+    });
+    list.addEventListener('pointermove', (event) => {
+      if (index < 0 || moved) return;
+      if (Math.abs(event.clientX - startX) > 8 || Math.abs(event.clientY - startY) > 8) moved = true;
+    });
+    list.addEventListener('pointerup', (event) => {
+      const picked = index;
+      const dragged = moved || Math.abs(list.scrollTop - startScroll) > 3;
+      index = -1;
+      if (dragged || picked < 0) return;
+      const row = event.target.closest?.('.chat-mention-row');
+      if (!row || Number(row.dataset.index) !== picked) return;
+      const member = chatMentionVisible[picked];
+      if (!member) return;
+      event.preventDefault();
+      insertChatMention(member, chatMentionCaret);
+    });
+    list.addEventListener('pointercancel', () => {
+      index = -1;
+      moved = true;
+    });
+    list.addEventListener('click', (event) => {
+      if (event.target.closest?.('.chat-mention-row')) event.preventDefault();
+    });
+  }
+
+  function insertChatMention(member, caretAt) {
     const draft = $('#chat-draft');
     if (!draft || !member?.name) return;
-    const caret = draft.selectionStart ?? draft.value.length;
+    const caret = Number.isInteger(caretAt) ? caretAt : (draft.selectionStart ?? draft.value.length);
     const token = chatMentionToken(draft.value, caret);
     if (!token) return;
     const bucket = mentionBucket();
@@ -6602,7 +6640,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '106';
+      const version = window.LOZA_ASSET_VERSION || '107';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

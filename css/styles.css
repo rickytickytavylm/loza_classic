@@ -3477,6 +3477,7 @@ button.chat-hashtag {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .chat-mention-row {
@@ -3491,10 +3492,12 @@ button.chat-hashtag {
   font: inherit;
   font-size: 16px;
   text-align: left;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.chat-mention-row.is-active,
-.chat-mention-row:active {
+.chat-mention-row.is-active {
   background: rgba(95, 75, 120, 0.1);
 }
 
