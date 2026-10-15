@@ -2851,7 +2851,10 @@
     });
     if (!seenId) return;
     const message = (room.messages || []).find((item) => item.id === seenId);
-    if (message && markChatMessageRead(room.id, message)) patchChatRoomPreviews();
+    if (message && markChatMessageRead(room.id, message)) {
+      patchChatRoomPreviews();
+      updateChatJumps(scroller);
+    }
   }
 
   function queueChatReadCheck() {
@@ -2885,7 +2888,10 @@
   function endChatSettle() {
     const wasSettling = chatSettling;
     cancelChatSettle();
-    if (wasSettling) updateChatReadFromScroll($('.telegram-messages'));
+    if (!wasSettling) return;
+    const list = $('.telegram-messages');
+    updateChatReadFromScroll(list);
+    updateChatJumps(list);
   }
 
   function onChatEntryTouch() {
@@ -3027,19 +3033,30 @@
     return Boolean(quoted && isMyChatMessage(quoted));
   }
 
+  const seenReplies = new Set();
+
   function nextReplyToMe(scroller) {
     const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
     if (!room || !scroller) return '';
+    const markAt = state.chatReads[room.id]?.at || 0;
     const scRect = scroller.getBoundingClientRect();
     let below = '';
     let above = '';
     (room.messages || []).forEach((message) => {
       if (!messageRepliesToMe(message, room)) return;
+      const at = new Date(message.createdAt || 0).getTime();
+      // Already read: the button is only for a reply the person has not reached.
+      if (markAt && at && at <= markAt) return;
+      const seenKey = `${room.id}:${message.id}`;
       const node = scroller.querySelector(`[data-message-id="${message.id}"]`);
       if (!node) return;
       const rect = node.getBoundingClientRect();
       const visible = rect.bottom > scRect.top + 28 && rect.top < scRect.bottom - 28;
-      if (visible) return;
+      if (visible) {
+        seenReplies.add(seenKey);
+        return;
+      }
+      if (seenReplies.has(seenKey)) return;
       if (rect.top >= scRect.bottom - 8) below = below || message.id;
       else above = message.id;
     });
@@ -6271,7 +6288,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '104';
+      const version = window.LOZA_ASSET_VERSION || '105';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
