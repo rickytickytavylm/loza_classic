@@ -2464,6 +2464,7 @@
     const clean = String(name || '').trim().replace(/\s+/g, ' ');
     const text = String(body || '');
     if (!clean) return false;
+    const names = (state.chatMentionMembers || []).map((member) => String(member?.name || '').trim()).filter(Boolean);
     const needle = `@${clean}`;
     let from = 0;
     while (from <= text.length - needle.length) {
@@ -2471,12 +2472,16 @@
       if (at < 0) return false;
       const beforeOk = at === 0 || /[\s\n]/.test(text[at - 1]);
       const end = at + needle.length;
-      let afterOk = end >= text.length || /[\s\n.,!?:;)]/.test(text[end]);
-      if (afterOk && end < text.length && /\s/.test(text[end])) {
-        const next = text.slice(end).match(/^\s+(\S)/u);
-        if (next && /\p{L}/u.test(next[1])) afterOk = false;
+      const afterOk = end >= text.length || /[\s\n.,!?:;)]/.test(text[end]);
+      if (beforeOk && afterOk) {
+        const longer = names.some((other) => {
+          if (other.length <= clean.length) return false;
+          const token = `@${other}`;
+          const otherEnd = at + token.length;
+          return text.startsWith(token, at) && (otherEnd >= text.length || /[\s\n.,!?:;)]/.test(text[otherEnd]));
+        });
+        if (!longer) return true;
       }
-      if (beforeOk && afterOk) return true;
       from = at + 1;
     }
     return false;
@@ -2492,6 +2497,16 @@
       ids.push(item.userId);
     });
     return ids.slice(0, 20);
+  }
+
+  function mentionHighlightsFor(message) {
+    const body = message?.body || message?.text || '';
+    const stored = (message?.mentions || []).filter((item) => item?.name && chatBodyHasMention(body, item.name));
+    const known = new Set(stored.map((item) => item.name));
+    const extra = (state.chatMentionMembers || []).filter((member) => (
+      member?.name && !known.has(member.name) && chatBodyHasMention(body, member.name)
+    ));
+    return stored.concat(extra);
   }
 
   function highlightChatMentions(html, mentions) {
@@ -3211,7 +3226,7 @@
       message.failed ? 'f' : '',
       message.seenByOthers ? 's' : '',
       message.isPinned ? 'pin' : '',
-      (message.mentions || []).map((item) => `${item.userId}:${item.name}`).join(','),
+      (mentionHighlightsFor(message)).map((item) => `${item.userId || ''}:${item.name}`).join(','),
     ].join('\u0001'));
   }
 
@@ -3337,7 +3352,7 @@
     const body = message.body || message.text || '';
     const meetings = detectMeetingLinks(body);
     const meetingCards = meetings.map((meeting, i) => meetingCardHtml(meeting, i)).join('');
-    const formattedBody = formatChatBody(body, meetings, message.mentions).trim();
+    const formattedBody = formatChatBody(body, meetings, mentionHighlightsFor(message)).trim();
     const bodyHtml = formattedBody ? `<p>${formattedBody}</p>` : '';
     const meetingOnly = meetings.length > 0 && !formattedBody;
 
@@ -3410,7 +3425,7 @@
       || (hasClubAccess() ? state.chatRooms.find((room) => !room.locked) : null);
     const preset = D.CHAT_BG_PRESETS.find((p) => p.id === state.chatBg) || D.CHAT_BG_PRESETS[0];
 
-    // Wide screens show the thread straight away, without tapping a room.
+    if (selectedRoom && !selectedRoom.locked) ensureMentionNames(selectedRoom.id);
     if (selectedRoom && !selectedRoom.locked && !state.chatScrollPending
       && chatPositionedRoomId !== selectedRoom.id) {
       state.selectedRoomId = selectedRoom.id;
@@ -4288,6 +4303,20 @@
     sheet.innerHTML = '';
     sheet.dataset.query = '';
     chatMentionVisible = [];
+  }
+
+  let mentionNamesReadyFor = '';
+  let mentionNamesLoadingFor = '';
+
+  function ensureMentionNames(roomId) {
+    if (!roomId || roomId === mentionNamesReadyFor || roomId === mentionNamesLoadingFor) return;
+    mentionNamesLoadingFor = roomId;
+    loadChatMentionMembers(roomId).then((members) => {
+      if (mentionNamesLoadingFor === roomId) mentionNamesLoadingFor = '';
+      if (!Array.isArray(members)) return;
+      mentionNamesReadyFor = roomId;
+      if (state.tab === 'chat' && state.selectedRoomId === roomId) renderChatLive();
+    });
   }
 
   function loadChatMentionMembers(roomId) {
@@ -6640,7 +6669,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '108';
+      const version = window.LOZA_ASSET_VERSION || '109';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
