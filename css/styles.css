@@ -2486,6 +2486,7 @@ body.rules-open {
 .telegram-header,
 .chat-pinned-bar,
 #chat-compose-slot,
+.chat-mention-sheet,
 .telegram-composer,
 .chat-readonly-note {
   flex-shrink: 0;
@@ -3435,6 +3436,105 @@ button.chat-hashtag {
 
 .chat-emoji-panel[hidden] {
   display: none;
+}
+
+.chat-mention-sheet {
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  max-height: 240px;
+  margin: 0 12px;
+  overflow: hidden;
+  border-radius: 16px 16px 0 0;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -8px 24px rgba(43, 39, 53, 0.1);
+}
+
+.chat-mention-sheet[hidden] {
+  display: none;
+}
+
+.app.immersive-chat .chat-mention-sheet {
+  margin: 0;
+  border-radius: 16px 16px 0 0;
+  border-top: 1px solid rgba(var(--plum-rgb), 0.08);
+  box-shadow: none;
+}
+
+.chat-mention-head {
+  flex-shrink: 0;
+  padding: 10px 14px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chat-mention-list {
+  max-height: 200px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-mention-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+}
+
+.chat-mention-row.is-active,
+.chat-mention-row:active {
+  background: rgba(95, 75, 120, 0.1);
+}
+
+.chat-mention-avatar {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 50%;
+  color: #fff;
+  background: hsl(var(--av-hue, 270) 42% 46%);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.chat-mention-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-mention-status {
+  margin: 0;
+  padding: 12px 14px 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.chat-mention {
+  font-weight: 700;
+  color: #5f4b78;
+}
+
+.chat-bubble.mine .chat-mention {
+  color: #1d6a28;
 }
 
 .chat-compose-emoji {

@@ -114,6 +114,7 @@
     selectedRoomId: '',
     chatCompose: null, // { mode: 'reply'|'edit', messageId, preview, authorName, body? }
     chatDrafts: {}, // { [roomId]: text } — survives leaving the chat to check a movie
+    chatDraftMentions: {}, // { [roomId]: [{ userId, name }] } chosen from the @ sheet
     chatAttachments: [], // { localId, previewUrl, status: 'uploading'|'ready'|'error', id? }
     pushEndpoint: '',
     // Per-room read marks: { [roomId]: { id, at } } — the newest message the
@@ -2455,7 +2456,54 @@
     return /#знакомств/iu.test(String(text || ''));
   }
 
-  function formatChatBody(text, meetings = []) {
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function chatBodyHasMention(body, name) {
+    const clean = String(name || '').trim().replace(/\s+/g, ' ');
+    const text = String(body || '');
+    if (!clean) return false;
+    const needle = `@${clean}`;
+    let from = 0;
+    while (from <= text.length - needle.length) {
+      const at = text.indexOf(needle, from);
+      if (at < 0) return false;
+      const beforeOk = at === 0 || /[\s\n]/.test(text[at - 1]);
+      const end = at + needle.length;
+      let afterOk = end >= text.length || /[\s\n.,!?:;)]/.test(text[end]);
+      if (afterOk && end < text.length && /\s/.test(text[end])) {
+        const next = text.slice(end).match(/^\s+(\S)/u);
+        if (next && /\p{L}/u.test(next[1])) afterOk = false;
+      }
+      if (beforeOk && afterOk) return true;
+      from = at + 1;
+    }
+    return false;
+  }
+
+  function mentionIdsInBody(body, mentions) {
+    const seen = new Set();
+    const ids = [];
+    (mentions || []).forEach((item) => {
+      if (!item?.userId || seen.has(item.userId)) return;
+      if (!chatBodyHasMention(body, item.name)) return;
+      seen.add(item.userId);
+      ids.push(item.userId);
+    });
+    return ids.slice(0, 20);
+  }
+
+  function highlightChatMentions(html, mentions) {
+    const names = [...new Set((mentions || []).map((item) => String(item.name || '').trim()).filter(Boolean))]
+      .sort((a, b) => b.length - a.length);
+    if (!names.length) return html;
+    const pattern = names.map((name) => `@${escapeRegExp(esc(name))}`).join('|');
+    const re = new RegExp(`(^|[\\s\\n])(${pattern})(?=$|[\\s\\n.,!?:;)])`, 'g');
+    return html.replace(re, (_full, lead, name) => `${lead}<span class="chat-mention">${name}</span>`);
+  }
+
+  function formatChatBody(text, meetings = [], mentions = []) {
     const meetingUrls = new Set(meetings.map((item) => item.url));
     let html = esc(text);
 
@@ -2470,6 +2518,7 @@
     html = html.replace(/#([\p{L}\p{N}_]{2,40})/gu, (_, tag) => (
       `<button type="button" class="chat-hashtag" data-chat-tag="${esc(tag)}">#${esc(tag)}</button>`
     ));
+    html = highlightChatMentions(html, mentions);
     // Keep line breaks from textarea (Telegram-style multi-line messages).
     return html.replace(/\n/g, '<br>');
   }
@@ -2519,7 +2568,7 @@
   }
 
   /** Local-only bubble shown while the request is in flight. */
-  function addPendingChatMessage(body, attachments, compose) {
+  function addPendingChatMessage(body, attachments, compose, mentions) {
     const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
     if (!room) return null;
     const message = {
@@ -2536,6 +2585,7 @@
       replyTo: compose?.mode === 'reply'
         ? { id: compose.messageId, authorName: compose.authorName, body: compose.preview }
         : null,
+      mentions: mentions || [],
       mine: true,
       pending: true,
     };
@@ -3118,6 +3168,7 @@
       preview: String(message.body || '').slice(0, 120),
       authorName: 'Редактирование',
       body: message.body || '',
+      mentions: (message.mentions || []).map((item) => ({ userId: item.userId, name: item.name })),
     };
     renderChatLive();
     window.setTimeout(() => {
@@ -3160,6 +3211,7 @@
       message.failed ? 'f' : '',
       message.seenByOthers ? 's' : '',
       message.isPinned ? 'pin' : '',
+      (message.mentions || []).map((item) => `${item.userId}:${item.name}`).join(','),
     ].join('\u0001'));
   }
 
@@ -3285,7 +3337,7 @@
     const body = message.body || message.text || '';
     const meetings = detectMeetingLinks(body);
     const meetingCards = meetings.map((meeting, i) => meetingCardHtml(meeting, i)).join('');
-    const formattedBody = formatChatBody(body, meetings).trim();
+    const formattedBody = formatChatBody(body, meetings, message.mentions).trim();
     const bodyHtml = formattedBody ? `<p>${formattedBody}</p>` : '';
     const meetingOnly = meetings.length > 0 && !formattedBody;
 
@@ -3399,6 +3451,7 @@
       ? '<div class="chat-readonly-note" role="status">Чаты открываются после оплаты тарифа «Клуб».</div>'
       : allowPost
       ? `<div id="chat-compose-slot" data-sig="${esc(chatComposeSlotSignature())}">${renderChatComposeBar()}${renderChatAttachmentTray()}</div>
+        <div id="chat-mention-sheet" class="chat-mention-sheet" hidden></div>
         <div class="chat-emoji-panel" id="chat-emoji-panel" hidden>
           ${(D.CHAT_QUICK_EMOJIS || []).map((emoji) => `<button type="button" class="chat-compose-emoji" data-compose-emoji="${esc(emoji)}" aria-label="${esc(emoji)}">${emoji}</button>`).join('')}
         </div>
@@ -3472,6 +3525,7 @@
       reactions,
       attachments: message.attachments || previous?.attachments || [],
       seenByOthers: Boolean(message.seenByOthers || previous?.seenByOthers),
+      mentions: message.mentions || previous?.mentions || [],
       isPinned: Boolean(message.isPinned),
       mine,
       pending: false,
@@ -4025,8 +4079,16 @@
       emojiToggle?.setAttribute('aria-expanded', 'false');
       if (state.selectedRoomId) delete state.chatDrafts[state.selectedRoomId];
 
+      const mentionSource = editing
+        ? (compose?.mentions || [])
+        : (state.chatDraftMentions[state.selectedRoomId] || []);
+      const pickedMentions = mentionSource.filter((item) => chatBodyHasMention(body, item.name));
+      const mentionIds = mentionIdsInBody(body, pickedMentions);
+      if (!editing && state.selectedRoomId) delete state.chatDraftMentions[state.selectedRoomId];
+      hideChatMentionSheet();
+
       // Show the bubble right away; the server copy replaces it on reply.
-      const pending = editing ? null : addPendingChatMessage(body, attachments, compose);
+      const pending = editing ? null : addPendingChatMessage(body, attachments, compose, pickedMentions);
       const sentAttachments = editing ? [] : attachments;
       if (!editing) state.chatAttachments = [];
       clearChatCompose();
@@ -4034,7 +4096,7 @@
 
       try {
         if (editing) {
-          const data = await API.editChatMessage(compose.messageId, body);
+          const data = await API.editChatMessage(compose.messageId, body, mentionIds);
           if (data.message) {
             rememberMyChatMessage(data.message.id);
             upsertChatMessageLocal(data.message, { trustMine: true });
@@ -4046,6 +4108,7 @@
             compose?.mode === 'reply' ? compose.messageId : undefined,
             attachmentIds,
             state.pushEndpoint || undefined,
+            mentionIds,
           );
           removePendingChatMessage(pending);
           if (data.message) {
@@ -4083,6 +4146,7 @@
             attachmentIds,
             replyToId: compose?.mode === 'reply' ? compose.messageId : undefined,
             attachments: sentAttachments,
+            mentionIds,
           };
         }
         renderChatLive();
@@ -4113,6 +4177,7 @@
         payload.replyToId,
         payload.attachmentIds,
         state.pushEndpoint || undefined,
+        payload.mentionIds,
       );
       removePendingChatMessage(message);
       if (data.message) {
@@ -4181,23 +4246,270 @@
     el.scrollTop = el.scrollHeight;
   }
 
+  let chatMentionVisible = [];
+  let chatMentionActive = 0;
+  let chatMentionQuery = '';
+  let chatMentionHold = '';
+  let chatMentionLoad = null;
+
+  function chatMentionToken(value, caret) {
+    const before = String(value || '').slice(0, caret);
+    const match = before.match(/(^|\s)@([^\n@]*)$/);
+    if (!match) return null;
+    const query = match[2];
+    const start = before.length - query.length - 1;
+    const typed = before.slice(start);
+    const completed = mentionBucket().some((item) => {
+      const label = `@${String(item.name || '').trim()}`;
+      if (!label || label === '@') return false;
+      if (typed === label) return true;
+      return typed.startsWith(label) && /^[\s\n]/.test(typed.slice(label.length));
+    });
+    if (completed) return null;
+    return { query, start };
+  }
+
+  function mentionBucket() {
+    if (state.chatCompose?.mode === 'edit') {
+      if (!Array.isArray(state.chatCompose.mentions)) state.chatCompose.mentions = [];
+      return state.chatCompose.mentions;
+    }
+    const roomId = state.selectedRoomId;
+    if (!roomId) return [];
+    if (!state.chatDraftMentions[roomId]) state.chatDraftMentions[roomId] = [];
+    return state.chatDraftMentions[roomId];
+  }
+
+  function hideChatMentionSheet() {
+    const sheet = $('#chat-mention-sheet');
+    if (!sheet) return;
+    sheet.hidden = true;
+    sheet.innerHTML = '';
+    sheet.dataset.query = '';
+    chatMentionVisible = [];
+  }
+
+  function loadChatMentionMembers(roomId) {
+    if (!roomId) return Promise.resolve([]);
+    const fresh = state.chatMentionRoomId === roomId
+      && Array.isArray(state.chatMentionMembers)
+      && Date.now() - state.chatMentionLoadedAt < 60000;
+    if (fresh) return Promise.resolve(state.chatMentionMembers);
+    if (chatMentionLoad && state.chatMentionRoomId === roomId && state.chatMentionMembers == null) {
+      return chatMentionLoad;
+    }
+    state.chatMentionRoomId = roomId;
+    state.chatMentionMembers = null;
+    chatMentionLoad = API.chatMentionMembers(roomId)
+      .then((data) => {
+        const members = Array.isArray(data.members) ? data.members : [];
+        if (state.chatMentionRoomId === roomId) {
+          state.chatMentionMembers = members;
+          state.chatMentionLoadedAt = Date.now();
+        }
+        return state.chatMentionRoomId === roomId ? members : [];
+      })
+      .catch(() => {
+        chatMentionLoad = null;
+        return null;
+      });
+    return chatMentionLoad;
+  }
+
+  function filterChatMentions(members, query) {
+    const q = String(query || '').trim().toLocaleLowerCase('ru');
+    const list = !q
+      ? [...members]
+      : members.filter((member) => String(member.name || '').toLocaleLowerCase('ru').includes(q));
+    if (!q) return list;
+    return list.sort((a, b) => {
+      const an = String(a.name || '').toLocaleLowerCase('ru');
+      const bn = String(b.name || '').toLocaleLowerCase('ru');
+      const as = an.startsWith(q) ? 0 : 1;
+      const bs = bn.startsWith(q) ? 0 : 1;
+      if (as !== bs) return as - bs;
+      return an.localeCompare(bn, 'ru');
+    });
+  }
+
+  function chatMentionRowHtml(member, index) {
+    const name = String(member.name || '').trim();
+    const letter = esc((name[0] || '?').toUpperCase());
+    const seed = String(member.id || name);
+    let hue = 0;
+    for (let i = 0; i < seed.length; i += 1) hue = (hue * 31 + seed.charCodeAt(i)) % 360;
+    const url = String(member.avatarUrl || '').trim();
+    const photo = /^https?:\/\//i.test(url)
+      ? `<img src="${esc(url)}" alt="" onerror="this.remove()" />`
+      : '';
+    return `<button type="button" class="chat-mention-row${index === chatMentionActive ? ' is-active' : ''}" data-index="${index}" role="option">
+      <span class="chat-mention-avatar" style="--av-hue:${hue}"><span>${letter}</span>${photo}</span>
+      <strong>${esc(name)}</strong>
+    </button>`;
+  }
+
+  function markChatMentionActive() {
+    const sheet = $('#chat-mention-sheet');
+    if (!sheet) return;
+    $$('.chat-mention-row', sheet).forEach((row, index) => {
+      const on = index === chatMentionActive;
+      row.classList.toggle('is-active', on);
+      if (on) row.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  function paintChatMentionSheet(members, query, statusText) {
+    const sheet = $('#chat-mention-sheet');
+    if (!sheet) return;
+    const emojiPanel = $('#chat-emoji-panel');
+    if (emojiPanel) emojiPanel.hidden = true;
+    $('#chat-emoji')?.classList.remove('is-open');
+    const filtered = statusText ? [] : filterChatMentions(members || [], query);
+    chatMentionVisible = filtered;
+    if (chatMentionActive >= filtered.length) chatMentionActive = 0;
+    const key = statusText || `${query}:${filtered.map((item) => item.id).join(',')}`;
+    if (sheet.dataset.query !== key) {
+      sheet.dataset.query = key;
+      const emptyText = String(query || '').trim()
+        ? 'Никого с таким именем нет'
+        : 'В клубе пока некого отметить';
+      const rows = statusText
+        ? `<p class="chat-mention-status">${esc(statusText)}</p>`
+        : (filtered.length
+          ? filtered.map((member, index) => chatMentionRowHtml(member, index)).join('')
+          : `<p class="chat-mention-status">${emptyText}</p>`);
+      sheet.innerHTML = `<div class="chat-mention-head">Участники</div><div class="chat-mention-list" role="listbox">${rows}</div>`;
+      $$('.chat-mention-row', sheet).forEach((row) => {
+        row.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
+          const member = chatMentionVisible[Number(row.dataset.index)];
+          if (member) insertChatMention(member);
+        });
+      });
+    } else {
+      markChatMentionActive();
+    }
+    sheet.hidden = false;
+  }
+
+  function syncChatMentionSheet() {
+    const draft = $('#chat-draft');
+    const sheet = $('#chat-mention-sheet');
+    if (!draft || !sheet) return;
+    const caret = draft.selectionStart ?? draft.value.length;
+    const token = chatMentionToken(draft.value, caret);
+    if (!token) {
+      chatMentionHold = '';
+      chatMentionQuery = '';
+      hideChatMentionSheet();
+      return;
+    }
+    const holdKey = `${token.start}:${token.query}`;
+    if (chatMentionHold && chatMentionHold === holdKey) {
+      hideChatMentionSheet();
+      return;
+    }
+    chatMentionHold = '';
+    if (token.query !== chatMentionQuery) {
+      chatMentionQuery = token.query;
+      chatMentionActive = 0;
+    }
+    const roomId = state.selectedRoomId;
+    const ready = state.chatMentionRoomId === roomId
+      && Array.isArray(state.chatMentionMembers)
+      && Date.now() - (state.chatMentionLoadedAt || 0) < 60000;
+    if (!ready) {
+      paintChatMentionSheet([], token.query, 'Загружаем участников…');
+      loadChatMentionMembers(roomId).then((members) => {
+        const still = $('#chat-draft');
+        if (!still) return;
+        const next = chatMentionToken(still.value, still.selectionStart ?? still.value.length);
+        if (!next || next.query !== token.query) return;
+        if (members == null) {
+          paintChatMentionSheet([], next.query, 'Не удалось загрузить участников');
+          return;
+        }
+        paintChatMentionSheet(members, next.query);
+      });
+      return;
+    }
+    paintChatMentionSheet(state.chatMentionMembers, token.query);
+  }
+
+  function insertChatMention(member) {
+    const draft = $('#chat-draft');
+    if (!draft || !member?.name) return;
+    const caret = draft.selectionStart ?? draft.value.length;
+    const token = chatMentionToken(draft.value, caret);
+    if (!token) return;
+    const bucket = mentionBucket();
+    const exists = bucket.some((item) => item.userId === member.id);
+    if (!exists && bucket.length >= 20) {
+      showAppToast('В одном сообщении можно отметить не больше 20 человек', { title: 'Чат', tone: 'warn' });
+      return;
+    }
+    const insert = `@${member.name} `;
+    const nextValue = `${draft.value.slice(0, token.start)}${insert}${draft.value.slice(caret)}`;
+    draft.value = nextValue;
+    const nextCaret = token.start + insert.length;
+    try { draft.setSelectionRange(nextCaret, nextCaret); } catch { /* ignore */ }
+    if (!exists) bucket.push({ userId: member.id, name: member.name });
+    chatMentionHold = '';
+    chatMentionQuery = '';
+    draft.focus();
+    resizeChatDraft(draft);
+    if (state.chatCompose?.mode !== 'edit' && state.selectedRoomId) {
+      if (draft.value) state.chatDrafts[state.selectedRoomId] = draft.value;
+      else delete state.chatDrafts[state.selectedRoomId];
+    }
+    syncChatMentionSheet();
+  }
+
   function bindChatDraftAutosize(el) {
     if (!el) return;
     resizeChatDraft(el);
-    el.addEventListener('input', () => resizeChatDraft(el));
+    el.addEventListener('input', () => {
+      resizeChatDraft(el);
+      syncChatMentionSheet();
+    });
+    el.addEventListener('keyup', () => syncChatMentionSheet());
+    el.addEventListener('click', () => syncChatMentionSheet());
     // Enter always makes a line break; sending is the arrow button (or Ctrl/⌘+Enter
     // on desktop). Some mobile keyboards fire a submit action on Enter even inside
     // a textarea, so the break is inserted by hand instead of relying on default.
+    // While the @ list is open, Enter picks the highlighted person.
     el.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' || event.isComposing) return;
+      if (event.isComposing) return;
+      const sheetOpen = Boolean(chatMentionVisible.length && $('#chat-mention-sheet') && !$('#chat-mention-sheet').hidden);
+      if (sheetOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        chatMentionActive = (chatMentionActive + step + chatMentionVisible.length) % chatMentionVisible.length;
+        markChatMentionActive();
+        return;
+      }
+      if (sheetOpen && event.key === 'Escape') {
+        event.preventDefault();
+        const caret = el.selectionStart ?? el.value.length;
+        const token = chatMentionToken(el.value, caret);
+        chatMentionHold = token ? `${token.start}:${token.query}` : '';
+        hideChatMentionSheet();
+        return;
+      }
+      if (event.key !== 'Enter') return;
       event.preventDefault();
       event.stopPropagation();
+      if (sheetOpen && !event.ctrlKey && !event.metaKey) {
+        insertChatMention(chatMentionVisible[chatMentionActive]);
+        return;
+      }
       if (event.ctrlKey || event.metaKey) {
         if (el.form?.requestSubmit) el.form.requestSubmit();
         else $('.telegram-composer-send', el.form || document)?.click();
         return;
       }
       insertNewlineAtCaret(el);
+      syncChatMentionSheet();
     });
   }
 
@@ -5218,6 +5530,7 @@
       reactions: message.reactions || [],
       attachments: message.attachments || [],
       seenByOthers: Boolean(message.seenByOthers),
+      mentions: message.mentions || [],
       isPinned: Boolean(message.isPinned),
       mine,
     };
@@ -5548,6 +5861,7 @@
     const nextList = $('.telegram-messages');
     if (nextList) nextList.scrollTop = atBottom ? nextList.scrollHeight : prevScroll;
     updateChatJumps(nextList);
+    syncChatMentionSheet();
   }
 
   function applyChatEvent(payload) {
@@ -6288,7 +6602,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '105';
+      const version = window.LOZA_ASSET_VERSION || '106';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

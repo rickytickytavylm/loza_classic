@@ -143,13 +143,16 @@
         method: 'POST',
         body: JSON.stringify({ guestId: getGuestId() }),
       }),
-    sendChatMessage: (roomId, body, replyToId, attachmentIds, senderEndpoint) =>
+    chatMentionMembers: (roomId) =>
+      request(`/chat/rooms/${roomId}/members?guestId=${encodeURIComponent(getGuestId())}`),
+    sendChatMessage: (roomId, body, replyToId, attachmentIds, senderEndpoint, mentionIds) =>
       request(`/chat/rooms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify({
           body: body || '',
           replyToId: replyToId || undefined,
           attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
+          mentions: mentionIds?.length ? mentionIds : undefined,
           senderEndpoint: senderEndpoint || undefined,
           guestId: getGuestId(),
         }),
@@ -176,10 +179,14 @@
       }
       return response.json();
     },
-    editChatMessage: (messageId, body) =>
+    editChatMessage: (messageId, body, mentionIds) =>
       request(`/chat/messages/${messageId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ body, guestId: getGuestId() }),
+        body: JSON.stringify({
+          body,
+          mentions: Array.isArray(mentionIds) ? mentionIds : undefined,
+          guestId: getGuestId(),
+        }),
       }),
     deleteChatMessage: (messageId) =>
       request(`/chat/messages/${messageId}`, {
