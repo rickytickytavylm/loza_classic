@@ -142,6 +142,7 @@
     chatBg: localStorage.getItem('chat-bg') || 'aurora',
     mediaSection: 'all',
     profileView: '',
+    psychologistView: null,
     mediaQuery: '',
     mediaLikes: (() => {
       try {
@@ -669,10 +670,19 @@
     shell.setAttribute('aria-label', D.TAB_TITLES[tab] || tab);
   }
 
-  function setTab(tab) {
+  function setTab(tab, options = {}) {
     if (tab === 'movies') {
       state.mediaSection = 'movies';
       tab = 'media';
+    }
+    const keepPsychologist = Boolean(options.preservePsychologist) && tab === 'home';
+    const psychologistRoute = keepPsychologist ? psychologistRouteFromHash() : null;
+    if (psychologistRoute) state.psychologistView = psychologistRoute;
+    else {
+      state.psychologistView = null;
+      if (/^#psychologist/.test(location.hash)) {
+        history.replaceState({ lozaStay: 1 }, '', `${location.pathname}${location.search}`);
+      }
     }
     if (tab === 'chat' && needsChatRules()) {
       openChatRules();
@@ -976,7 +986,18 @@
     }
     document.body.classList.remove('material-immersive-open');
     switch (state.tab) {
-      case 'home': shell.innerHTML = renderHome(); bindHome(shell); break;
+      case 'home':
+        if (state.psychologistView?.kind === 'person') {
+          shell.innerHTML = renderPsychologistPage(state.psychologistView.slug);
+          bindPsychologistPage(shell);
+        } else if (state.psychologistView?.kind === 'catalog') {
+          shell.innerHTML = renderPsychologistCatalog();
+          bindPsychologistCatalog(shell);
+        } else {
+          shell.innerHTML = renderHome();
+          bindHome(shell);
+        }
+        break;
       case 'feed': shell.innerHTML = renderFeed(); bindFeed(shell); break;
       case 'media': shell.innerHTML = renderMedia(); bindMedia(shell); break;
       case 'chat': shell.innerHTML = renderChat(); bindChat(shell); break;
@@ -996,6 +1017,170 @@
         break;
       default: shell.innerHTML = '';
     }
+  }
+
+  function psychologists() {
+    return Array.isArray(window.LOZA_PSYCHOLOGISTS) ? window.LOZA_PSYCHOLOGISTS : [];
+  }
+
+  function psychologistBySlug(slug) {
+    return psychologists().find((item) => item.slug === slug) || null;
+  }
+
+  function psychologistRouteFromHash() {
+    const hash = String(location.hash || '').replace(/^#/, '');
+    if (hash === 'psychologists') return { kind: 'catalog' };
+    const match = hash.match(/^psychologist\/([a-z0-9-]+)$/);
+    if (match && psychologistBySlug(match[1])) return { kind: 'person', slug: match[1] };
+    return null;
+  }
+
+  function formatRub(value) {
+    return `${Number(value || 0).toLocaleString('ru-RU')} ₽`;
+  }
+
+  function psychologistPhoto(person) {
+    return asset(`/${person.image}`);
+  }
+
+  function showPsychologistRoute(view) {
+    state.tab = 'home';
+    state.psychologistView = view;
+    const hash = view.kind === 'catalog' ? '#psychologists' : `#psychologist/${view.slug}`;
+    history.pushState({ lozaPsych: view.kind, slug: view.slug || '' }, '', hash);
+    const shell = $('#page-shell');
+    if (shell) shell.scrollTop = 0;
+    syncPageShell('home');
+    renderNav();
+    renderScreen();
+    setImmersive();
+  }
+
+  function psychologistBack() {
+    if (history.state?.lozaPsych) {
+      history.back();
+      return;
+    }
+    state.psychologistView = null;
+    history.replaceState({ lozaStay: 1 }, '', `${location.pathname}${location.search}`);
+    const shell = $('#page-shell');
+    if (shell) shell.scrollTop = 0;
+    renderScreen();
+  }
+
+  function bindPsychologistLinks(root) {
+    $$('[data-psy-catalog]', root).forEach((button) => {
+      button.onclick = () => showPsychologistRoute({ kind: 'catalog' });
+    });
+    $$('[data-psy]', root).forEach((button) => {
+      button.onclick = () => {
+        const slug = button.dataset.psy;
+        if (!psychologistBySlug(slug)) return;
+        showPsychologistRoute({ kind: 'person', slug });
+      };
+    });
+    $$('[data-psy-back]', root).forEach((button) => {
+      button.onclick = () => psychologistBack();
+    });
+  }
+
+  function psychologistCardsHtml() {
+    return psychologists().map((person) => `
+      <button class="psy-card" type="button" data-psy="${esc(person.slug)}">
+        <span class="psy-card-photo">
+          <img src="${esc(psychologistPhoto(person))}" alt="" style="object-position:${esc(person.focus || 'center 20%')}" />
+        </span>
+        <span class="psy-card-copy">
+          <strong>${esc(person.shortName)}</strong>
+          <span class="psy-card-role">${esc(person.role)}</span>
+          <span class="psy-card-focus">${esc(person.shortDescription)}</span>
+          <span class="psy-card-price">От ${esc(formatRub(person.individualPrice))}</span>
+        </span>
+      </button>`).join('');
+  }
+
+  function psychologistHeader(title) {
+    return `<header class="inner-page-header">
+      <button class="inner-page-back" type="button" data-psy-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
+      ${innerBrand(title)}
+      <span class="inner-page-spacer" aria-hidden="true"></span>
+    </header>`;
+  }
+
+  function renderPsychologistCatalog() {
+    const cards = psychologists().map((person) => `
+      <button class="psy-list-card" type="button" data-psy="${esc(person.slug)}">
+        <span class="psy-list-photo">
+          <img src="${esc(psychologistPhoto(person))}" alt="" style="object-position:${esc(person.focus || 'center 20%')}" />
+        </span>
+        <span class="psy-list-copy">
+          <strong>${esc(person.shortName)}</strong>
+          <span class="psy-card-role">${esc(person.role)}</span>
+          <span class="psy-list-topics">${esc(person.specializations.slice(0, 3).join(' · '))}</span>
+          <span class="psy-list-foot"><span>От ${esc(formatRub(person.individualPrice))}</span>${ic('chevronRight', 18)}</span>
+        </span>
+      </button>`).join('');
+    return `<article class="psy-catalog">
+      ${psychologistHeader('Психологи клуба')}
+      <div class="psy-catalog-body">
+        <p>Выберите специалиста, с которым сможете обсудить то, что важно именно вам.</p>
+        <div class="psy-list">${cards}</div>
+      </div>
+    </article>`;
+  }
+
+  function bindPsychologistCatalog(root) {
+    bindPsychologistLinks(root);
+  }
+
+  function renderPsychologistPage(slug) {
+    const person = psychologistBySlug(slug);
+    if (!person) {
+      return `<article class="psy-catalog">${psychologistHeader('Психологи клуба')}<div class="psy-catalog-body"><p>Специалист не найден.</p></div></article>`;
+    }
+    const topics = person.specializations.map((item) => `<li>${esc(item)}</li>`).join('');
+    const formats = person.formats.map((item) => `<li>${esc(item)}</li>`).join('');
+    return `<article class="psy-profile">
+      <div class="psy-hero">
+        <img src="${esc(psychologistPhoto(person))}" alt="" style="object-position:${esc(person.focus || 'center 20%')}" />
+        <button class="psy-hero-back" type="button" data-psy-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
+      </div>
+      <div class="psy-profile-body">
+        <h1>${esc(person.shortName)}</h1>
+        <p class="psy-role">${esc(person.roleLine || person.role)}</p>
+        <section>
+          <h2>С чем помогает</h2>
+          <ul>${topics}</ul>
+        </section>
+        <section>
+          <h2>О работе со специалистом</h2>
+          <p>${esc(person.approachDescription)}</p>
+        </section>
+        <section>
+          <h2>Формат консультаций</h2>
+          <ul>${formats}</ul>
+        </section>
+        <section class="psy-prices">
+          <h2>Стоимость консультаций</h2>
+          <div>
+            <span>Индивидуальная · ${esc(person.individualDuration)}</span>
+            <strong>${esc(formatRub(person.individualPrice))}</strong>
+          </div>
+          <div>
+            <span>Семейная · ${esc(person.familyDuration)}</span>
+            <strong>${esc(formatRub(person.familyPrice))}</strong>
+          </div>
+        </section>
+      </div>
+      <div class="psy-bookbar">
+        <a class="primary-button psy-book" href="${esc(person.bookingUrl)}" target="_blank" rel="noopener noreferrer">Записаться на консультацию ${ic('arrowRight', 18)}</a>
+        <span>Запись через администратора клуба</span>
+      </div>
+    </article>`;
+  }
+
+  function bindPsychologistPage(root) {
+    bindPsychologistLinks(root);
   }
 
   function renderHome() {
@@ -1034,6 +1219,17 @@
         <header class="section-header"><span>Сегодня для вас</span><h2>Материалы, которые помогают не срываться в контроль</h2></header>
         <div class="editorial-rail editorial-rail-featured">${cards}</div>
       </section>
+      <section class="section psy-home">
+        <header class="psy-home-head">
+          <div>
+            <span class="eyebrow">Поддержка рядом</span>
+            <h2>Психологи клуба</h2>
+          </div>
+          <button class="psy-all" type="button" data-psy-catalog>Все психологи ${ic('arrowRight', 16)}</button>
+        </header>
+        <p class="psy-lead">Специалисты, которые помогут разобраться в сложной ситуации и найти путь к изменениям.</p>
+        <div class="psy-rail">${psychologistCardsHtml()}</div>
+      </section>
     </div>`;
   }
 
@@ -1042,6 +1238,7 @@
     $$('[data-open-media]', root).forEach((b) => {
       b.onclick = () => openItem(b.dataset.openMedia);
     });
+    bindPsychologistLinks(root);
   }
 
   function feedLikeButton(postId, liked, likes) {
@@ -6691,8 +6888,22 @@
   function blockEdgeExit() {
     try {
       const stay = () => history.pushState({ lozaStay: 1 }, '', location.href);
-      stay();
-      window.addEventListener('popstate', stay);
+      if (!history.state) stay();
+      window.addEventListener('popstate', () => {
+        const route = psychologistRouteFromHash();
+        if (route || state.psychologistView) {
+          state.psychologistView = route;
+          state.tab = 'home';
+          const shell = $('#page-shell');
+          if (shell) shell.scrollTop = 0;
+          syncPageShell('home');
+          renderNav();
+          renderScreen();
+          setImmersive();
+          return;
+        }
+        stay();
+      });
     } catch {
       /* ignore */
     }
@@ -6725,7 +6936,7 @@
     ]);
     await handlePaymentReturn();
     renderNav();
-    setTab('home');
+    setTab('home', { preservePsychologist: true });
 
     if (isAuthorized() && (state.user || authReturn?.ok)) {
       state.onboardingDone = true;
@@ -6775,7 +6986,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '111';
+      const version = window.LOZA_ASSET_VERSION || '112';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
