@@ -198,6 +198,8 @@
         method: 'POST',
         body: JSON.stringify({ emoji, guestId: getGuestId() }),
       }),
+    chatReactionPeople: (messageId, emoji) =>
+      request(`/chat/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}&guestId=${encodeURIComponent(getGuestId())}`),
     reportChatMessage: (messageId, reason) =>
       request(`/chat/messages/${messageId}/report`, {
         method: 'POST',

@@ -3217,7 +3217,7 @@
       message.author?.publicStatus || '',
       message.author?.avatarUrl || '',
       (message.attachments || []).map((item) => `${item.url}:${item.width || 0}x${item.height || 0}`).join(','),
-      (message.reactions || []).map((r) => `${r.emoji}${r.count}${r.mine ? '*' : ''}`).join(''),
+      (message.reactions || []).map((item) => `${item.emoji}${item.count}${item.mine ? '*' : ''}:${(item.people || []).map((person) => person.avatarUrl || person.name).join('.')}`).join(','),
       message.replyTo
         ? `${message.replyTo.id}${message.replyTo.deleted ? 'd' : ''}${message.replyTo.body || ''}`
         : '',
@@ -3319,7 +3319,40 @@
     const photo = /^https?:\/\//i.test(url)
       ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />`
       : '';
-    return `<span class="bubble-avatar" style="--av-hue:${hue}" aria-hidden="true"><span>${letter}</span>${photo}</span>`;
+    return `<button type="button" class="bubble-avatar" data-chat-profile="${esc(message.id)}" style="--av-hue:${hue}" aria-label="${esc(name)}"><span>${letter}</span>${photo}</button>`;
+  }
+
+  function reactionFaceHtml(person) {
+    const name = String(person?.name || 'Участник').trim();
+    const letter = esc((name[0] || '?').toUpperCase());
+    let hue = 0;
+    for (let i = 0; i < name.length; i += 1) hue = (hue * 31 + name.charCodeAt(i)) % 360;
+    const url = String(person?.avatarUrl || '').trim();
+    const photo = /^https?:\/\//i.test(url)
+      ? `<img src="${esc(url)}" alt="" onerror="this.remove()" />`
+      : '';
+    return `<span class="chat-reaction-face" style="--av-hue:${hue}"><span>${letter}</span>${photo}</span>`;
+  }
+
+  function chatReactionChipHtml(message, item) {
+    const own = isMyChatMessage(message);
+    const faces = item.count <= 3 ? (item.people || []).slice(0, 3) : [];
+    const faceHtml = faces.map((person) => reactionFaceHtml(person)).join('');
+    const detail = faces.length
+      ? `<span class="chat-reaction-faces">${faceHtml}</span>`
+      : (item.count > 3 ? `<span class="chat-reaction-count">${item.count}</span>` : '');
+    if (!own) {
+      return `<button type="button" class="chat-reaction-chip${item.mine ? ' is-mine' : ''}" data-react="${esc(message.id)}" data-emoji="${esc(item.emoji)}">
+        <span class="chat-reaction-emoji">${esc(item.emoji)}</span>${detail}
+      </button>`;
+    }
+    const who = detail
+      ? `<button type="button" class="chat-reaction-who" data-reaction-list="${esc(message.id)}" data-emoji="${esc(item.emoji)}" aria-label="Кто поставил">${detail}</button>`
+      : '';
+    return `<span class="chat-reaction-chip${item.mine ? ' is-mine' : ''}">
+      <button type="button" class="chat-reaction-emoji" data-react="${esc(message.id)}" data-emoji="${esc(item.emoji)}" aria-label="${esc(item.emoji)}">${esc(item.emoji)}</button>
+      ${who}
+    </span>`;
   }
 
   function renderChatBubble(message, mine, sig, showAvatar = true) {
@@ -3327,7 +3360,7 @@
     const avatarHtml = mine ? '' : chatAvatarHtml(message, showAvatar);
     const authorStatus = String(message.author?.publicStatus || '').trim();
     const author = !mine
-      ? `<div class="bubble-author-row"><strong class="bubble-author">${esc(message.authorName || message.author?.name || 'Участник клуба')}</strong>${authorStatus ? `<span class="bubble-status">${esc(authorStatus)}</span>` : ''}</div>`
+      ? `<div class="bubble-author-row"><button type="button" class="bubble-author" data-chat-profile="${esc(message.id)}">${esc(message.authorName || message.author?.name || 'Участник клуба')}</button>${authorStatus ? `<span class="bubble-status">${esc(authorStatus)}</span>` : ''}</div>`
       : '';
     const reply = message.replyTo
       ? `<button type="button" class="bubble-reply" data-scroll-to="${esc(message.replyTo.id)}">
@@ -3335,11 +3368,7 @@
           <span>${esc(message.replyTo.deleted ? '' : (message.replyTo.body || '').slice(0, 140))}</span>
         </button>`
       : '';
-    const reactions = (message.reactions || []).map((item) => `
-      <button type="button" class="chat-reaction-chip${item.mine ? ' is-mine' : ''}" data-react="${esc(message.id)}" data-emoji="${esc(item.emoji)}">
-        <span>${esc(item.emoji)}</span><small>${item.count}</small>
-      </button>
-    `).join('');
+    const reactions = (message.reactions || []).map((item) => chatReactionChipHtml(message, item)).join('');
     const edited = message.editedAt ? '<span class="bubble-edited">изм.</span>' : '';
     // One check = saved on the server; two = at least one other member has read it.
     const check = mine && !message.pending && !message.failed
@@ -3799,6 +3828,67 @@
     }
   }
 
+  function personCircleHtml(name, avatarUrl, large) {
+    const clean = String(name || 'Участник').trim();
+    const letter = esc((clean[0] || '?').toUpperCase());
+    const url = String(avatarUrl || '').trim();
+    const photo = /^https?:\/\//i.test(url)
+      ? `<img src="${esc(url)}" alt="" onerror="this.remove()" />`
+      : '';
+    let hue = 0;
+    for (let i = 0; i < clean.length; i += 1) hue = (hue * 31 + clean.charCodeAt(i)) % 360;
+    return `<span class="chat-person-avatar${large ? ' is-large' : ''}" style="--av-hue:${hue}"><span>${letter}</span>${photo}</span>`;
+  }
+
+  function openChatPerson(message) {
+    const name = String(message?.authorName || message?.author?.name || 'Участник').trim();
+    const avatarUrl = message?.author?.avatarUrl || '';
+    $('#portal').innerHTML = `<div class="chat-person-backdrop is-center" id="modal-close">
+      <section class="chat-person-card" role="dialog" aria-modal="true" aria-label="${esc(name)}" onclick="event.stopPropagation()">
+        ${personCircleHtml(name, avatarUrl, true)}
+        <strong>${esc(name)}</strong>
+      </section>
+    </div>`;
+    bindModalClose();
+  }
+
+  function reactionPeopleRows(people) {
+    if (!people?.length) return '<p class="chat-person-status">Пока никто не поставил</p>';
+    return people.map((person) => `
+      <div class="chat-person-row">
+        ${personCircleHtml(person.name, person.avatarUrl, false)}
+        <span>${esc(person.name || 'Участник')}</span>
+      </div>
+    `).join('');
+  }
+
+  function openReactionPeople(messageId, emoji) {
+    const found = findChatMessage(messageId);
+    if (!found || !isMyChatMessage(found.message)) return;
+    const reaction = (found.message.reactions || []).find((item) => item.emoji === emoji);
+    const ready = reaction && reaction.count <= 3 ? (reaction.people || []) : null;
+    const paint = (people, status) => {
+      $('#portal').innerHTML = `<div class="chat-person-backdrop" id="modal-close">
+        <section class="chat-person-sheet" role="dialog" aria-modal="true" aria-label="Кто поставил" onclick="event.stopPropagation()">
+          <header><span>${esc(emoji)}</span><strong>Кто поставил</strong></header>
+          <div class="chat-person-list">${status ? `<p class="chat-person-status">${esc(status)}</p>` : reactionPeopleRows(people)}</div>
+        </section>
+      </div>`;
+      bindModalClose();
+    };
+    if (ready) {
+      paint(ready);
+      return;
+    }
+    paint(null, 'Загружаем…');
+    API.chatReactionPeople(messageId, emoji).then((data) => {
+      if (!$('#modal-close')) return;
+      paint(data.people || []);
+    }).catch(() => {
+      if ($('#modal-close')) paint(null, 'Не удалось открыть список');
+    });
+  }
+
   function bindChatMessageGestures(root) {
     $$('.chat-bubble[data-message-id]', root).forEach((bubble) => {
       // Optimistic bubbles have no server id yet, so no menu actions for them.
@@ -3823,6 +3913,7 @@
       };
 
       bubble.addEventListener('contextmenu', (event) => {
+        if (event.target.closest?.('[data-chat-profile], [data-react], [data-reaction-list]')) return;
         event.preventDefault();
         clearNativeSelection();
         const found = findChatMessage(messageId);
@@ -3835,6 +3926,7 @@
       }
 
       bubble.addEventListener('touchstart', (event) => {
+        if (event.target.closest?.('[data-chat-profile], [data-react], [data-reaction-list]')) return;
         if (event.touches.length !== 1) return;
         const touch = event.touches[0];
         startX = touch.clientX;
@@ -3909,6 +4001,20 @@
         } catch {
           window.alert('Не удалось обновить реакцию.');
         }
+      };
+    });
+
+    $$('[data-reaction-list]', root).forEach((button) => {
+      button.onclick = (event) => {
+        event.stopPropagation();
+        openReactionPeople(button.dataset.reactionList, button.dataset.emoji);
+      };
+    });
+    $$('[data-chat-profile]', root).forEach((button) => {
+      button.onclick = (event) => {
+        event.stopPropagation();
+        const found = findChatMessage(button.dataset.chatProfile);
+        if (found) openChatPerson(found.message);
       };
     });
 
@@ -6669,7 +6775,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '109';
+      const version = window.LOZA_ASSET_VERSION || '110';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
