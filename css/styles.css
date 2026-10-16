@@ -401,6 +401,17 @@ button {
   html:not(.is-compact) .app.immersive-ai .ai-inner-header {
     display: none;
   }
+
+  /* The header is not a grid row once it is hidden. Two rows remain:
+     the transcript takes the spare height, the composer stays one line. */
+  html:not(.is-compact) .app.immersive-ai .ai-coach-page {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  html:not(.is-compact) .app.immersive-ai .ai-composer {
+    flex-shrink: 0;
+    align-self: end;
+  }
 }
 
 .stack {
