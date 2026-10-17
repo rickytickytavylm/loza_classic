@@ -4158,20 +4158,24 @@
       bubble.dataset.gesturesBound = '1';
       const messageId = bubble.dataset.messageId;
       let pressTimer = null;
-      let armed = false;
-      let locked = false;
       let startX = 0;
       let startY = 0;
+      let startAt = 0;
+      let moved = false;
+      let opened = false;
+      let ready = false;
+      const holdMs = 340;
+      const slop = 24;
 
-      const resetPress = ({ keepLock = false } = {}) => {
+      const openHeldMenu = () => {
+        if (opened || moved) return;
+        opened = true;
+        ready = false;
         if (pressTimer) window.clearTimeout(pressTimer);
         pressTimer = null;
-        armed = false;
-        bubble.classList.remove('is-pressing');
-        if (!keepLock && locked) {
-          unlockChatSelection();
-          locked = false;
-        }
+        clearNativeSelection();
+        const found = findChatMessage(messageId);
+        if (found) openChatMessageMenu(found.message);
       };
 
       bubble.addEventListener('click', (event) => {
@@ -4180,74 +4184,52 @@
         jumpToChatSearchHit(messageId);
       });
       bubble.addEventListener('contextmenu', (event) => {
-        if (event.target.closest?.('[data-chat-profile], [data-react], [data-reaction-list]')) return;
+        if (event.target.closest?.('[data-chat-profile], [data-react], [data-reaction-list], button, a')) return;
         event.preventDefault();
-        clearNativeSelection();
-        const found = findChatMessage(messageId);
-        if (found) openChatMessageMenu(found.message);
+        if (startAt || moved || opened) return;
+        openHeldMenu();
       });
-      // Mobile long-press must not select text; desktop users can still select to copy.
       if (!window.matchMedia('(pointer: fine)').matches) {
         bubble.addEventListener('selectstart', (event) => event.preventDefault());
         bubble.addEventListener('dragstart', (event) => event.preventDefault());
       }
 
       bubble.addEventListener('touchstart', (event) => {
-        if (event.target.closest?.('[data-chat-profile], [data-react], [data-reaction-list]')) return;
+        if (event.target.closest?.('[data-chat-profile], [data-react], [data-reaction-list], button, a')) return;
         if (event.touches.length !== 1) return;
         const touch = event.touches[0];
         startX = touch.clientX;
         startY = touch.clientY;
-        armed = false;
-        pressTimer = window.setTimeout(() => {
-          armed = true;
-          bubble.classList.add('is-pressing');
-          if (!locked) {
-            lockChatSelection();
-            locked = true;
-          }
-          clearNativeSelection();
-          if (navigator.vibrate) {
-            try { navigator.vibrate(12); } catch { /* ignore */ }
-          }
-        }, 280);
+        startAt = Date.now();
+        moved = false;
+        opened = false;
+        ready = false;
+        if (pressTimer) window.clearTimeout(pressTimer);
+        pressTimer = window.setTimeout(() => { ready = true; }, holdMs);
       }, { passive: true });
 
-      // Non-passive: once armed, cancel iOS text-selection gesture.
       bubble.addEventListener('touchmove', (event) => {
-        if (armed) {
-          event.preventDefault();
-          clearNativeSelection();
-          return;
-        }
-        if (!pressTimer) return;
         const touch = event.touches[0];
         if (!touch) return;
-        if (Math.abs(touch.clientX - startX) > 8 || Math.abs(touch.clientY - startY) > 8) {
-          resetPress();
+        if (Math.abs(touch.clientX - startX) > slop || Math.abs(touch.clientY - startY) > slop) {
+          moved = true;
+          ready = false;
+          if (pressTimer) window.clearTimeout(pressTimer);
+          pressTimer = null;
         }
-      }, { passive: false });
+      }, { passive: true });
 
-      bubble.addEventListener('touchend', (event) => {
-        const shouldOpen = armed;
-        if (!shouldOpen) {
-          resetPress();
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        bubble.classList.remove('is-pressing');
+      const finishTouch = () => {
+        const held = startAt ? Date.now() - startAt : 0;
+        const ok = !moved && held >= holdMs - 80;
+        if (pressTimer) window.clearTimeout(pressTimer);
         pressTimer = null;
-        armed = false;
-        clearNativeSelection();
-        const found = findChatMessage(messageId);
-        // Keep selection lock through the menu lifetime.
-        locked = false;
-        if (found) openChatMessageMenu(found.message);
-        else unlockChatSelection();
-      }, { passive: false });
-
-      bubble.addEventListener('touchcancel', () => resetPress());
+        ready = false;
+        if (ok) openHeldMenu();
+        startAt = 0;
+      };
+      bubble.addEventListener('touchend', finishTouch);
+      bubble.addEventListener('touchcancel', finishTouch);
     });
 
     $$('[data-chat-tag]', root).forEach((btn) => {
@@ -7251,7 +7233,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '114';
+      const version = window.LOZA_ASSET_VERSION || '115';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
