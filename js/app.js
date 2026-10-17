@@ -1103,14 +1103,6 @@
       </button>`).join('');
   }
 
-  function psychologistHeader(title) {
-    return `<header class="inner-page-header">
-      <button class="inner-page-back" type="button" data-psy-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
-      ${innerBrand(title)}
-      <span class="inner-page-spacer" aria-hidden="true"></span>
-    </header>`;
-  }
-
   function renderPsychologistCatalog() {
     const cards = psychologists().map((person) => `
       <button class="psy-list-card" type="button" data-psy="${esc(person.slug)}">
@@ -1125,7 +1117,6 @@
         </span>
       </button>`).join('');
     return `<article class="psy-catalog">
-      ${psychologistHeader('Психологи клуба')}
       <div class="psy-catalog-body">
         <p>Выберите специалиста, с которым сможете обсудить то, что важно именно вам.</p>
         <div class="psy-list">${cards}</div>
@@ -1140,7 +1131,7 @@
   function renderPsychologistPage(slug) {
     const person = psychologistBySlug(slug);
     if (!person) {
-      return `<article class="psy-catalog">${psychologistHeader('Психологи клуба')}<div class="psy-catalog-body"><p>Специалист не найден.</p></div></article>`;
+      return `<article class="psy-catalog"><div class="psy-catalog-body"><p>Специалист не найден.</p></div></article>`;
     }
     const topics = person.specializations.map((item) => `<li>${esc(item)}</li>`).join('');
     const formats = person.formats.map((item) => `<li>${esc(item)}</li>`).join('');
@@ -1229,7 +1220,7 @@
             <span class="eyebrow">Поддержка рядом</span>
             <h2>Психологи клуба</h2>
           </div>
-          <button class="psy-all" type="button" data-psy-catalog>Все психологи ${ic('arrowRight', 16)}</button>
+          <button class="psy-all" type="button" data-psy-catalog aria-label="Все психологи">${ic('arrowRight', 22)}</button>
         </header>
         <p class="psy-lead">Специалисты, которые помогут разобраться в сложной ситуации и найти путь к изменениям.</p>
         <div class="psy-rail">${psychologistCardsHtml()}</div>
@@ -7233,7 +7224,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '115';
+      const version = window.LOZA_ASSET_VERSION || '116';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

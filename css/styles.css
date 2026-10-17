@@ -8483,17 +8483,16 @@ div.profile-avatar-wrap {
 }
 
 .psy-all {
-  display: inline-flex;
+  display: grid;
   flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 2px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--olive-dark);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
   cursor: pointer;
 }
 
@@ -8797,10 +8796,6 @@ div.profile-avatar-wrap {
     bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
     padding: 14px 16px 8px;
     background: linear-gradient(180deg, rgba(246, 243, 250, 0), #f6f3fa 36%);
-  }
-
-  .psy-home-head {
-    flex-wrap: wrap;
   }
 }
 
