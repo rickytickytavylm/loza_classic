@@ -23,7 +23,7 @@ window.LOZA_PSYCHOLOGISTS = [
     familyDuration: '90 минут',
     formats: ['Онлайн, Zoom', 'Очно в Москве, 5 минут от метро Курская/Чкаловская'],
     location: 'Очно в Москве, 5 минут от метро Курская/Чкаловская',
-    bookingUrl: 'https://t.me/ksanka_rr',
+    bookingUrl: 'https://t.me/aredovevgenij',
   },
   {
     id: 'aredov',
@@ -49,7 +49,7 @@ window.LOZA_PSYCHOLOGISTS = [
     familyDuration: '90 минут',
     formats: ['Онлайн, Zoom', 'Очно в Москве, 5 минут от метро Курская/Чкаловская'],
     location: 'Очно в Москве, 5 минут от метро Курская/Чкаловская',
-    bookingUrl: 'https://t.me/ksanka_rr',
+    bookingUrl: 'https://t.me/aredovevgenij',
   },
   {
     id: 'ovechkina',
@@ -75,6 +75,6 @@ window.LOZA_PSYCHOLOGISTS = [
     familyDuration: '90 минут',
     formats: ['Онлайн, Zoom'],
     location: '',
-    bookingUrl: 'https://t.me/ksanka_rr',
+    bookingUrl: 'https://t.me/aredovevgenij',
   },
 ];
