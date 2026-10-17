@@ -129,8 +129,16 @@
       return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
     },
     chatTaggedMessages: (roomId, before, tag) => {
-      const params = new URLSearchParams({ guestId: getGuestId(), tag: String(tag || ''), limit: '200' });
+      const params = new URLSearchParams({ guestId: getGuestId(), tag: String(tag || ''), limit: '80' });
       if (before) params.set('before', before);
+      return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
+    },
+    chatSearchMessages: (roomId, query) => {
+      const params = new URLSearchParams({
+        guestId: getGuestId(),
+        q: String(query || ''),
+        limit: '80',
+      });
       return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
     },
     markChatRead: (roomId, messageId) =>

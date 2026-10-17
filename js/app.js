@@ -131,6 +131,10 @@
     chatTagHits: [],
     chatTagHasMore: false,
     chatTagLoading: false,
+    chatSearchOpen: false,
+    chatSearchQuery: '',
+    chatSearchHits: [],
+    chatSearchLoading: false,
     chatStreamStatus: 'connecting', // connecting | live | offline
     // Persisted so your own messages stay "yours" after a reload, even when the
     // session drops and the server briefly treats you as a fresh guest.
@@ -2706,6 +2710,13 @@
     return stored.concat(extra);
   }
 
+  function highlightChatSearch(html, query) {
+    const q = String(query || '').trim();
+    if (q.length < 2) return html;
+    const re = new RegExp(escapeRegExp(esc(q)), 'gi');
+    return html.replace(re, (match) => `<mark class="chat-search-mark">${match}</mark>`);
+  }
+
   function highlightChatMentions(html, mentions) {
     const names = [...new Set((mentions || []).map((item) => String(item.name || '').trim()).filter(Boolean))]
       .sort((a, b) => b.length - a.length);
@@ -2718,6 +2729,7 @@
   function formatChatBody(text, meetings = [], mentions = []) {
     const meetingUrls = new Set(meetings.map((item) => item.url));
     let html = esc(text);
+    if (state.chatSearchOpen) html = highlightChatSearch(html, state.chatSearchQuery);
 
     html = html.replace(URL_PATTERN, (rawUrl) => {
       const trailing = rawUrl.match(/[),.;]+$/)?.[0] || '';
@@ -3424,33 +3436,40 @@
       message.seenByOthers ? 's' : '',
       message.isPinned ? 'pin' : '',
       (mentionHighlightsFor(message)).map((item) => `${item.userId || ''}:${item.name}`).join(','),
+      state.chatSearchOpen ? state.chatSearchQuery.trim().toLocaleLowerCase('ru') : '',
     ].join('\u0001'));
   }
 
   /** Keyed timeline entries so the thread can be patched instead of rebuilt. */
   function chatTimelineItems(room) {
-    const filtering = Boolean(state.chatTag);
-    const messages = filtering ? (state.chatTagHits || []) : (room?.messages || []);
-    if (filtering && state.chatTagLoading && !messages.length) {
+    const searching = state.chatSearchOpen && state.chatSearchQuery.trim().length >= 1;
+    const filtering = !searching && Boolean(state.chatTag);
+    const messages = searching
+      ? (state.chatSearchHits || [])
+      : (filtering ? (state.chatTagHits || []) : (room?.messages || []));
+    if ((filtering && state.chatTagLoading && !messages.length) || (searching && state.chatSearchLoading && !messages.length)) {
       return [{
         key: 'tag-loading',
-        sig: 'loading',
-        html: '<div class="empty-chat" data-key="tag-loading" data-sig="loading"><p>Собираем сообщения…</p></div>',
+        sig: searching ? `search-loading-${state.chatSearchQuery}` : 'loading',
+        html: `<div class="empty-chat" data-key="tag-loading" data-sig="${searching ? 'search-loading' : 'loading'}"><p>${searching ? 'Ищем…' : 'Собираем сообщения…'}</p></div>`,
       }];
     }
     if (!messages.length) {
-      const text = filtering
-        ? `С тегом #${state.chatTag} в этом чате пока ничего нет.`
-        : 'Напишите первое сообщение.';
+      const text = searching
+        ? 'В этом чате такого нет.'
+        : filtering
+          ? `С тегом #${state.chatTag} в этом чате пока ничего нет.`
+          : 'Напишите первое сообщение.';
+      const sig = searching ? `empty-search-${state.chatSearchQuery}` : (filtering ? `empty-${state.chatTag}` : 'empty');
       return [{
         key: 'empty',
-        sig: filtering ? `empty-${state.chatTag}` : 'empty',
-        html: `<div class="empty-chat" data-key="empty" data-sig="empty"><p>${esc(text)}</p></div>`,
+        sig,
+        html: `<div class="empty-chat" data-key="empty" data-sig="${esc(sig)}"><p>${esc(text)}</p></div>`,
       }];
     }
 
     const items = [];
-    if (!filtering && room?.hasMore) {
+    if (!filtering && !searching && room?.hasMore) {
       items.push({
         key: 'history-top',
         sig: state.chatHistoryLoading ? 'load' : 'hint',
@@ -3460,7 +3479,7 @@
       });
     }
     let lastDateKey = '';
-    const anchor = !filtering && state.chatUnreadAnchor?.roomId === room?.id ? state.chatUnreadAnchor : null;
+    const anchor = !filtering && !searching && state.chatUnreadAnchor?.roomId === room?.id ? state.chatUnreadAnchor : null;
     messages.forEach((message, messageIndex) => {
       if (anchor && anchor.beforeId === message.id) {
         items.push({
@@ -3711,16 +3730,20 @@
         ${roomsListInner}
       </aside>
       <section class="telegram-thread chat-background chat-background-${esc(preset.id)}" style="${chatBgVars(preset)}">
-        <header class="telegram-header">
-          <button class="telegram-header-back" type="button" id="chat-back" aria-label="К списку чатов">${ic('chevronLeft', 22)}</button>
-          <div class="telegram-header-pill">
-            <strong>${esc(selectedRoom?.title || 'Чат клуба')}</strong>
-            <span>${esc(chatHeaderSubtitle(selectedRoom))}</span>
-          </div>
-          <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>
+        <header class="telegram-header${state.chatSearchOpen ? ' is-searching' : ''}">
+          ${state.chatSearchOpen
+            ? `<button class="telegram-header-back" type="button" id="chat-search-close" aria-label="Закрыть поиск">${ic('x', 22)}</button>
+               <input id="chat-search" class="chat-search-input" type="search" placeholder="Найти в этом чате" autocomplete="off" enterkeyhint="search" value="${esc(state.chatSearchQuery)}" />`
+            : `<button class="telegram-header-back" type="button" id="chat-back" aria-label="К списку чатов">${ic('chevronLeft', 22)}</button>
+               <div class="telegram-header-pill">
+                 <strong>${esc(selectedRoom?.title || 'Чат клуба')}</strong>
+                 <span>${esc(chatHeaderSubtitle(selectedRoom))}</span>
+               </div>
+               <button class="telegram-header-search" type="button" id="chat-search-open" aria-label="Найти в этом чате">${ic('search', 20)}</button>
+               <button class="telegram-header-settings" type="button" id="chat-settings" aria-label="Настройки фона чата">${ic('settings', 20)}</button>`}
         </header>
-        ${chatTagBarHtml()}
-        ${chatPinnedBarHtml(selectedRoom)}
+        ${state.chatSearchOpen ? '' : chatTagBarHtml()}
+        ${state.chatSearchOpen ? '' : chatPinnedBarHtml(selectedRoom)}
         <div class="telegram-messages">
           <div class="telegram-messages-canvas">
             ${timeline.join('')}
@@ -4109,6 +4132,11 @@
         }
       };
 
+      bubble.addEventListener('click', (event) => {
+        if (!state.chatSearchOpen || state.chatSearchQuery.trim().length < 1) return;
+        if (event.target.closest('button, a, .chat-reaction-chip, .bubble-photo')) return;
+        jumpToChatSearchHit(messageId);
+      });
       bubble.addEventListener('contextmenu', (event) => {
         if (event.target.closest?.('[data-chat-profile], [data-react], [data-reaction-list]')) return;
         event.preventDefault();
@@ -4252,6 +4280,94 @@
     API.chatTyping(state.selectedRoomId).catch(() => {});
   }
 
+  let chatSearchTimer = 0;
+  let chatSearchSeq = 0;
+
+  function localChatSearch(room, query) {
+    const q = String(query || '').trim().toLocaleLowerCase('ru');
+    if (!q) return [];
+    return (room?.messages || []).filter((message) => {
+      if (message.pending || message.failed) return false;
+      const body = String(message.body || message.text || '').toLocaleLowerCase('ru');
+      const name = String(message.authorName || message.author?.name || '').toLocaleLowerCase('ru');
+      return body.includes(q) || name.includes(q);
+    });
+  }
+
+  function closeChatSearch() {
+    clearTimeout(chatSearchTimer);
+    chatSearchSeq += 1;
+    state.chatSearchOpen = false;
+    state.chatSearchQuery = '';
+    state.chatSearchHits = [];
+    state.chatSearchLoading = false;
+  }
+
+  function openChatSearch() {
+    state.chatTag = '';
+    state.chatTagHits = [];
+    state.chatTagHasMore = false;
+    state.chatTagLoading = false;
+    state.chatSearchOpen = true;
+    state.chatSearchQuery = '';
+    state.chatSearchHits = [];
+    state.chatSearchLoading = false;
+    renderScreen();
+    window.setTimeout(() => $('#chat-search')?.focus(), 40);
+  }
+
+  function applyChatSearchQuery(value) {
+    const roomId = state.selectedRoomId;
+    const room = state.chatRooms.find((item) => item.id === roomId);
+    state.chatSearchQuery = String(value || '');
+    const q = state.chatSearchQuery.trim();
+    if (!room || q.length < 2) {
+      clearTimeout(chatSearchTimer);
+      chatSearchSeq += 1;
+      state.chatSearchLoading = false;
+      state.chatSearchHits = q ? localChatSearch(room, q) : [];
+      renderChatLive();
+      const scroller = $('.telegram-messages');
+      if (scroller && q) scroller.scrollTop = scroller.scrollHeight;
+      return;
+    }
+    state.chatSearchHits = localChatSearch(room, q);
+    state.chatSearchLoading = true;
+    renderChatLive();
+    clearTimeout(chatSearchTimer);
+    const seq = ++chatSearchSeq;
+    chatSearchTimer = window.setTimeout(async () => {
+      try {
+        const data = await API.chatSearchMessages(roomId, q);
+        if (seq !== chatSearchSeq || state.chatSearchQuery.trim() !== q || state.selectedRoomId !== roomId) return;
+        state.chatSearchHits = (data.messages || []).map(normalizeChatMessage);
+      } catch {
+        /* keep the matches already on screen */
+      } finally {
+        if (seq === chatSearchSeq) {
+          state.chatSearchLoading = false;
+          renderChatLive();
+          const scroller = $('.telegram-messages');
+          if (scroller) scroller.scrollTop = scroller.scrollHeight;
+        }
+      }
+    }, 280);
+  }
+
+  function jumpToChatSearchHit(messageId) {
+    const room = state.chatRooms.find((item) => item.id === state.selectedRoomId);
+    const hit = (state.chatSearchHits || []).find((item) => item.id === messageId)
+      || (room?.messages || []).find((item) => item.id === messageId);
+    closeChatSearch();
+    if (room && hit && !(room.messages || []).some((item) => item.id === hit.id)) {
+      room.messages = [...(room.messages || []), hit].sort(
+        (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+      );
+    }
+    renderChatLive();
+    window.setTimeout(() => scrollChatToMessage(messageId), 40);
+  }
+
   function bindChat(root) {
     $$('[data-room]', root).forEach((b) => {
       b.onclick = () => {
@@ -4265,6 +4381,7 @@
           return;
         }
         captureChatDraft();
+        closeChatSearch();
         state.selectedRoomId = b.dataset.room;
         state.chatTag = '';
         state.chatTagHits = [];
@@ -4278,6 +4395,7 @@
     });
     $('#chat-back', root)?.addEventListener('click', () => {
       captureChatDraft();
+      closeChatSearch();
       state.chatView = 'rooms';
       state.chatUnreadAnchor = null;
       chatPositionedRoomId = '';
@@ -4287,6 +4405,18 @@
       setImmersive();
     });
     $('#chat-settings', root)?.addEventListener('click', () => openChatBgPicker());
+    $('#chat-search-open', root)?.addEventListener('click', () => openChatSearch());
+    $('#chat-search-close', root)?.addEventListener('click', () => {
+      closeChatSearch();
+      renderScreen();
+    });
+    const searchInput = $('#chat-search', root);
+    searchInput?.addEventListener('input', () => applyChatSearchQuery(searchInput.value));
+    if (searchInput && state.chatSearchOpen) {
+      const end = searchInput.value.length;
+      searchInput.focus();
+      try { searchInput.setSelectionRange(end, end); } catch { /* ignore */ }
+    }
     $$('[data-chat-tag-pick]', root).forEach((btn) => {
       btn.onclick = () => {
         const tag = btn.dataset.chatTagPick;
@@ -6986,7 +7116,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '112';
+      const version = window.LOZA_ASSET_VERSION || '113';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
