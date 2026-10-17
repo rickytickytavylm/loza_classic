@@ -141,6 +141,13 @@
       });
       return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
     },
+    chatMessagesAround: (roomId, messageId) => {
+      const params = new URLSearchParams({
+        guestId: getGuestId(),
+        around: String(messageId || ''),
+      });
+      return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
+    },
     markChatRead: (roomId, messageId) =>
       request(`/chat/rooms/${roomId}/read`, {
         method: 'POST',
@@ -153,7 +160,7 @@
       }),
     chatMentionMembers: (roomId) =>
       request(`/chat/rooms/${roomId}/members?guestId=${encodeURIComponent(getGuestId())}`),
-    sendChatMessage: (roomId, body, replyToId, attachmentIds, senderEndpoint, mentionIds) =>
+    sendChatMessage: (roomId, body, replyToId, attachmentIds, senderEndpoint, mentionIds, linkMessageId) =>
       request(`/chat/rooms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify({
@@ -161,6 +168,7 @@
           replyToId: replyToId || undefined,
           attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
           mentions: mentionIds?.length ? mentionIds : undefined,
+          linkMessageId: linkMessageId || undefined,
           senderEndpoint: senderEndpoint || undefined,
           guestId: getGuestId(),
         }),

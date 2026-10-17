@@ -3163,6 +3163,7 @@
     const wasSettling = chatSettling;
     cancelChatSettle();
     if (!wasSettling) return;
+    chatJumpMessageId = '';
     const list = $('.telegram-messages');
     updateChatReadFromScroll(list);
     updateChatJumps(list);
@@ -3179,7 +3180,22 @@
     });
   }
 
+  let chatJumpMessageId = '';
+  let openChatLinkJump = async () => {};
+
   function placeChatScroll(scroller, resume) {
+    if (chatJumpMessageId) {
+      const target = scroller.querySelector(`[data-message-id="${chatJumpMessageId}"]`);
+      if (target) {
+        const scRect = scroller.getBoundingClientRect();
+        const elRect = target.getBoundingClientRect();
+        scroller.scrollTop += elRect.top - scRect.top - 72;
+        target.classList.add('is-flash');
+        window.setTimeout(() => target.classList.remove('is-flash'), 1200);
+        updateChatJumps(scroller);
+        return;
+      }
+    }
     const anchorEl = resume ? scroller.querySelector('[data-key="unread-divider"]') : null;
     if (anchorEl) {
       const scRect = scroller.getBoundingClientRect();
@@ -3436,6 +3452,7 @@
       message.seenByOthers ? 's' : '',
       message.isPinned ? 'pin' : '',
       (mentionHighlightsFor(message)).map((item) => `${item.userId || ''}:${item.name}`).join(','),
+      message.linkTo ? `${message.linkTo.id}:${message.linkTo.deleted ? 'd' : message.linkTo.body || ''}` : '',
       state.chatSearchOpen ? state.chatSearchQuery.trim().toLocaleLowerCase('ru') : '',
     ].join('\u0001'));
   }
@@ -3571,6 +3588,19 @@
     </span>`;
   }
 
+  function chatLinkCardHtml(message) {
+    const link = message.linkTo;
+    if (!link?.id) return '';
+    const preview = link.deleted ? 'Сообщение удалено' : (link.body || 'Сообщение');
+    const room = link.roomTitle || 'Чат';
+    const who = link.authorName || 'Участник';
+    return `<button type="button" class="chat-deeplink${link.deleted ? ' is-deleted' : ''}" data-chat-link="${esc(link.id)}" data-chat-link-room="${esc(link.roomId || '')}">
+      <span>${esc(room)}</span>
+      <strong>${esc(who)}</strong>
+      <em>${esc(preview)}</em>
+    </button>`;
+  }
+
   function renderChatBubble(message, mine, sig, showAvatar = true) {
     const signature = sig ?? chatBubbleSignature(message, mine);
     const avatarHtml = mine ? '' : chatAvatarHtml(message, showAvatar);
@@ -3584,6 +3614,7 @@
           <span>${esc(message.replyTo.deleted ? '' : (message.replyTo.body || '').slice(0, 140))}</span>
         </button>`
       : '';
+    const linkCard = chatLinkCardHtml(message);
     const reactions = (message.reactions || []).map((item) => chatReactionChipHtml(message, item)).join('');
     const edited = message.editedAt ? '<span class="bubble-edited">изм.</span>' : '';
     // One check = saved on the server; two = at least one other member has read it.
@@ -3616,13 +3647,13 @@
     // Photos and link cards bring their own frame, so the coloured bubble around
     // them is just visual noise. A quote or the intro badge still needs one.
     const photoOnly = Boolean(photos) && !formattedBody && !meetings.length;
-    const mediaOnly = (photoOnly || meetingOnly) && !reply && !intro;
+    const mediaOnly = (photoOnly || meetingOnly) && !reply && !intro && !linkCard;
     const mediaClass = `${mediaOnly ? ' is-media-only' : ''}${photoOnly && mediaOnly ? ' is-photo-only' : ''}`;
 
     return `<article class="chat-bubble ${mine ? 'mine' : 'incoming has-avatar'}${introClass}${meetingClass}${photoClass}${mediaClass}${message.pending ? ' is-pending' : ''}${message.failed ? ' is-failed' : ''}" data-message-id="${esc(message.id)}" data-key="msg-${esc(message.id)}" data-sig="${esc(signature)}"${message.pending ? ' data-pending="1"' : ''}${message.failed ? ' data-failed="1"' : ''}>
       ${avatarHtml}
       <div class="bubble-body">
-        ${author}${reply}${introBadge}
+        ${author}${reply}${linkCard}${introBadge}
         ${photos}
         ${bodyHtml}
         ${meetingCards}
@@ -3895,6 +3926,7 @@
         <div class="chat-msg-menu-emojis">${emojis}</div>
         <div class="chat-msg-menu-actions">
           <button type="button" data-chat-action="reply">${ic('reply', 18)}<span>Ответить</span></button>
+          <button type="button" data-chat-action="link">${ic('link', 18)}<span>Ссылка</span></button>
           ${copyAction}
           ${pinAction}
           ${ownActions}
@@ -3936,6 +3968,16 @@
         closePortal();
         if (action === 'reply') {
           setChatReply(message);
+          return;
+        }
+        if (action === 'link') {
+          const url = `https://lozapsy.help/m/${message.id}`;
+          try {
+            await navigator.clipboard.writeText(url);
+            showAppToast('Ссылка скопирована. Вставьте её в сообщение.', { title: 'Чат' });
+          } catch {
+            window.prompt('Скопируйте ссылку', url);
+          }
           return;
         }
         if (action === 'edit') {
@@ -4258,6 +4300,12 @@
   /** Handlers that every bubble needs, safe to call again after a patch. */
   function bindChatThreadInteractions(scope) {
     bindChatMessageGestures(scope);
+    $$('[data-chat-link]', scope).forEach((button) => {
+      button.onclick = (event) => {
+        event.stopPropagation();
+        openChatLinkJump(button.dataset.chatLinkRoom, button.dataset.chatLink);
+      };
+    });
     $$('[data-photo]', scope).forEach((b) => {
       b.onclick = (event) => {
         event.stopPropagation();
@@ -4498,10 +4546,93 @@
       b.onclick = () => removeChatAttachment(b.dataset.attachRemove);
     });
 
-    $('#chat-form', root)?.addEventListener('submit', async (e) => {
+  function takeChatMessageLink(raw) {
+    let id = null;
+    const body = String(raw || '').replace(
+      /https?:\/\/(?:www\.)?(?:lozapsy\.help|loza-club\.ru)\/m\/([a-z0-9]{10,40})/gi,
+      (_full, messageId) => {
+        if (!id) id = messageId;
+        return ' ';
+      },
+    ).replace(/[ ]{2,}/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    return { id, body };
+  }
+
+  function findLinkPreview(messageId) {
+    for (const room of state.chatRooms) {
+      const message = (room.messages || []).find((item) => item.id === messageId);
+      if (!message) continue;
+      return {
+        id: message.id,
+        roomId: room.id,
+        roomTitle: room.title || 'Чат',
+        authorName: message.authorName || message.author?.name || 'Участник',
+        body: String(message.body || message.text || '').replace(/\s+/g, ' ').trim().slice(0, 140),
+        deleted: false,
+      };
+    }
+    return {
+      id: messageId,
+      roomId: '',
+      roomTitle: 'Чат',
+      authorName: '',
+      body: 'Открыть сообщение',
+      deleted: false,
+    };
+  }
+
+  openChatLinkJump = async function openLinkedChatMessage(roomId, messageId) {
+    const room = state.chatRooms.find((item) => item.id === roomId);
+    if (!roomId || !messageId || !room) {
+      showAppToast('Не удалось открыть сообщение', { title: 'Чат' });
+      return;
+    }
+    if (room.locked && !isStaffUser()) {
+      openPaywall({
+        reason: 'chat',
+        title: 'Закрытый чат клуба',
+        text: 'Этот чат открывается с тарифа «Клуб».',
+        preferPlan: 'club_30',
+      });
+      return;
+    }
+    closeChatSearch();
+    state.chatTag = '';
+    state.chatTagHits = [];
+    state.chatTagHasMore = false;
+    if (!(room.messages || []).some((item) => item.id === messageId)) {
+      try {
+        const data = await API.chatMessagesAround(roomId, messageId);
+        const incoming = (data.messages || []).map(normalizeChatMessage);
+        const byId = new Map((room.messages || []).map((item) => [item.id, item]));
+        incoming.forEach((item) => byId.set(item.id, { ...byId.get(item.id), ...item }));
+        room.messages = [...byId.values()].sort(
+          (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+        );
+      } catch {
+        showAppToast('Не удалось открыть сообщение', { title: 'Чат' });
+        return;
+      }
+    }
+    if (!(room.messages || []).some((item) => item.id === messageId)) {
+      showAppToast('Сообщение уже удалено', { title: 'Чат' });
+      return;
+    }
+    chatJumpMessageId = messageId;
+    state.selectedRoomId = roomId;
+    state.chatView = 'thread';
+    state.chatScrollPending = true;
+    chatPositionedRoomId = '';
+    renderScreen();
+    setImmersive();
+  }
+
+  $('#chat-form', root)?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = $('#chat-draft', root);
-      const body = input?.value.trim() || '';
+      const linked = takeChatMessageLink(input?.value || '');
+      const body = linked.body;
+      const linkMessageId = linked.id;
       if (!state.selectedRoomId) return;
 
       const compose = state.chatCompose;
@@ -4512,7 +4643,7 @@
         return;
       }
       const attachmentIds = attachments.filter((item) => item.id).map((item) => item.id);
-      if (!body && !attachmentIds.length) return;
+      if (!body && !attachmentIds.length && !linkMessageId) return;
       if (body.length > 8000) {
         showAppToast('Слишком длинный текст. Сократите и отправьте ещё раз.', { title: 'Чат', tone: 'warn' });
         return;
@@ -4537,6 +4668,7 @@
 
       // Show the bubble right away; the server copy replaces it on reply.
       const pending = editing ? null : addPendingChatMessage(body, attachments, compose, pickedMentions);
+      if (pending && linkMessageId) pending.linkTo = findLinkPreview(linkMessageId);
       const sentAttachments = editing ? [] : attachments;
       if (!editing) state.chatAttachments = [];
       clearChatCompose();
@@ -4557,6 +4689,7 @@
             attachmentIds,
             state.pushEndpoint || undefined,
             mentionIds,
+            linkMessageId,
           );
           removePendingChatMessage(pending);
           if (data.message) {
@@ -4595,6 +4728,7 @@
             replyToId: compose?.mode === 'reply' ? compose.messageId : undefined,
             attachments: sentAttachments,
             mentionIds,
+            linkMessageId,
           };
         }
         renderChatLive();
@@ -4626,6 +4760,7 @@
         payload.attachmentIds,
         state.pushEndpoint || undefined,
         payload.mentionIds,
+        payload.linkMessageId,
       );
       removePendingChatMessage(message);
       if (data.message) {
@@ -7116,7 +7251,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '113';
+      const version = window.LOZA_ASSET_VERSION || '114';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

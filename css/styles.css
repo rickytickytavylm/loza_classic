@@ -3028,6 +3028,56 @@ button.chat-hashtag {
   color: #3f8a36;
 }
 
+.chat-deeplink {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-left: 3px solid #5f4b78;
+  border-radius: 10px;
+  background: rgba(95, 75, 120, 0.08);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-deeplink span {
+  color: #5f4b78;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chat-deeplink strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.chat-deeplink em {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--muted);
+  font-style: normal;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.chat-bubble.mine .chat-deeplink {
+  border-left-color: #3f8a36;
+  background: rgba(47, 122, 40, 0.1);
+}
+
+.chat-bubble.mine .chat-deeplink span,
+.chat-bubble.mine .chat-deeplink strong {
+  color: #1d6a28;
+}
+
 .bubble-reply span {
   display: -webkit-box;
   overflow: hidden;
