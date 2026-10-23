@@ -1230,8 +1230,9 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   height: 100%;
+  overflow-y: auto;
   padding: calc(env(safe-area-inset-top, 0px) + 64px) 28px calc(env(safe-area-inset-bottom, 0px) + 40px);
   gap: 0;
   color: #fff;
@@ -1371,6 +1372,37 @@ button {
 .audio-modal-play-btn:active {
   opacity: 0.85;
   transform: scale(0.94);
+}
+
+.audio-modal-speeds {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.audio-speed {
+  min-width: 68px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.16);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+
+.audio-speed.is-active {
+  color: #2b2735;
+  background: #fff;
+}
+
+.audio-speed:active {
+  transform: scale(0.96);
 }
 
 .audio-modal-error {

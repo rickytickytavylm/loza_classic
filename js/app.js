@@ -2437,6 +2437,11 @@
             <input aria-label="Перемотка" class="audio-modal-seek" id="audio-seek" max="100" min="0" type="range" value="0" />
             <div class="audio-modal-times"><span id="audio-time-current">0:00</span><span id="audio-time-duration">0:00</span></div>
             <button aria-label="Воспроизвести" class="audio-modal-play-btn" id="audio-play" type="button">${ic('play', 34)}</button>
+            <div class="audio-modal-speeds" role="group" aria-label="Скорость">${[1, 1.25, 2].map((rate) => {
+              const active = rate === readAudioRate();
+              const label = rate === 1.25 ? '1.25×' : `${rate}×`;
+              return `<button type="button" class="audio-speed${active ? ' is-active' : ''}" data-audio-rate="${rate}" aria-pressed="${active ? 'true' : 'false'}">${label}</button>`;
+            }).join('')}</div>
           </div>
         </div>
       </div>
@@ -2458,16 +2463,37 @@
     return localAsset(`assets/webp/audio-cover-${String((hash % 10) + 1).padStart(2, '0')}.webp`);
   }
 
+  function readAudioRate() {
+    try {
+      const value = Number(localStorage.getItem('loza-audio-rate'));
+      if (value === 1 || value === 1.25 || value === 2) return value;
+    } catch { /* keep the normal speed */ }
+    return 1;
+  }
+
   function bindAudioPlayer(item) {
     const audio = $('#audio-player-el');
     const seek = $('#audio-seek');
     const playBtn = $('#audio-play');
     const timeCurrent = $('#audio-time-current');
     const timeDuration = $('#audio-time-duration');
+    const speedButtons = $$('[data-audio-rate]');
     if (!audio || !seek || !playBtn) return;
 
     let isPlaying = false;
     let isScrubbing = false;
+
+    function applyAudioRate(rate) {
+      const next = rate === 1.25 || rate === 2 ? rate : 1;
+      audio.playbackRate = next;
+      audio.preservesPitch = true;
+      try { localStorage.setItem('loza-audio-rate', String(next)); } catch { /* playback still changes */ }
+      speedButtons.forEach((button) => {
+        const active = Number(button.dataset.audioRate) === next;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
 
     function paint() {
       const duration = audio.duration || 0;
@@ -2488,10 +2514,14 @@
       paint();
     }
 
-    audio.addEventListener('loadedmetadata', syncUi);
+    audio.addEventListener('loadedmetadata', () => { applyAudioRate(readAudioRate()); syncUi(); });
     audio.addEventListener('durationchange', syncUi);
     audio.addEventListener('timeupdate', syncUi);
-    audio.addEventListener('play', () => { isPlaying = true; syncUi(); });
+    audio.addEventListener('play', () => {
+      audio.playbackRate = readAudioRate();
+      isPlaying = true;
+      syncUi();
+    });
     audio.addEventListener('pause', () => { isPlaying = false; syncUi(); });
     audio.addEventListener('ended', () => { isPlaying = false; audio.currentTime = 0; syncUi(); });
 
@@ -2516,7 +2546,11 @@
       if (isPlaying) audio.pause();
       else audio.play().catch(() => {});
     });
+    speedButtons.forEach((button) => {
+      button.addEventListener('click', () => applyAudioRate(Number(button.dataset.audioRate)));
+    });
 
+    applyAudioRate(readAudioRate());
     syncUi();
     // Auto-start playback when the player opens (best-effort; browsers may block
     // until the user interacts, in which case the play button stays available).
@@ -7224,7 +7258,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '117';
+      const version = window.LOZA_ASSET_VERSION || '118';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
