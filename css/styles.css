@@ -2373,6 +2373,17 @@ body.rules-open {
   display: grid;
 }
 
+.chat-search-field {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 40px;
+  padding-right: 4px;
+  border-radius: 14px;
+  background: rgba(var(--plum-rgb), 0.06);
+}
+
 .chat-search-input {
   grid-column: 2;
   width: 100%;
@@ -2386,6 +2397,117 @@ body.rules-open {
   color: var(--ink);
   font: inherit;
   font-size: 16px;
+}
+
+.chat-search-field .chat-search-input {
+  grid-column: auto;
+  flex: 1;
+  width: auto;
+  background: transparent;
+}
+
+.chat-search-calendar {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--olive-dark);
+  background: transparent;
+}
+
+.chat-search-calendar.is-open {
+  background: rgba(var(--plum-rgb), 0.08);
+}
+
+.chat-calendar {
+  flex-shrink: 0;
+  margin: 0 12px 8px;
+  padding: 12px 12px 10px;
+  border-radius: 18px;
+  background: rgba(255, 252, 250, 0.96);
+  box-shadow: 0 10px 28px rgba(43, 39, 53, 0.08);
+}
+
+.chat-cal-head {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.chat-cal-head strong {
+  color: var(--ink);
+  font-size: 16px;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.chat-cal-head button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  color: var(--ink);
+  background: transparent;
+}
+
+.chat-cal-head button:disabled {
+  opacity: 0.28;
+}
+
+.chat-cal-week,
+.chat-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.chat-cal-week span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.chat-cal-day {
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: rgba(43, 39, 53, 0.38);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chat-cal-day.has-messages {
+  color: var(--ink);
+  background: rgba(94, 139, 90, 0.16);
+}
+
+.chat-cal-day.is-today {
+  box-shadow: inset 0 0 0 1.5px var(--olive-dark);
+}
+
+.chat-date-jump {
+  display: block;
+  margin: 24px auto;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+  box-shadow: 0 8px 24px rgba(43, 39, 53, 0.08);
 }
 
 .chat-search-input:focus {
@@ -2609,8 +2731,40 @@ body.rules-open {
   margin-inline: 12px;
 }
 
-.telegram-messages-canvas > .telegram-date-pill {
+.telegram-messages-canvas > .telegram-date-pill,
+.telegram-messages-canvas > .chat-date-jump {
   margin-inline: auto;
+}
+
+.telegram-messages-host {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chat-float-date {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 4;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(43, 39, 53, 0.55);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease;
+}
+
+.chat-float-date.is-on {
+  opacity: 1;
 }
 
 /* Keep swatches in the bg picker working. */

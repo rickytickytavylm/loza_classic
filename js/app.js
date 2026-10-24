@@ -135,6 +135,10 @@
     chatSearchQuery: '',
     chatSearchHits: [],
     chatSearchLoading: false,
+    chatDateJump: null,
+    chatCalendarOpen: false,
+    chatCalendarMonth: '',
+    chatCalendarDays: [],
     chatStreamStatus: 'connecting', // connecting | live | offline
     // Persisted so your own messages stay "yours" after a reload, even when the
     // session drops and the server briefly treats you as a fresh guest.
@@ -3056,21 +3060,36 @@
       }, 450);
     }
     const room = state.chatRooms.find((item) => item.id === roomId);
-    if (room) room.serverUnreadCount = 0;
+    if (room && historyCoversReadMark(room, state.chatReads[roomId])) {
+      room.serverUnreadCount = loadedUnreadCount(room, state.chatReads[roomId]);
+    }
     return true;
   }
 
-  function roomUnreadCount(room) {
-    if (!room || room.locked) return 0;
-    const mark = state.chatReads[room.id];
-    // Prefer the live local mark once the user has opened the room at least once.
-    if (!mark) return room.serverUnreadCount || 0;
+  function loadedUnreadCount(room, mark) {
     return (room.messages || []).filter((message) => (
       !message.pending
       && !message.failed
       && !isMyChatMessage(message)
       && new Date(message.createdAt || 0).getTime() > mark.at
     )).length;
+  }
+
+  function historyCoversReadMark(room, mark) {
+    const oldest = (room.messages || []).find((message) => !message.pending && !message.failed);
+    if (!oldest) return false;
+    return new Date(oldest.createdAt || 0).getTime() <= mark.at;
+  }
+
+  function roomUnreadCount(room) {
+    if (!room || room.locked) return 0;
+    const server = room.serverUnreadCount || 0;
+    const mark = state.chatReads[room.id];
+    if (!mark) return server;
+    const local = loadedUnreadCount(room, mark);
+    // The open page is only the latest 40. Older unread still live in the server count.
+    if (!historyCoversReadMark(room, mark)) return Math.max(local, server);
+    return local;
   }
 
   function totalChatUnreadCount() {
@@ -3169,6 +3188,44 @@
     const room = state.chatRooms.find((item) => item.id === roomId);
     state.chatUnreadAnchor = computeUnreadAnchor(room);
     state.chatScrollPending = true;
+    chatEntryTouched = false;
+  }
+
+  let chatFloatDateTimer = 0;
+
+  function updateFloatingChatDate(scroller) {
+    const chip = $('#chat-float-date');
+    if (!chip) return;
+    if (!scroller || !chatEntryTouched || state.chatSearchOpen || state.chatTag) {
+      chip.classList.remove('is-on');
+      return;
+    }
+    const edge = scroller.getBoundingClientRect().top + 36;
+    let current = null;
+    scroller.querySelectorAll('.chat-bubble[data-message-id]').forEach((bubble) => {
+      if (!current && bubble.getBoundingClientRect().bottom > edge) current = bubble;
+    });
+    if (!current) {
+      chip.classList.remove('is-on');
+      return;
+    }
+    let label = '';
+    let node = current.previousElementSibling;
+    while (node) {
+      if (node.classList.contains('telegram-date-pill') && !node.classList.contains('chat-unread-pill')) {
+        label = node.textContent.trim();
+        break;
+      }
+      node = node.previousElementSibling;
+    }
+    if (!label) {
+      chip.classList.remove('is-on');
+      return;
+    }
+    chip.textContent = label;
+    chip.classList.add('is-on');
+    window.clearTimeout(chatFloatDateTimer);
+    chatFloatDateTimer = window.setTimeout(() => chip.classList.remove('is-on'), 900);
   }
 
   let chatPositionedRoomId = ''; // room whose thread already got its opening position
@@ -3485,6 +3542,14 @@
   /** Keyed timeline entries so the thread can be patched instead of rebuilt. */
   function chatTimelineItems(room) {
     const searching = state.chatSearchOpen && state.chatSearchQuery.trim().length >= 1;
+    if (searching && state.chatDateJump) {
+      const jump = state.chatDateJump;
+      return [{
+        key: 'date-jump',
+        sig: jump.iso,
+        html: `<button type="button" class="chat-date-jump" data-key="date-jump" data-sig="${esc(jump.iso)}" data-chat-date="${esc(jump.iso)}">Открыть ${esc(jump.label)}</button>`,
+      }];
+    }
     const filtering = !searching && Boolean(state.chatTag);
     const messages = searching
       ? (state.chatSearchHits || [])
@@ -3789,7 +3854,10 @@
         <header class="telegram-header${state.chatSearchOpen ? ' is-searching' : ''}">
           ${state.chatSearchOpen
             ? `<button class="telegram-header-back" type="button" id="chat-search-close" aria-label="Закрыть поиск">${ic('x', 22)}</button>
-               <input id="chat-search" class="chat-search-input" type="search" placeholder="Найти в этом чате" autocomplete="off" enterkeyhint="search" value="${esc(state.chatSearchQuery)}" />`
+               <div class="chat-search-field">
+                 <input id="chat-search" class="chat-search-input" type="search" placeholder="Сообщение или дата" autocomplete="off" enterkeyhint="search" value="${esc(state.chatSearchQuery)}" />
+                 <button class="chat-search-calendar${state.chatCalendarOpen ? ' is-open' : ''}" type="button" id="chat-search-calendar" aria-label="Календарь" aria-pressed="${state.chatCalendarOpen ? 'true' : 'false'}">${ic('calendar', 18)}</button>
+               </div>`
             : `<button class="telegram-header-back" type="button" id="chat-back" aria-label="К списку чатов">${ic('chevronLeft', 22)}</button>
                <div class="telegram-header-pill">
                  <strong>${esc(selectedRoom?.title || 'Чат клуба')}</strong>
@@ -3800,10 +3868,14 @@
         </header>
         ${state.chatSearchOpen ? '' : chatTagBarHtml()}
         ${state.chatSearchOpen ? '' : chatPinnedBarHtml(selectedRoom)}
+        ${state.chatSearchOpen ? renderChatCalendar() : ''}
+        <div class="telegram-messages-host">
+        <div class="chat-float-date" id="chat-float-date"></div>
         <div class="telegram-messages">
           <div class="telegram-messages-canvas">
             ${timeline.join('')}
           </div>
+        </div>
         </div>
         <div class="chat-jump" id="chat-jump">
           <button type="button" class="chat-jump-btn" id="chat-jump-mention" hidden aria-label="К ответу вам">@</button>
@@ -4349,13 +4421,180 @@
     });
   }
 
+  const CHAT_MONTHS = [
+    ['января', 1], ['январь', 1], ['янв', 1],
+    ['февраля', 2], ['февраль', 2], ['фев', 2],
+    ['марта', 3], ['март', 3], ['мар', 3],
+    ['апреля', 4], ['апрель', 4], ['апр', 4],
+    ['мая', 5], ['май', 5],
+    ['июня', 6], ['июнь', 6], ['июн', 6],
+    ['июля', 7], ['июль', 7], ['июл', 7],
+    ['августа', 8], ['август', 8], ['авг', 8],
+    ['сентября', 9], ['сентябрь', 9], ['сен', 9],
+    ['октября', 10], ['октябрь', 10], ['окт', 10],
+    ['ноября', 11], ['ноябрь', 11], ['ноя', 11],
+    ['декабря', 12], ['декабрь', 12], ['дек', 12],
+  ];
+
+  function chatIsoDate(date) {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  function chatDateResult(date) {
+    return { iso: chatIsoDate(date), label: chatDateLabel(date) };
+  }
+
+  function finishChatDate(day, month, year, today) {
+    let chosenYear = year;
+    if (!chosenYear) {
+      chosenYear = today.getFullYear();
+      const candidate = new Date(chosenYear, month - 1, day);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (candidate > tomorrow) chosenYear -= 1;
+    }
+    const date = new Date(chosenYear, month - 1, day);
+    if (date.getFullYear() !== chosenYear || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return chatDateResult(date);
+  }
+
+  function parseChatDateQuery(raw) {
+    const text = String(raw || '').trim().toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/\s+/g, ' ');
+    if (!text) return null;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (text === 'сегодня') return chatDateResult(today);
+    if (text === 'вчера') {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return chatDateResult(yesterday);
+    }
+    let match = text.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?$/);
+    if (match) {
+      let year = match[3] ? Number(match[3]) : null;
+      if (year !== null && year < 100) year += 2000;
+      return finishChatDate(Number(match[1]), Number(match[2]), year, today);
+    }
+    match = text.match(/^(\d{1,2})\s+([а-я]+)(?:\s+(\d{4}))?$/);
+    if (!match) return null;
+    const monthName = match[2];
+    const month = CHAT_MONTHS.find(([name]) => monthName === name)?.[1];
+    if (!month) return null;
+    return finishChatDate(Number(match[1]), month, match[3] ? Number(match[3]) : null, today);
+  }
+
+  function renderChatCalendar() {
+    if (!state.chatCalendarOpen) return '';
+    const now = new Date();
+    const monthKey = state.chatCalendarMonth || chatIsoDate(now).slice(0, 7);
+    const [year, month] = monthKey.split('-').map(Number);
+    const first = new Date(year, month - 1, 1);
+    const startPad = (first.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const today = chatIsoDate(now);
+    const known = new Set(state.chatCalendarDays || []);
+    const cells = [];
+    for (let i = 0; i < startPad; i += 1) cells.push('<span></span>');
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const iso = chatIsoDate(new Date(year, month - 1, day));
+      const classes = ['chat-cal-day'];
+      if (known.has(iso)) classes.push('has-messages');
+      if (iso === today) classes.push('is-today');
+      cells.push(`<button type="button" class="${classes.join(' ')}" data-chat-cal-day="${iso}">${day}</button>`);
+    }
+    const title = first.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    const atCurrent = year === now.getFullYear() && month === now.getMonth() + 1;
+    return `<div class="chat-calendar" id="chat-calendar">
+      <div class="chat-cal-head">
+        <button type="button" data-chat-cal-nav="-1" aria-label="Предыдущий месяц">${ic('chevronLeft', 18)}</button>
+        <strong>${esc(title)}</strong>
+        <button type="button" data-chat-cal-nav="1" aria-label="Следующий месяц"${atCurrent ? ' disabled' : ''}>${ic('chevronRight', 18)}</button>
+      </div>
+      <div class="chat-cal-week"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+      <div class="chat-cal-grid">${cells.join('')}</div>
+    </div>`;
+  }
+
+  let chatCalendarSeq = 0;
+
+  function shiftChatCalendarMonth(delta) {
+    const now = new Date();
+    const current = state.chatCalendarMonth || chatIsoDate(now).slice(0, 7);
+    const [year, month] = current.split('-').map(Number);
+    const next = new Date(year, month - 1 + delta, 1);
+    if (next > new Date(now.getFullYear(), now.getMonth(), 1)) return;
+    state.chatCalendarMonth = chatIsoDate(next).slice(0, 7);
+    state.chatCalendarDays = [];
+    renderScreen();
+    loadChatCalendarDays();
+  }
+
+  async function loadChatCalendarDays() {
+    const roomId = state.selectedRoomId;
+    const month = state.chatCalendarMonth;
+    if (!roomId || !month || !state.chatCalendarOpen) return;
+    const seq = ++chatCalendarSeq;
+    try {
+      const data = await API.chatMessageDays(roomId, month);
+      if (seq !== chatCalendarSeq || state.chatCalendarMonth !== month || state.selectedRoomId !== roomId) return;
+      state.chatCalendarDays = data.days || [];
+      if (state.chatCalendarOpen) renderScreen();
+    } catch {
+      /* the calendar still opens the day, it just won't mark busy ones */
+    }
+  }
+
+  function toggleChatCalendar() {
+    state.chatCalendarOpen = !state.chatCalendarOpen;
+    if (state.chatCalendarOpen && !state.chatCalendarMonth) {
+      state.chatCalendarMonth = chatIsoDate(new Date()).slice(0, 7);
+    }
+    renderScreen();
+    if (state.chatCalendarOpen) loadChatCalendarDays();
+  }
+
+  async function jumpToChatDay(iso) {
+    const roomId = state.selectedRoomId;
+    const room = state.chatRooms.find((item) => item.id === roomId);
+    if (!roomId || !room || !iso) return;
+    try {
+      const data = await API.chatMessagesOnDay(roomId, iso);
+      const incoming = (data.messages || []).map(normalizeChatMessage);
+      if (!data.focusId || !incoming.length) {
+        showAppToast('В этот день сообщений нет', { title: 'Чат' });
+        return;
+      }
+      const byId = new Map((room.messages || []).map((item) => [item.id, item]));
+      incoming.forEach((item) => byId.set(item.id, { ...byId.get(item.id), ...item }));
+      room.messages = [...byId.values()].sort(
+        (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+      );
+      closeChatSearch();
+      chatJumpMessageId = data.focusId;
+      state.chatView = 'thread';
+      state.chatScrollPending = true;
+      chatPositionedRoomId = '';
+      chatEntryTouched = false;
+      renderScreen();
+      setImmersive();
+    } catch {
+      showAppToast('Не удалось открыть этот день', { title: 'Чат' });
+    }
+  }
+
   function closeChatSearch() {
     clearTimeout(chatSearchTimer);
     chatSearchSeq += 1;
+    chatCalendarSeq += 1;
     state.chatSearchOpen = false;
     state.chatSearchQuery = '';
     state.chatSearchHits = [];
     state.chatSearchLoading = false;
+    state.chatDateJump = null;
+    state.chatCalendarOpen = false;
+    state.chatCalendarDays = [];
   }
 
   function openChatSearch() {
@@ -4367,6 +4606,8 @@
     state.chatSearchQuery = '';
     state.chatSearchHits = [];
     state.chatSearchLoading = false;
+    state.chatDateJump = null;
+    state.chatCalendarOpen = false;
     renderScreen();
     window.setTimeout(() => $('#chat-search')?.focus(), 40);
   }
@@ -4376,6 +4617,18 @@
     const room = state.chatRooms.find((item) => item.id === roomId);
     state.chatSearchQuery = String(value || '');
     const q = state.chatSearchQuery.trim();
+    state.chatDateJump = parseChatDateQuery(q);
+    if (state.chatDateJump) {
+      clearTimeout(chatSearchTimer);
+      chatSearchSeq += 1;
+      state.chatSearchLoading = false;
+      state.chatSearchHits = [];
+      renderChatLive();
+      $$('[data-chat-date]').forEach((button) => {
+        button.onclick = () => jumpToChatDay(button.dataset.chatDate);
+      });
+      return;
+    }
     if (!room || q.length < 2) {
       clearTimeout(chatSearchTimer);
       chatSearchSeq += 1;
@@ -4467,6 +4720,21 @@
     });
     const searchInput = $('#chat-search', root);
     searchInput?.addEventListener('input', () => applyChatSearchQuery(searchInput.value));
+    searchInput?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || !state.chatDateJump) return;
+      event.preventDefault();
+      jumpToChatDay(state.chatDateJump.iso);
+    });
+    $('#chat-search-calendar', root)?.addEventListener('click', () => toggleChatCalendar());
+    $$('[data-chat-date]', root).forEach((button) => {
+      button.onclick = () => jumpToChatDay(button.dataset.chatDate);
+    });
+    $$('[data-chat-cal-nav]', root).forEach((button) => {
+      button.onclick = () => shiftChatCalendarMonth(Number(button.dataset.chatCalNav));
+    });
+    $$('[data-chat-cal-day]', root).forEach((button) => {
+      button.onclick = () => jumpToChatDay(button.dataset.chatCalDay);
+    });
     if (searchInput && state.chatSearchOpen) {
       const end = searchInput.value.length;
       searchInput.focus();
@@ -4487,8 +4755,9 @@
     const messages = $('.telegram-messages', root);
     if (messages) {
       positionChatThread(messages);
-      messages.addEventListener('scroll', () => {
+        messages.addEventListener('scroll', () => {
         queueChatReadCheck();
+        updateFloatingChatDate(messages);
         if (messages.scrollTop < 80) {
           if (state.chatTag) loadOlderChatTagMessages();
           else loadOlderChatMessages();
@@ -4508,11 +4777,8 @@
     $$('[data-scroll-to]', root).forEach((btn) => {
       if (btn.closest('.chat-pinned-bar')) {
         btn.onclick = () => {
-          const target = root.querySelector(`[data-message-id="${btn.dataset.scrollTo}"]`);
-          if (!target) return;
-          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          target.classList.add('is-flash');
-          window.setTimeout(() => target.classList.remove('is-flash'), 1200);
+          const messageId = btn.dataset.scrollTo;
+          if (state.selectedRoomId && messageId) openChatLinkJump(state.selectedRoomId, messageId);
         };
       }
     });
@@ -7258,7 +7524,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '118';
+      const version = window.LOZA_ASSET_VERSION || '119';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

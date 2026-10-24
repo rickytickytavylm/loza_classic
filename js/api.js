@@ -148,6 +148,22 @@
       });
       return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
     },
+    chatMessagesOnDay: (roomId, day) => {
+      const params = new URLSearchParams({
+        guestId: getGuestId(),
+        on: String(day || ''),
+        offset: String(new Date().getTimezoneOffset()),
+      });
+      return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
+    },
+    chatMessageDays: (roomId, month) => {
+      const params = new URLSearchParams({
+        guestId: getGuestId(),
+        days: String(month || ''),
+        offset: String(new Date().getTimezoneOffset()),
+      });
+      return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
+    },
     markChatRead: (roomId, messageId) =>
       request(`/chat/rooms/${roomId}/read`, {
         method: 'POST',
