@@ -148,6 +148,10 @@
       });
       return request(`/chat/rooms/${roomId}/messages?${params.toString()}`);
     },
+    chatMessagePlace: (messageId) => {
+      const params = new URLSearchParams({ guestId: getGuestId() });
+      return request(`/chat/messages/${encodeURIComponent(messageId)}/place?${params.toString()}`);
+    },
     chatMessagesOnDay: (roomId, day) => {
       const params = new URLSearchParams({
         guestId: getGuestId(),

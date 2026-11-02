@@ -7017,7 +7017,7 @@
     }
   }
 
-  function consumeContentDeepLink() {
+  async function consumeContentDeepLink() {
     let media = '';
     let post = '';
     try {
@@ -7029,6 +7029,25 @@
       /* ignore */
     }
     if (media) {
+      if (!state.libraryItems.some((item) => item.id === media)) {
+        try {
+          const place = await API.chatMessagePlace(media);
+          if (place?.roomId && place?.id) {
+            state.tab = 'chat';
+            state.selectedRoomId = place.roomId;
+            state.chatView = 'thread';
+            state.profileView = '';
+            syncPageShell('chat');
+            renderNav();
+            setImmersive();
+            renderScreen();
+            await openChatLinkJump(place.roomId, place.id);
+            return;
+          }
+        } catch {
+          /* a library id that is not loaded yet stays on the media tab */
+        }
+      }
       state.tab = 'media';
       state.profileView = '';
       syncPageShell('media');
@@ -7524,7 +7543,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '120';
+      const version = window.LOZA_ASSET_VERSION || '121';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
