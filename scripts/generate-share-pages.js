@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SITE = 'https://lozapsy.help';
-const API = process.env.LOZA_API_URL || 'https://api.loza-club.ru/api';
+const API = process.env.LOZA_API_URL || 'https://api.lozapsy.help/api';
 const ROOT = path.join(__dirname, '..');
 const DEFAULT_IMAGE = `${SITE}/assets/social/loza-social-share-mockup.png`;
 const STUB_LEAD = /архивный аудиоподкаст|аудиоподкаст закрытого клуба|открыть запись внутри|полная формулировка вопроса|полная расшифровка/i;

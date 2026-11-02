@@ -1282,9 +1282,9 @@
 
   function apiOrigin() {
     try {
-      return new URL(window.__LOZA_API_URL__ || 'https://api.loza-club.ru/api', window.location.href).origin;
+      return new URL(window.__LOZA_API_URL__ || 'https://api.lozapsy.help/api', window.location.href).origin;
     } catch {
-      return 'https://api.loza-club.ru';
+      return 'https://api.lozapsy.help';
     }
   }
 
@@ -7524,7 +7524,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '119';
+      const version = window.LOZA_ASSET_VERSION || '120';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
