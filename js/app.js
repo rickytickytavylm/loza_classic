@@ -960,6 +960,7 @@
 
   function renderScreen() {
     const shell = $('#page-shell');
+    document.getElementById('live-club-buybar')?.remove();
     syncPageShell();
     if (state.selectedMovieId) {
       const movie = state.movies.find((x) => x.id === state.selectedMovieId);
@@ -1233,15 +1234,16 @@
         <p class="psy-lead">Специалисты, которые помогут разобраться в сложной ситуации и найти путь к изменениям.</p>
         <div class="psy-rail">${psychologistCardsHtml()}</div>
       </section>
-      <button class="live-club-card" type="button" data-live-club>
-        <img src="${asset('/assets/webp/background06.webp')}" alt="" />
-        <span>
-          <em>В Москве</em>
-          <strong>Живой клуб</strong>
-          <small>7 мест. По средам в 19:30</small>
-        </span>
-        ${ic('chevronRight', 22)}
-      </button>
+      <section class="section live-club-home">
+        <button class="live-club-card" type="button" data-live-club>
+          <img src="${asset('/assets/webp/background06.webp')}" alt="" />
+          <span class="live-club-card-copy">
+            <em>Москва · живая встреча</em>
+            <strong>Живой клуб</strong>
+            <span class="live-club-card-meta"><b>7 мест</b><b>Среда, 19:30</b></span>
+          </span>
+        </button>
+      </section>
     </div>`;
   }
 
@@ -1294,20 +1296,23 @@
           </div>
         </section>
       </div>
-      <div class="live-club-buybar">
+      <div class="live-club-buybar" id="live-club-buybar">
         <button class="primary-button" type="button" data-live-club-buy>Купить место</button>
       </div>
     </article>`;
   }
 
   function bindLiveClub(root) {
+    const bar = document.getElementById('live-club-buybar');
+    const host = document.getElementById('app');
+    if (bar && host && bar.parentElement !== host) host.appendChild(bar);
     $$('[data-live-club-back]', root).forEach((button) => {
       button.onclick = () => {
         state.liveClubOpen = false;
         renderScreen();
       };
     });
-    $$('[data-live-club-buy]', root).forEach((button) => {
+    $$('[data-live-club-buy]', bar || root).forEach((button) => {
       button.onclick = () => {
         showAppToast('Место оплачивается отдельно от подписки клуба. Ссылку на оплату добавим, когда будет разовая форма.', { title: 'Живой клуб', hold: 7000 });
       };
@@ -7617,7 +7622,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '122';
+      const version = window.LOZA_ASSET_VERSION || '123';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
