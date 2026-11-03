@@ -1256,11 +1256,13 @@
         <div class="psy-rail">${psychologistCardsHtml()}</div>
       </section>
       <section class="section live-club-home">
+        <div class="live-club-home-copy">
+          <span class="eyebrow">Живой клуб</span>
+          <p>Небольшая группа для родителей. Можно выдохнуть и быть среди своих.</p>
+        </div>
         <button class="live-club-card" type="button" data-live-club>
           <img src="${asset('/assets/webp/background06.webp')}" alt="" />
           <span class="live-club-card-copy">
-            <em>Москва · живая встреча</em>
-            <strong>Живой клуб</strong>
             <span class="live-club-card-meta"><b>7 мест</b><b>Среда, 19:30</b></span>
           </span>
         </button>
@@ -7686,7 +7688,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '125';
+      const version = window.LOZA_ASSET_VERSION || '126';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
