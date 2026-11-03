@@ -1264,7 +1264,7 @@
         </header>
         <p class="psy-lead">Небольшая группа для родителей. Можно выдохнуть и быть среди своих.</p>
         <button class="live-club-card" type="button" data-live-club>
-          <img src="${asset('/assets/webp/background06.webp')}" alt="" />
+          <img src="${asset('/assets/webp/live-club.webp')}" alt="" />
           <span class="live-club-card-copy">
             <span class="live-club-card-meta"><b>7 мест</b><b>Среда, 19:30</b></span>
           </span>
@@ -1294,7 +1294,7 @@
     const mapsLink = 'https://yandex.ru/maps/?ll=37.664185%2C55.753125&z=17&pt=37.664185%2C55.753125%2Cpm2rdm&text=%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0%2C%203-%D0%B9%20%D0%A1%D1%8B%D1%80%D0%BE%D0%BC%D1%8F%D1%82%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9%20%D0%BF%D0%B5%D1%80%D0%B5%D1%83%D0%BB%D0%BE%D0%BA%2C%203%2F9%D1%812';
     return `<article class="live-club">
       <div class="live-club-hero">
-        <img src="${asset('/assets/webp/background06.webp')}" alt="" />
+        <img src="${asset('/assets/webp/live-club.webp')}" alt="" />
         <div><span>В Москве</span><h1>Живой клуб</h1></div>
       </div>
       <div class="live-club-body">
@@ -7724,7 +7724,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '128';
+      const version = window.LOZA_ASSET_VERSION || '129';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
