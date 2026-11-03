@@ -678,6 +678,27 @@
     shell.setAttribute('aria-label', D.TAB_TITLES[tab] || tab);
   }
 
+  function syncInnerTopbar() {
+    const app = $('#app');
+    const button = $('#topbar-back');
+    const onHome = state.tab === 'home' && !state.selectedItemId && !state.selectedMovieId;
+    const live = onHome && state.liveClubOpen;
+    const person = onHome && state.psychologistView?.kind === 'person';
+    app?.classList.toggle('has-inner-back', live || person);
+    if (!button) return;
+    button.hidden = !(live || person);
+    button.onclick = () => {
+      const shell = $('#page-shell');
+      if (shell) shell.scrollTop = 0;
+      if (state.liveClubOpen) {
+        state.liveClubOpen = false;
+        renderScreen();
+        return;
+      }
+      psychologistBack();
+    };
+  }
+
   function setTab(tab, options = {}) {
     if (tab === 'movies') {
       state.mediaSection = 'movies';
@@ -961,6 +982,7 @@
   function renderScreen() {
     const shell = $('#page-shell');
     document.getElementById('live-club-buybar')?.remove();
+    syncInnerTopbar();
     syncPageShell();
     if (state.selectedMovieId) {
       const movie = state.movies.find((x) => x.id === state.selectedMovieId);
@@ -1147,7 +1169,6 @@
     return `<article class="psy-profile">
       <div class="psy-hero">
         <img src="${esc(psychologistPhoto(person))}" alt="" style="object-position:${esc(person.focus || 'center 20%')}" />
-        <button class="psy-hero-back" type="button" data-psy-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
       </div>
       <div class="psy-profile-body">
         <h1>${esc(person.shortName)}</h1>
@@ -1269,7 +1290,6 @@
     return `<article class="live-club">
       <div class="live-club-hero">
         <img src="${asset('/assets/webp/background06.webp')}" alt="" />
-        <button class="psy-hero-back" type="button" data-live-club-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
         <div><span>В Москве</span><h1>Живой клуб</h1></div>
       </div>
       <div class="live-club-body">
@@ -7622,7 +7642,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '123';
+      const version = window.LOZA_ASSET_VERSION || '124';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

@@ -181,6 +181,35 @@ button {
   pointer-events: none;
 }
 
+.topbar-back {
+  display: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.topbar-back[hidden] {
+  display: none !important;
+}
+
+.app.has-inner-back .topbar-back,
+.app.has-inner-back .header-actions {
+  position: relative;
+  z-index: 2;
+}
+
+.app.has-inner-back .topbar-back {
+  display: grid;
+}
+
 .brand {
   display: inline-flex;
   align-items: center;
@@ -191,6 +220,24 @@ button {
   font-size: 20px;
   font-weight: 850;
   letter-spacing: -0.04em;
+}
+
+@media (max-width: 980px), (max-device-width: 900px) {
+  .app.has-inner-back .brand {
+    position: absolute;
+    left: 50%;
+    z-index: 1;
+    margin: 0;
+    transform: translateX(-50%);
+  }
+}
+
+html.is-compact .app.has-inner-back .brand {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  margin: 0;
+  transform: translateX(-50%);
 }
 
 .brand img {
