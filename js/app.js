@@ -5582,7 +5582,7 @@
       <div class="chat-settings-row">
         <div class="chat-settings-row-copy">
           <strong>Push-уведомления</strong>
-          <span>${notifyUnsupported || (enabled ? 'Будут приходить новые сообщения из чата' : 'Включите, чтобы не пропускать чат')}</span>
+          <span>${notifyUnsupported || (enabled ? 'Сообщения, посты и новые материалы' : 'Включите, чтобы не пропускать клуб')}</span>
         </div>
         <label class="chat-settings-toggle${!available ? ' is-disabled' : ''}">
           <input type="checkbox" id="chat-notify-toggle" ${enabled ? 'checked' : ''} ${!available ? 'disabled' : ''} />
@@ -7277,12 +7277,45 @@
     });
   }
 
+  function pushLink(url) {
+    try {
+      return new URL(String(url || ''), window.location.origin);
+    } catch {
+      return null;
+    }
+  }
+
+  async function openMediaFromPush(mediaId) {
+    state.tab = 'media';
+    state.profileView = '';
+    closePortal();
+    try {
+      await loadContent();
+    } catch {
+      /* open the shelf with what is already loaded */
+    }
+    if (mediaId && state.libraryItems.some((item) => item.id === mediaId)) {
+      openItem(mediaId);
+      return;
+    }
+    syncPageShell('media');
+    renderNav();
+    renderScreen();
+    setImmersive();
+  }
+
   function bindPushDeepLinks() {
     if (!navigator.serviceWorker) return;
     navigator.serviceWorker.addEventListener('message', (event) => {
       const data = event.data;
       if (data?.type === 'loza:open-chat') {
-        if (String(data.url || '').includes('tab=feed')) {
+        const target = pushLink(data.url);
+        const mediaId = target?.searchParams.get('media') || '';
+        if (mediaId || target?.searchParams.get('tab') === 'media') {
+          openMediaFromPush(mediaId);
+          return;
+        }
+        if (target?.searchParams.get('tab') === 'feed' || String(data.url || '').includes('tab=feed')) {
           setTab('feed');
           return;
         }
@@ -7688,7 +7721,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '126';
+      const version = window.LOZA_ASSET_VERSION || '127';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
