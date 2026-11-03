@@ -58,8 +58,8 @@ window.LOZA_PSYCHOLOGISTS = [
     shortName: 'Юлия Овечкина',
     role: 'Клинический психолог, аддиктолог, детский психолог',
     roleLine: 'Клинический психолог · Аддиктолог · Детский психолог',
-    image: 'assets/psychologists/ovechkina.jpg',
-    focus: 'center 22%',
+    image: 'assets/psychologists/ovechkina-2.jpg',
+    focus: 'center 28%',
     shortDescription: 'Дети, детско-родительские отношения, семейные трудности.',
     specializations: [
       'Работа с детьми любого возраста, в том числе с особыми детьми',
