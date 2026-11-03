@@ -700,6 +700,7 @@
     state.selectedItemId = '';
     state.selectedMovieId = '';
     state.profileView = '';
+    state.liveClubOpen = false;
     document.body.classList.remove('material-immersive-open');
     closePortal();
     if (tab !== 'chat') {
@@ -995,7 +996,10 @@
     document.body.classList.remove('material-immersive-open');
     switch (state.tab) {
       case 'home':
-        if (state.psychologistView?.kind === 'person') {
+        if (state.liveClubOpen) {
+          shell.innerHTML = renderLiveClub();
+          bindLiveClub(shell);
+        } else if (state.psychologistView?.kind === 'person') {
           shell.innerHTML = renderPsychologistPage(state.psychologistView.slug);
           bindPsychologistPage(shell);
         } else if (state.psychologistView?.kind === 'catalog') {
@@ -1229,6 +1233,15 @@
         <p class="psy-lead">Специалисты, которые помогут разобраться в сложной ситуации и найти путь к изменениям.</p>
         <div class="psy-rail">${psychologistCardsHtml()}</div>
       </section>
+      <button class="live-club-card" type="button" data-live-club>
+        <img src="${asset('/assets/webp/background06.webp')}" alt="" />
+        <span>
+          <em>В Москве</em>
+          <strong>Живой клуб</strong>
+          <small>7 мест. По средам в 19:30</small>
+        </span>
+        ${ic('chevronRight', 22)}
+      </button>
     </div>`;
   }
 
@@ -1238,6 +1251,67 @@
       b.onclick = () => openItem(b.dataset.openMedia);
     });
     bindPsychologistLinks(root);
+    $$('[data-live-club]', root).forEach((button) => {
+      button.onclick = () => {
+        state.liveClubOpen = true;
+        renderScreen();
+        const shell = $('#page-shell');
+        if (shell) shell.scrollTop = 0;
+      };
+    });
+  }
+
+  function renderLiveClub() {
+    const map = 'https://yandex.ru/map-widget/v1/?ll=37.664185%2C55.753125&z=17&pt=37.664185%2C55.753125%2Cpm2rdm';
+    const mapsLink = 'https://yandex.ru/maps/?ll=37.664185%2C55.753125&z=17&pt=37.664185%2C55.753125%2Cpm2rdm&text=%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0%2C%203-%D0%B9%20%D0%A1%D1%8B%D1%80%D0%BE%D0%BC%D1%8F%D1%82%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9%20%D0%BF%D0%B5%D1%80%D0%B5%D1%83%D0%BB%D0%BE%D0%BA%2C%203%2F9%D1%812';
+    return `<article class="live-club">
+      <div class="live-club-hero">
+        <img src="${asset('/assets/webp/background06.webp')}" alt="" />
+        <button class="psy-hero-back" type="button" data-live-club-back aria-label="Назад">${ic('chevronLeft', 22)}</button>
+        <div><span>В Москве</span><h1>Живой клуб</h1></div>
+      </div>
+      <div class="live-club-body">
+        <p class="live-club-lead">Небольшая группа для родителей проблемных подростков. Место, где можно выдохнуть, перестать изображать идеального родителя и оказаться среди своих.</p>
+        <p>Встречаемся, пьём чай, разговариваем, получаем поддержку и разбираем то, что сейчас происходит у вас дома. Ищем те места, с которыми действительно стоит поработать, а иногда просто бываем вместе без детей. Это тоже терапевтично.</p>
+        <p>Здесь можно быть любой: уставшей, злой, растерянной, весёлой. Вас поймут и не осудят.</p>
+        <p>В группе всего 7 участников. Всё личное, что происходит на встречах, остаётся внутри группы.</p>
+        <ul class="live-club-facts">
+          <li><span>Место</span><strong>Москва, район Курской и Чкаловской</strong></li>
+          <li><span>Старт</span><strong>7 октября</strong></li>
+          <li><span>Когда</span><strong>По средам, начало в 19:30 мск</strong></li>
+          <li><span>Сколько</span><strong>1,5 часа</strong></li>
+        </ul>
+        <section class="live-club-place">
+          <div>
+            <h2>Как пройти</h2>
+            <p>3-й Сыромятнический переулок, 3/9, строение 2.</p>
+            <p>Если идти от метро Чкаловская, выход номер шесть. Двигайтесь направо вдоль железнодорожных путей. Дальше на карте всё нарисовано.</p>
+            <p>Вам нужно пройти в металлическую калитку, она открыта. Наше здание будет напротив калитки. Входите в подъезд с вывеской «Профилактика», дальше поднимайтесь один лестничный пролёт. По правой стороне будет дверь с такой же вывеской.</p>
+          </div>
+          <div class="live-club-map">
+            <iframe title="Живой клуб на карте" loading="lazy" src="${map}"></iframe>
+            <a href="${mapsLink}" target="_blank" rel="noopener noreferrer">Открыть в Яндекс.Картах</a>
+          </div>
+        </section>
+      </div>
+      <div class="live-club-buybar">
+        <button class="primary-button" type="button" data-live-club-buy>Купить место</button>
+      </div>
+    </article>`;
+  }
+
+  function bindLiveClub(root) {
+    $$('[data-live-club-back]', root).forEach((button) => {
+      button.onclick = () => {
+        state.liveClubOpen = false;
+        renderScreen();
+      };
+    });
+    $$('[data-live-club-buy]', root).forEach((button) => {
+      button.onclick = () => {
+        showAppToast('Место оплачивается отдельно от подписки клуба. Ссылку на оплату добавим, когда будет разовая форма.', { title: 'Живой клуб', hold: 7000 });
+      };
+    });
   }
 
   function feedLikeButton(postId, liked, likes) {
@@ -7543,7 +7617,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '121';
+      const version = window.LOZA_ASSET_VERSION || '122';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
