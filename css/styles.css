@@ -8940,6 +8940,14 @@ div.profile-avatar-wrap {
   pointer-events: none;
 }
 
+.live-club-paid-backdrop {
+  z-index: 320;
+}
+
+.live-club-paid-backdrop .paywall-modal p {
+  margin: 0;
+}
+
 .live-club-buybar .primary-button {
   width: 100%;
   pointer-events: auto;

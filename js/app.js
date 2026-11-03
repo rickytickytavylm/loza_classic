@@ -1334,8 +1334,39 @@
     });
     $$('[data-live-club-buy]', bar || root).forEach((button) => {
       button.onclick = () => {
-        showAppToast('Место оплачивается отдельно от подписки клуба. Ссылку на оплату добавим, когда будет разовая форма.', { title: 'Живой клуб', hold: 7000 });
+        const url = new URL('https://payform.ru/6lcQgWv/');
+        const email = String(state.user?.email || '').trim();
+        const phone = String(state.user?.phone || '').replace(/\D/g, '');
+        if (email) url.searchParams.set('customer_email', email);
+        if (phone) url.searchParams.set('customer_phone', phone);
+        window.location.assign(url.toString());
       };
+    });
+  }
+
+  function showLiveClubPaidNotice() {
+    document.body.classList.add('paywall-open');
+    $('#portal').innerHTML = `<div class="modal-backdrop paywall-backdrop live-club-paid-backdrop">
+      <section class="paywall-modal glass-panel consent-modal" role="dialog" aria-modal="true" aria-labelledby="live-club-paid-title" onclick="event.stopPropagation()">
+        <span class="paywall-kicker">Живой клуб</span>
+        <h2 id="live-club-paid-title">Место оплачено</h2>
+        <p>Москва, 3-й Сыромятнический переулок, 3/9, строение 2.</p>
+        <p>По средам в 19:30 мск. Встреча длится 1,5 часа. Старт 7 октября.</p>
+        <div class="club-intro-actions">
+          <button type="button" class="primary-button" id="live-club-paid-map">Как пройти</button>
+          <button type="button" class="paywall-later" id="live-club-paid-ok">Хорошо</button>
+        </div>
+      </section>
+    </div>`;
+    $('#live-club-paid-ok')?.addEventListener('click', () => closePortal());
+    $('#live-club-paid-map')?.addEventListener('click', () => {
+      closePortal();
+      state.tab = 'home';
+      state.liveClubOpen = true;
+      state.psychologistView = null;
+      const shell = $('#page-shell');
+      if (shell) shell.scrollTop = 0;
+      renderScreen();
     });
   }
 
@@ -2340,9 +2371,18 @@
     }
   }
 
+  let liveClubPaidNotice = false;
+
   async function handlePaymentReturn() {
     try {
       const params = new URLSearchParams(window.location.search);
+      if (params.get('liveclub') === 'paid') {
+        params.delete('liveclub');
+        const search = params.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`);
+        liveClubPaidNotice = true;
+        return;
+      }
       const paymentFlag = params.get('payment');
       const paymentId = params.get('paymentId');
       if (!paymentFlag && !paymentId) return;
@@ -7614,6 +7654,10 @@
     syncHeaderIdentity();
     applyDeepLinkFromUrl();
     hideSplash();
+    if (liveClubPaidNotice) {
+      liveClubPaidNotice = false;
+      showLiveClubPaidNotice();
+    }
     if (authReturn) {
       [80, 300, 800].forEach((ms) => window.setTimeout(syncCompactLayout, ms));
     }
@@ -7642,7 +7686,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '124';
+      const version = window.LOZA_ASSET_VERSION || '125';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
