@@ -8734,21 +8734,7 @@ div.profile-avatar-wrap {
 }
 
 .live-club-home {
-  padding-inline: 0;
-}
-
-.live-club-home-copy {
-  display: grid;
-  gap: 6px;
-  padding-inline: clamp(28px, 5vw, 58px);
-}
-
-.live-club-home-copy p {
-  margin: 0;
-  max-width: 36rem;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.45;
+  gap: 12px;
 }
 
 .live-club-card {
@@ -8979,14 +8965,6 @@ html.is-compact .live-club-buybar {
 }
 
 @media (min-width: 860px) {
-  .live-club-home {
-    padding-inline: clamp(28px, 5vw, 58px);
-  }
-
-  .live-club-home-copy {
-    padding-inline: 0;
-  }
-
   .live-club-card img {
     height: 420px;
   }
