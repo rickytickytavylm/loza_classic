@@ -6,8 +6,8 @@ window.LOZA_PSYCHOLOGISTS = [
     shortName: 'Александра Изюменко',
     role: 'Клинический психолог, аддиктолог',
     roleLine: 'Клинический психолог · Аддиктолог',
-    image: 'assets/psychologists/izyumenko.jpg',
-    focus: 'center 18%',
+    image: 'assets/psychologists/izyumenko-2.jpg',
+    focus: 'center 22%',
     shortDescription: 'Подростки, семейные конфликты, эмоциональная нестабильность.',
     specializations: [
       'Расстройства пищевого поведения',
