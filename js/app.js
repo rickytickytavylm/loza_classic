@@ -736,6 +736,7 @@
     const shell = $('#page-shell');
     if (shell) shell.scrollTop = 0;
     syncPageShell(tab);
+    if (tab === 'feed' || tab === 'media') noteShelf(tab);
     renderNav();
     renderScreen();
     setImmersive();
@@ -968,10 +969,10 @@
     const desk = $('#desktop-nav');
     const mobile = $('#mobile-nav');
     desk.innerHTML = D.NAV.map((n) =>
-      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${esc(n.label)}${n.id === 'chat' ? navUnreadBadgeHtml() : ''}</button>`,
+      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${esc(n.label)}${navTabBadgeHtml(n.id)}</button>`,
     ).join('');
     mobile.innerHTML = D.NAV.map((n) =>
-      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${ic(n.id, 20)}<span>${esc(n.label)}</span>${n.id === 'chat' ? navUnreadBadgeHtml() : ''}</button>`,
+      `<button type="button" class="${state.tab === n.id ? 'active' : ''}" data-tab="${n.id}">${ic(n.id, 20)}<span>${esc(n.label)}</span>${navTabBadgeHtml(n.id)}</button>`,
     ).join('');
     $$('[data-tab]').forEach((btn) => {
       btn.onclick = () => setTab(btn.dataset.tab);
@@ -3240,25 +3241,101 @@
     return state.chatRooms.reduce((sum, room) => sum + roomUnreadCount(room), 0);
   }
 
-  function navUnreadBadgeHtml() {
-    const count = totalChatUnreadCount();
-    if (!count) return '';
-    return `<span class="nav-unread-badge" aria-label="${count} непрочитанных">${count > 99 ? '99+' : count}</span>`;
+  const SHELF_SEEN_KEY = { feed: 'loza-seen-feed', media: 'loza-seen-media' };
+
+  function readShelfSeen(kind) {
+    try {
+      const raw = localStorage.getItem(SHELF_SEEN_KEY[kind]);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return null;
+    }
   }
 
-  function syncUnreadBadges() {
-    const count = totalChatUnreadCount();
+  function writeShelfSeen(kind, ids) {
+    try {
+      localStorage.setItem(SHELF_SEEN_KEY[kind], JSON.stringify([...ids].slice(-2000)));
+    } catch {
+      /* the badge is local; a full store must not break the screen */
+    }
+  }
+
+  function shelfIds(kind) {
+    if (kind === 'feed') {
+      if (!state.feedLoaded || state.feedError) return [];
+      return state.feedPosts.map((post) => post.id).filter(Boolean);
+    }
+    if (!state.libraryFromApi) return [];
+    return state.libraryItems
+      .filter((item) => item.id && item.kind !== 'movie')
+      .map((item) => item.id);
+  }
+
+  function noteShelf(kind) {
+    const ids = shelfIds(kind);
+    if (!ids.length) return;
+    const seen = readShelfSeen(kind);
+    if (!seen) {
+      // First open on this phone. The old catalog is already known.
+      // A feed post from the last two days still counts, so today's post shows.
+      const seed = kind === 'feed'
+        ? state.feedPosts
+          .filter((post) => post.id && new Date(post.createdAt || 0).getTime() <= Date.now() - 48 * 60 * 60 * 1000)
+          .map((post) => post.id)
+        : ids;
+      writeShelfSeen(kind, seed);
+    }
+    else if (state.tab === kind) {
+      ids.forEach((id) => seen.add(id));
+      writeShelfSeen(kind, seen);
+    }
+    syncUnreadBadges();
+  }
+
+  function shelfFreshCount(kind) {
+    const ids = shelfIds(kind);
+    const seen = readShelfSeen(kind);
+    if (!ids.length || !seen || state.tab === kind) return 0;
+    return ids.filter((id) => !seen.has(id)).length;
+  }
+
+  function navCountBadgeHtml(count, noun) {
+    if (!count) return '';
+    const shown = count > 99 ? '99+' : String(count);
+    return `<span class="nav-unread-badge" aria-label="${count} ${noun}">${shown}</span>`;
+  }
+
+  function navTabBadgeHtml(tab) {
+    if (tab === 'chat') return navCountBadgeHtml(totalChatUnreadCount(), 'непрочитанных');
+    if (tab === 'feed') return navCountBadgeHtml(shelfFreshCount('feed'), 'новых постов');
+    if (tab === 'media') return navCountBadgeHtml(shelfFreshCount('media'), 'новых материалов');
+    return '';
+  }
+
+  function placeNavBadge(tab, count, noun) {
     const label = count > 99 ? '99+' : String(count);
-    $$('[data-tab="chat"]').forEach((button) => {
+    $$(`[data-tab="${tab}"]`).forEach((button) => {
       const badge = button.querySelector('.nav-unread-badge');
       if (!count) badge?.remove();
       else if (badge) {
         if (badge.textContent !== label) badge.textContent = label;
-        badge.setAttribute('aria-label', `${count} непрочитанных`);
+        badge.setAttribute('aria-label', `${count} ${noun}`);
       } else {
-        button.insertAdjacentHTML('beforeend', navUnreadBadgeHtml());
+        button.insertAdjacentHTML('beforeend', navCountBadgeHtml(count, noun));
       }
     });
+  }
+
+  function syncUnreadBadges() {
+    const chat = totalChatUnreadCount();
+    const feed = shelfFreshCount('feed');
+    const media = shelfFreshCount('media');
+    placeNavBadge('chat', chat, 'непрочитанных');
+    placeNavBadge('feed', feed, 'новых постов');
+    placeNavBadge('media', media, 'новых материалов');
+    const count = chat + feed + media;
 
     if ('setAppBadge' in navigator) {
       const update = count
@@ -6463,8 +6540,12 @@
           title: SECTION_TITLE_OVERRIDES[section.id] || section.title,
         }));
       }
-      if (apiItems.length) state.libraryItems = apiItems;
+      if (apiItems.length) {
+        state.libraryItems = apiItems;
+        state.libraryFromApi = true;
+      }
       mergeMoviesIntoLibrary();
+      noteShelf('media');
     } catch {
       // The full generated React catalog remains available offline.
       mergeMoviesIntoLibrary();
@@ -6478,7 +6559,7 @@
   function ensureMediaPolling() {
     if (state.mediaPollTimer) return;
     state.mediaPollTimer = window.setInterval(() => {
-      if (document.hidden || state.tab !== 'media') return;
+      if (document.hidden) return;
       refreshMediaFromServer();
     }, 8000);
   }
@@ -6486,8 +6567,7 @@
   function refreshMediaFromServer() {
     const before = contentFingerprint(state.libraryItems);
     return loadContent().then(() => {
-      if (state.tab !== 'media') return;
-      if (contentFingerprint(state.libraryItems) !== before) renderScreen();
+      if (state.tab === 'media' && contentFingerprint(state.libraryItems) !== before) renderScreen();
     });
   }
 
@@ -6527,6 +6607,7 @@
         });
         state.feedError = false;
         state.feedLoaded = true;
+        noteShelf('feed');
       } catch {
         state.feedError = true;
         state.feedLoaded = true;
@@ -6541,12 +6622,10 @@
   function ensureFeedPolling() {
     if (state.feedPollTimer) return;
     state.feedPollTimer = window.setInterval(() => {
-      if (document.hidden || state.tab !== 'feed') return;
+      if (document.hidden) return;
       const before = feedFingerprint(state.feedPosts);
       loadFeed().then(() => {
-        if (state.tab === 'feed' && feedFingerprint(state.feedPosts) !== before) {
-          renderScreen();
-        }
+        if (state.tab === 'feed' && feedFingerprint(state.feedPosts) !== before) renderScreen();
       });
     }, 8000);
   }
@@ -6556,13 +6635,11 @@
     state.visibilityBound = true;
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) return;
-      if (state.tab === 'media') refreshMediaFromServer();
-      if (state.tab === 'feed') {
-        const before = feedFingerprint(state.feedPosts);
-        loadFeed().then(() => {
-          if (state.tab === 'feed' && feedFingerprint(state.feedPosts) !== before) renderScreen();
-        });
-      }
+      refreshMediaFromServer();
+      const before = feedFingerprint(state.feedPosts);
+      loadFeed().then(() => {
+        if (state.tab === 'feed' && feedFingerprint(state.feedPosts) !== before) renderScreen();
+      });
     });
   }
 
@@ -7724,7 +7801,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '131';
+      const version = window.LOZA_ASSET_VERSION || '132';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
