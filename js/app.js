@@ -1034,7 +1034,7 @@
           bindHome(shell);
         }
         break;
-      case 'feed': shell.innerHTML = renderFeed(); bindFeed(shell); break;
+      case 'feed': shell.innerHTML = state.blogEnabled ? renderBlog() : renderFeed(); bindFeed(shell); break;
       case 'media': shell.innerHTML = renderMedia(); bindMedia(shell); break;
       case 'chat': shell.innerHTML = renderChat(); bindChat(shell); break;
       case 'movies': shell.innerHTML = renderMovies(); bindMovies(shell); break;
@@ -1445,6 +1445,56 @@
     return `<div class="feed-page"><div class="feed-list insta-feed feed-skeleton" aria-busy="true" aria-label="Загружаем ленту">${cards}</div></div>`;
   }
 
+  const blogNames = { post: 'Лента', video: 'Видео', article: 'Статьи', question: 'Вопросы' };
+  const blog = { kind: 'post', items: [], item: null, busy: false, error: '', request: 0, scroll: 0 };
+
+  async function loadBlog(kind, id) {
+    const seq = ++blog.request;
+    if (id && !blog.item) blog.scroll = $('#page-shell')?.scrollTop || 0;
+    Object.assign(blog, { kind, item: null, busy: true, error: '', retryId: id });
+    if (state.tab === 'feed') renderScreen();
+    try {
+      const data = id ? await API.blogItem(id) : await API.blog(kind);
+      if (seq !== blog.request) return;
+      if (id) Object.assign(blog, { item: data.item, kind: data.item.kind });
+      else blog.items = data.items;
+    } catch {
+      if (seq === blog.request) blog.error = 'Материал недоступен. Попробуйте ещё раз.';
+    } finally {
+      if (seq === blog.request) {
+        blog.busy = false;
+        if (state.tab === 'feed') renderScreen();
+      }
+    }
+  }
+
+  function renderBlog() {
+    const tabs = `<nav class="blog-tabs" aria-label="Разделы блога">${Object.entries(blogNames).map(([id, title]) =>
+      `<button type="button" data-blog-kind="${id}" aria-pressed="${blog.kind === id}">${title}</button>`).join('')}</nav>`;
+    if (blog.busy) return tabs + '<p role="status">Загружаем материал…</p>';
+    if (blog.error) return tabs + `<p role="status">${esc(blog.error)}</p><button class="secondary-button" data-blog-retry>Повторить</button>`;
+    const x = blog.item;
+    if (x) {
+      const embed = x.videoUrl && M.kinescopeEmbed(x.videoUrl);
+      const blocks = (x.blocks || []).map((b) => b.type === 'heading' ? `<h2>${esc(b.text)}</h2>` : `<p>${esc(b.text)}</p>`).join('');
+      const chapters = (x.chapters || []).map((c) => {
+        const url = new URL(embed);
+        url.searchParams.set('t', String(c.seconds));
+        return `<a class="blog-chapter" href="${esc(url.href)}" target="loza-blog-player">${M.formatAudioTime(c.seconds)} · ${esc(c.title)}</a>`;
+      }).join('');
+      return tabs + `<article class="blog-reading"><button type="button" class="secondary-button" data-blog-back>← ${blogNames[x.kind]}</button>
+        <h1>${esc(x.title)}</h1>${x.summary && x.summary !== x.title ? `<p>${esc(x.summary)}</p>` : ''}
+        ${embed ? `<iframe name="loza-blog-player" src="${esc(embed)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen title="${esc(x.title)}"></iframe>` : ''}
+        ${x.kind === 'article' && x.imageUrl ? `<img src="${esc(x.imageUrl)}" alt="">` : ''}
+        ${blocks || `<p class="blog-body">${esc(x.body || '')}</p>`}
+        ${chapters ? `<h2>Главы</h2>${chapters}` : ''}${x.sourceUrl ? `<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener noreferrer">Оригинал статьи</a>` : ''}</article>`;
+    }
+    if (blog.kind === 'post') return tabs + renderFeed();
+    return tabs + `<div class="blog-grid">${blog.items.map((p, i) => `<button class="blog-card" data-blog-id="${esc(p.id)}">
+      <img loading="lazy" alt="" src="${esc(p.imageUrl || bgImage(i))}"><strong>${esc(p.title)}</strong>
+      ${p.summary !== p.title ? `<span>${esc(p.summary || '')}</span>` : ''}</button>`).join('') || '<p>Здесь пока нет публикаций.</p>'}</div>`;
+  }
+
   function renderFeed() {
     if (!state.feedLoaded) return renderFeedSkeleton();
     if (!state.feedPosts.length) {
@@ -1570,6 +1620,20 @@
   }
 
   function bindFeed(root) {
+    $$('[data-blog-kind]', root).forEach((b) => { b.onclick = () => {
+      const kind = b.dataset.blogKind;
+      if (kind === 'post') {
+        ++blog.request;
+        Object.assign(blog, { kind, item: null, busy: false, error: '' });
+        renderScreen();
+      } else loadBlog(kind);
+    }; });
+    $$('[data-blog-id]', root).forEach((b) => { b.onclick = () => loadBlog(blog.kind, b.dataset.blogId); });
+    $('[data-blog-back]', root)?.addEventListener('click', async () => {
+      await loadBlog(blog.kind);
+      if ($('#page-shell')) $('#page-shell').scrollTop = blog.scroll;
+    });
+    $('[data-blog-retry]', root)?.addEventListener('click', () => loadBlog(blog.kind, blog.retryId));
     $('[data-feed-retry]', root)?.addEventListener('click', () => {
       state.feedLoaded = false;
       state.feedError = false;
@@ -5874,7 +5938,7 @@
         return `<article class="ai-message assistant">
           <span>Лоза AI</span>
           ${visible ? `<p>${esc(visible)}</p>` : ''}
-          ${aiLinksHtml(links)}
+          ${m.recommendation ? `<button type="button" class="ai-link-chip" data-ai-open data-ai-id="${esc(m.recommendation.id)}" data-ai-type="${esc(m.recommendation.type)}">${esc(m.recommendation.title)}${m.recommendation.locked ? ' · По подписке' : ''}</button>` : aiLinksHtml(links)}
         </article>`;
       }
       return `<article class="ai-message ${m.role}">
@@ -5978,6 +6042,13 @@
     $('.ai-coach-scroll', root)?.addEventListener('click', (e) => {
       const chip = e.target.closest('[data-ai-open]');
       if (!chip) return;
+      if (chip.dataset.aiId) {
+        const id = chip.dataset.aiId;
+        if (chip.dataset.aiType === 'blog') { setTab('feed'); loadBlog('post', id); }
+        else if (chip.dataset.aiType === 'movie') openMovie(id);
+        else openItem(id);
+        return;
+      }
       openAiRecommendation(chip.dataset.aiType || '', chip.dataset.aiTitle || '');
     });
     const draft = $('#ai-draft', root);
@@ -6030,6 +6101,10 @@
             answer.content += data.token;
             refreshAiMessages();
           }
+          if (event === 'done') {
+            answer.recommendation = data.recommendation || null;
+            refreshAiMessages();
+          }
           if (event === 'done' && data.aiUsage) {
             state.aiUsage = data.aiUsage;
           }
@@ -6051,6 +6126,7 @@
         const result = await API.askAiPublic(payload, controller?.signal);
         const answerText = result && (result.answer || result.reply || result.content);
         if (answerText) {
+          state.aiMessages[state.aiMessages.length - 1].recommendation = result.recommendation || null;
           setAnswer(answerText);
           refreshAiMessages();
         } else {
@@ -7281,6 +7357,13 @@
     if (post) {
       state.tab = 'feed';
       syncPageShell('feed');
+      if (state.blogEnabled && !state.feedPosts.some((p) => p.id === post)) await loadBlog('post', post);
+      else {
+        blog.kind = 'post';
+        blog.item = null;
+        renderScreen();
+        requestAnimationFrame(() => document.querySelector(`[data-post="${CSS.escape(post)}"]`)?.scrollIntoView());
+      }
     }
   }
 
@@ -7680,6 +7763,8 @@
   async function loadPublicConfig() {
     try {
       const cfg = await API.publicConfig();
+      state.blogEnabled = cfg.blogEnabled === true;
+      D.NAV.find((n) => n.id === 'feed').label = D.TAB_TITLES.feed = state.blogEnabled ? 'Блог' : 'Лента';
       state.plans = Array.isArray(cfg.plans) && cfg.plans.length ? cfg.plans : FALLBACK_PLANS;
       state.freeTier = cfg.freeTier || null;
       state.paymentProvider = cfg.paymentProvider || state.paymentProvider;
@@ -7801,7 +7886,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '132';
+      const version = window.LOZA_ASSET_VERSION || '133';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();

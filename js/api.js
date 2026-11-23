@@ -117,6 +117,8 @@
     content: () => request('/content', { timeout: 30000 }),
     feedComments: (postId) => request(`/feed/${postId}/comments`),
     feed: () => request('/feed'),
+    blog: (kind) => request(`/blog?kind=${encodeURIComponent(kind)}`),
+    blogItem: (id) => request(`/blog/${encodeURIComponent(id)}`),
     likePost: (postId) =>
       request(`/feed/${postId}/like`, { method: 'POST', body: '{}' }),
     addFeedComment: (postId, body) =>
@@ -286,9 +288,9 @@
         body: '{}',
       }),
     askAiPublic: (messages, signal) =>
-      fetch(`${API_ORIGIN}/api/ai/chat/public`, {
+      fetch(`${API_ORIGIN}/api/ai/chat${getToken() ? '' : '/public'}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
         body: JSON.stringify({ messages }),
         signal,
       }).then(async (r) => {
