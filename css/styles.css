@@ -7,6 +7,10 @@
 .blog-card,.blog-reading { border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--glass-strong); color:var(--ink); overflow:hidden; }
 .blog-card { padding:0 0 18px; cursor:pointer; text-align:left; font:inherit; }
 .blog-card img,.blog-reading iframe { width:100%; aspect-ratio:16/9; object-fit:cover; border:0; }
+.blog-player { position:relative; }
+.blog-player iframe { display:block; }
+.blog-player-shield { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; border:0; background:rgba(43,39,53,.35); color:#fff; cursor:pointer; }
+html:not(.is-compact) .blog-player-shield { display:none; }
 .blog-card strong,.blog-card span { display:block; padding:10px 18px 0; }
 .blog-card span { color:var(--muted); }
 .blog-reading { max-width:760px; margin:auto; padding:clamp(16px,4vw,36px); line-height:1.65; }

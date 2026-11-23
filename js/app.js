@@ -1484,7 +1484,7 @@
       }).join('');
       return tabs + `<article class="blog-reading"><button type="button" class="secondary-button" data-blog-back>← ${blogNames[x.kind]}</button>
         <h1>${esc(x.title)}</h1>${x.summary && x.summary !== x.title ? `<p>${esc(x.summary)}</p>` : ''}
-        ${embed ? `<iframe name="loza-blog-player" src="${esc(embed)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen title="${esc(x.title)}"></iframe>` : ''}
+        ${embed ? `<div class="blog-player"><iframe name="loza-blog-player" src="${esc(embed)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen title="${esc(x.title)}"></iframe><button type="button" class="blog-player-shield" data-blog-play data-embed="${esc(embed)}" aria-label="Смотреть видео">${ic('play', 44)}</button></div>` : ''}
         ${x.kind === 'article' && x.imageUrl ? `<img src="${esc(x.imageUrl)}" alt="">` : ''}
         ${blocks || `<p class="blog-body">${esc(x.body || '')}</p>`}
         ${chapters ? `<h2>Главы</h2>${chapters}` : ''}${x.sourceUrl ? `<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener noreferrer">Оригинал статьи</a>` : ''}</article>`;
@@ -1634,6 +1634,25 @@
       if ($('#page-shell')) $('#page-shell').scrollTop = blog.scroll;
     });
     $('[data-blog-retry]', root)?.addEventListener('click', () => loadBlog(blog.kind, blog.retryId));
+    // Mobile: a bare iframe swallows page scroll gestures, so the player stays
+    // under a shield until the user explicitly taps play or a chapter.
+    const blogAutoplay = (src) => {
+      const frame = $('[name="loza-blog-player"]', root);
+      if (!frame || !src) return;
+      try {
+        const url = new URL(src);
+        url.searchParams.set('autoplay', '1');
+        frame.src = url.href;
+      } catch { frame.src = src; }
+      $('.blog-player-shield', root)?.remove();
+    };
+    $('[data-blog-play]', root)?.addEventListener('click', (e) => blogAutoplay(e.currentTarget.dataset.embed));
+    $$('.blog-chapter', root).forEach((link) => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        blogAutoplay(link.href);
+      });
+    });
     $('[data-feed-retry]', root)?.addEventListener('click', () => {
       state.feedLoaded = false;
       state.feedError = false;
@@ -7886,7 +7905,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '133';
+      const version = window.LOZA_ASSET_VERSION || '134';
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
