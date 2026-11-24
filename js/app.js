@@ -1477,17 +1477,21 @@
     if (x) {
       const embed = x.videoUrl && M.kinescopeEmbed(x.videoUrl);
       const blocks = (x.blocks || []).map((b) => b.type === 'heading' ? `<h2>${esc(b.text)}</h2>` : `<p>${esc(b.text)}</p>`).join('');
+      const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+      const dek = x.summary && x.summary !== x.title && !norm(x.body).startsWith(norm(x.summary.replace(/…$/, ''))) ? x.summary : '';
+      const date = x.createdAt ? ` · ${esc(new Date(x.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }))}` : '';
       const chapters = (x.chapters || []).map((c) => {
         const url = new URL(embed);
         url.searchParams.set('t', String(c.seconds));
         return `<a class="blog-chapter" href="${esc(url.href)}" target="loza-blog-player">${M.formatAudioTime(c.seconds)} · ${esc(c.title)}</a>`;
       }).join('');
       return tabs + `<article class="blog-reading"><button type="button" class="secondary-button" data-blog-back>← ${blogNames[x.kind]}</button>
-        <h1>${esc(x.title)}</h1>${x.summary && x.summary !== x.title && !(x.body || '').startsWith(x.summary.replace(/…$/, '')) ? `<p>${esc(x.summary)}</p>` : ''}
+        <p class="blog-meta">${esc(blogNames[x.kind])}${date}</p>
+        <h1>${esc(x.title)}</h1>${dek ? `<p class="blog-dek">${esc(dek)}</p>` : ''}
+        ${x.kind === 'article' && x.imageUrl ? `<img class="blog-cover" src="${esc(x.imageUrl)}" alt="">` : ''}
         ${embed ? `<div class="blog-player"><iframe name="loza-blog-player" src="${esc(embed)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen title="${esc(x.title)}"></iframe><button type="button" class="blog-player-shield" data-blog-play data-embed="${esc(embed)}" aria-label="Смотреть видео">${ic('play', 44)}</button></div>` : ''}
-        ${x.kind === 'article' && x.imageUrl ? `<img src="${esc(x.imageUrl)}" alt="">` : ''}
         ${blocks || `<p class="blog-body">${esc(x.body || '')}</p>`}
-        ${chapters ? `<h2>Главы</h2>${chapters}` : ''}${x.sourceUrl ? `<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener noreferrer">Оригинал статьи</a>` : ''}</article>`;
+        ${chapters ? `<h2>Главы</h2>${chapters}` : ''}${x.sourceUrl ? `<a class="blog-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener noreferrer">Читать оригинал на lozapsy.ru →</a>` : ''}</article>`;
     }
     if (blog.kind === 'post') return tabs + renderFeed();
     if (blog.kind === 'question') return tabs + `<div class="feed-page"><div class="insta-feed">${blog.items.map((p, i) => {
@@ -7930,7 +7934,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || "138";
+      const version = window.LOZA_ASSET_VERSION || "139";
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
