@@ -16,6 +16,8 @@
 .blog-reading img { max-width:100%; }
 .blog-body { white-space:pre-line; }
 .blog-chapter { display:block; padding:8px 0; color:var(--ink); }
+.blog-q { cursor:pointer; }
+.blog-q .insta-post-media:not(.is-video) img { aspect-ratio:16/9; object-fit:cover; }
 
 :root {
   color-scheme: light;

@@ -1490,6 +1490,24 @@
         ${chapters ? `<h2>Главы</h2>${chapters}` : ''}${x.sourceUrl ? `<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener noreferrer">Оригинал статьи</a>` : ''}</article>`;
     }
     if (blog.kind === 'post') return tabs + renderFeed();
+    if (blog.kind === 'question') return tabs + `<div class="feed-page"><div class="insta-feed">${blog.items.map((p, i) => {
+      const qid = `q-${p.id}`;
+      const embed = p.videoUrl && M.kinescopeEmbed(p.videoUrl);
+      const media = embed
+        ? `<iframe name="${esc(qid)}" loading="lazy" src="${esc(embed)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen title="${esc(p.title)}"></iframe><button type="button" class="blog-player-shield" data-blog-play data-embed="${esc(embed)}" data-frame="${esc(qid)}" aria-label="Смотреть видео">${ic('play', 44)}</button>`
+        : `<img loading="lazy" alt="" src="${esc(p.imageUrl || bgImage(i))}">`;
+      return `<article class="insta-post blog-q" data-blog-id="${esc(p.id)}">
+        <header class="insta-post-head">
+          <img class="insta-post-mark" src="${localAsset('assets/webp/new_logo.webp')}" alt="" />
+          <div class="insta-post-meta"><strong>Лоза</strong><span>Вопросы</span></div>
+        </header>
+        <div class="insta-post-media${embed ? ' is-video' : ''}">${media}</div>
+        <div class="insta-post-caption"><div class="insta-post-caption-copy">
+          <h3 class="insta-post-title">${esc(p.title)}</h3>
+          ${p.summary && p.summary !== p.title ? feedCaptionBlock(qid, p.summary) : ''}
+        </div></div>
+      </article>`;
+    }).join('') || '<p>Здесь пока нет публикаций.</p>'}</div></div>`;
     return tabs + `<div class="blog-grid">${blog.items.map((p, i) => `<button class="blog-card" data-blog-id="${esc(p.id)}">
       <img loading="lazy" alt="" src="${esc(p.imageUrl || bgImage(i))}"><strong>${esc(p.title)}</strong>
       ${p.summary !== p.title ? `<span>${esc(p.summary || '')}</span>` : ''}</button>`).join('') || '<p>Здесь пока нет публикаций.</p>'}</div>`;
@@ -1628,7 +1646,10 @@
         renderScreen();
       } else loadBlog(kind);
     }; });
-    $$('[data-blog-id]', root).forEach((b) => { b.onclick = () => loadBlog(blog.kind, b.dataset.blogId); });
+    $$('[data-blog-id]', root).forEach((b) => { b.onclick = (e) => {
+      if (e.target.closest('a, .insta-post-more, .blog-player-shield')) return;
+      loadBlog(blog.kind, b.dataset.blogId);
+    }; });
     $('[data-blog-back]', root)?.addEventListener('click', async () => {
       await loadBlog(blog.kind);
       if ($('#page-shell')) $('#page-shell').scrollTop = blog.scroll;
@@ -1636,17 +1657,21 @@
     $('[data-blog-retry]', root)?.addEventListener('click', () => loadBlog(blog.kind, blog.retryId));
     // Mobile: a bare iframe swallows page scroll gestures, so the player stays
     // under a shield until the user explicitly taps play or a chapter.
-    const blogAutoplay = (src) => {
-      const frame = $('[name="loza-blog-player"]', root);
+    const blogAutoplay = (src, frameName) => {
+      const frame = frameName
+        ? root.querySelector(`iframe[name="${CSS.escape(frameName)}"]`)
+        : $('[name="loza-blog-player"]', root);
       if (!frame || !src) return;
       try {
         const url = new URL(src);
         url.searchParams.set('autoplay', '1');
         frame.src = url.href;
       } catch { frame.src = src; }
-      $('.blog-player-shield', root)?.remove();
+      frame.parentElement?.querySelector('.blog-player-shield')?.remove();
     };
-    $('[data-blog-play]', root)?.addEventListener('click', (e) => blogAutoplay(e.currentTarget.dataset.embed));
+    $$('[data-blog-play]', root).forEach((b) => {
+      b.addEventListener('click', () => blogAutoplay(b.dataset.embed, b.dataset.frame));
+    });
     $$('.blog-chapter', root).forEach((link) => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -7905,7 +7930,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || '136';
+      const version = window.LOZA_ASSET_VERSION || "137";
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
