@@ -1483,7 +1483,7 @@
         return `<a class="blog-chapter" href="${esc(url.href)}" target="loza-blog-player">${M.formatAudioTime(c.seconds)} · ${esc(c.title)}</a>`;
       }).join('');
       return tabs + `<article class="blog-reading"><button type="button" class="secondary-button" data-blog-back>← ${blogNames[x.kind]}</button>
-        <h1>${esc(x.title)}</h1>${x.summary && x.summary !== x.title ? `<p>${esc(x.summary)}</p>` : ''}
+        <h1>${esc(x.title)}</h1>${x.summary && x.summary !== x.title && !(x.body || '').startsWith(x.summary.replace(/…$/, '')) ? `<p>${esc(x.summary)}</p>` : ''}
         ${embed ? `<div class="blog-player"><iframe name="loza-blog-player" src="${esc(embed)}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen title="${esc(x.title)}"></iframe><button type="button" class="blog-player-shield" data-blog-play data-embed="${esc(embed)}" aria-label="Смотреть видео">${ic('play', 44)}</button></div>` : ''}
         ${x.kind === 'article' && x.imageUrl ? `<img src="${esc(x.imageUrl)}" alt="">` : ''}
         ${blocks || `<p class="blog-body">${esc(x.body || '')}</p>`}
@@ -7930,7 +7930,7 @@
       });
 
     if ('serviceWorker' in navigator) {
-      const version = window.LOZA_ASSET_VERSION || "137";
+      const version = window.LOZA_ASSET_VERSION || "138";
       navigator.serviceWorker.register(`./sw.js?v=${version}`, { scope: './', updateViaCache: 'none' })
         .then((reg) => {
           reg.update();
